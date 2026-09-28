@@ -114,12 +114,14 @@ def save_obj(scene, path) -> None:
     matname = export_names({k: materials[k] for k in keys})
 
     # Copy texture images next to the .obj so map_Kd resolves.
+    from core.texture import is_image_file
     for k in keys:
         mat = materials[k]
         if mat.get("map"):
             dst = path.parent / mat["map"]
             try:
-                if mat["src"].resolve() != dst.resolve():
+                if (mat["src"].resolve() != dst.resolve()
+                        and is_image_file(mat["src"])):
                     shutil.copy(mat["src"], dst)
             except Exception:  # noqa: BLE001 — best-effort; export still valid
                 pass

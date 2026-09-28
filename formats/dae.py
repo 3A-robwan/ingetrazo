@@ -144,12 +144,14 @@ def save_dae(scene, path, project_name: str = "IngeTrazo model") -> None:
         tri_groups.append((key, textured, p_tokens))
 
     # Copy texture images next to the .dae so <init_from> resolves.
+    from core.texture import is_image_file
     for key in keys:
         info = materials_in[key]
         if info.get("map"):
             dst = path.parent / info["map"]
             try:
-                if Path(info["src"]).resolve() != dst.resolve():
+                if (Path(info["src"]).resolve() != dst.resolve()
+                        and is_image_file(info["src"])):
                     shutil.copy(info["src"], dst)
             except Exception:  # noqa: BLE001 — best-effort; export still valid
                 pass

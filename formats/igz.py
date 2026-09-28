@@ -137,7 +137,7 @@ def _pack_textures(payload) -> tuple[dict, int]:
     their ``"path"``, so a document whose cache was wiped saves no worse than
     before instead of losing the reference outright."""
     import hashlib
-    from core.texture import texture_file_name
+    from core.texture import is_image_file, texture_file_name
 
     blobs: dict = {}
     resolved: dict = {}          # source path → member name ("" = unreadable)
@@ -146,6 +146,10 @@ def _pack_textures(payload) -> tuple[dict, int]:
         nonlocal missing
         member = resolved.get(src)
         if member is None:
+            if not is_image_file(src):
+                resolved[src] = ""
+                missing += 1
+                return ""
             try:
                 data = Path(src).read_bytes()
             except OSError:

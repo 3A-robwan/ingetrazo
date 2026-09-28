@@ -23,6 +23,7 @@ import json
 import struct
 from pathlib import Path
 
+from core.texture import is_image_bytes
 from .meshexport import collect_geometry, export_names, geolocation
 
 _F32 = 5126          # accessor componentType FLOAT
@@ -109,6 +110,8 @@ def save_glb(scene, path, face_me=None) -> None:
                 try:
                     img_bytes = Path(src).read_bytes()
                 except OSError:
+                    img_bytes = None
+                if img_bytes is not None and not is_image_bytes(img_bytes):
                     img_bytes = None
                 if img_bytes is not None:
                     _align()
