@@ -2460,5 +2460,8 @@
  "Back edges": "背面边线",
  "Draw the edges hidden behind faces as dashed lines.": "以虚线绘制被面遮挡的边线。",
  "The Polygon properties example extension: area, centroid and second moments of a face.": "示例扩展“多边形属性”：面的面积、形心和二阶矩。",
- "Preparing the drawing…": "正在准备绘图…"
+ "Preparing the drawing…": "正在准备绘图…",
+ "Component Edit": "组件编辑",
+ "Hide Rest of Model": "隐藏模型的其余部分",
+ "Hide Similar Components": "隐藏类似组件"
 }

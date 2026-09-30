@@ -2459,5 +2459,8 @@
  "Back edges": "Arestas de trás",
  "Draw the edges hidden behind faces as dashed lines.": "Desenha tracejadas as arestas que ficam atrás das faces.",
  "The Polygon properties example extension: area, centroid and second moments of a face.": "A extensão de exemplo Propriedades do polígono: área, centroide e momentos de segunda ordem de uma face.",
- "Preparing the drawing…": "Preparando o desenho…"
+ "Preparing the drawing…": "Preparando o desenho…",
+ "Component Edit": "Edição de componente",
+ "Hide Rest of Model": "Ocultar restante do modelo",
+ "Hide Similar Components": "Ocultar componentes semelhantes"
 }
