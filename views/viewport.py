@@ -12142,7 +12142,7 @@ class Viewport(QOpenGLWidget):
             t = ev.text().lower()
             if t and (t.isdigit() or t in (".", ",", ";", " ", "-", ":",
                                            "\"", "'", "/", "m", "c", "r",
-                                           "i", "n", "f", "t", "x", "*")):
+                                           "i", "n", "f", "t", "x", "*", "s")):
                 ev.accept()
                 return True
         return super().event(ev)
@@ -12722,7 +12722,7 @@ class Viewport(QOpenGLWidget):
             return True
         if text and (text.isdigit()
                      or text in (".", ",", ";", " ", "-", ":", "\"", "'", "/")
-                     or text.lower() in ("m", "c", "r", "i", "n", "f", "t")):
+                     or text.lower() in ("m", "c", "r", "i", "n", "f", "t", "s")):
             # A field separator (space / ;) with an empty buffer isn't VCB
             # input — let it fall through so Space can act as the Select
             # shortcut. It only separates fields mid-number.
@@ -12730,8 +12730,9 @@ class Viewport(QOpenGLWidget):
                 return False
             # A unit letter with an empty buffer is a tool shortcut (M = Move,
             # C = Circle, R = Rectangle), not VCB input — only buffer it
-            # after a digit. "r" is the radius suffix for arcs (2r).
-            if (text.lower() in ("m", "c", "r", "i", "n", "f", "t")
+            # after a digit. "r" is the radius suffix for arcs (2r), "s"
+            # the segment count of an arc / sides of a circle (16s).
+            if (text.lower() in ("m", "c", "r", "i", "n", "f", "t", "s")
                     and not self._current_token_tail()):
                 return False
             # Imperial marks and the fraction bar belong after a digit too:
