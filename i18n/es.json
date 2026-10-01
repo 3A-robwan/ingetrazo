@@ -2466,5 +2466,9 @@
  "Hide Similar Components": "Ocultar componentes similares",
  "Click the start point — on an edge, a tangent arc. Type the segments first.": "Clic en el punto inicial; sobre una arista, arco tangente. Antes puedes teclear los segmentos.",
  "Click the start point. Type the segments first.": "Clic en el punto inicial. Antes puedes teclear los segmentos.",
- "Click the centre. Type the segments first.": "Clic en el centro. Antes puedes teclear los segmentos."
+ "Click the centre. Type the segments first.": "Clic en el centro. Antes puedes teclear los segmentos.",
+ "Parallel Projection": "Proyección paralela",
+ "No vanishing points: measured elevations, plans and isometrics.": "Sin puntos de fuga: alzados, plantas e isométricas a escala.",
+ "The view as the eye sees it.": "La vista como la ve el ojo.",
+ "Vertical lines stay vertical, the usual view for architectural presentations.": "Las verticales se mantienen verticales, la vista habitual de una presentación de arquitectura."
 }
