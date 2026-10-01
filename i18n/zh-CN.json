@@ -2463,5 +2463,8 @@
  "Preparing the drawing…": "正在准备绘图…",
  "Component Edit": "组件编辑",
  "Hide Rest of Model": "隐藏模型的其余部分",
- "Hide Similar Components": "隐藏类似组件"
+ "Hide Similar Components": "隐藏类似组件",
+ "Click the start point — on an edge, a tangent arc. Type the segments first.": "点击起点；在边上则绘制相切圆弧。可先输入段数。",
+ "Click the start point. Type the segments first.": "点击起点。可先输入段数。",
+ "Click the centre. Type the segments first.": "点击中心。可先输入段数。"
 }

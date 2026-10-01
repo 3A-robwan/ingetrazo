@@ -2464,5 +2464,8 @@
  "Preparing the drawing…": "Preparazione del disegno…",
  "Component Edit": "Modifica componente",
  "Hide Rest of Model": "Nascondi resto del modello",
- "Hide Similar Components": "Nascondi componenti simili"
+ "Hide Similar Components": "Nascondi componenti simili",
+ "Click the start point — on an edge, a tangent arc. Type the segments first.": "Fai clic sul punto iniziale; su uno spigolo, arco tangente. Digita prima i segmenti.",
+ "Click the start point. Type the segments first.": "Fai clic sul punto iniziale. Digita prima i segmenti.",
+ "Click the centre. Type the segments first.": "Fai clic sul centro. Digita prima i segmenti."
 }
