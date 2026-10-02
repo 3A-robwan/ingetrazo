@@ -2460,5 +2460,15 @@
  "Draw the edges hidden behind faces as dashed lines.": "Dessine les arêtes cachées derrière les faces sous forme de lignes en pointillés.",
  "The Polygon properties example extension: area, centroid and second moments of a face.": "L'extension d'exemple Propriétés du polygone : surface, centre de gravité et moments d'inertie d'une face.",
  "Preparing the drawing…": "Préparation du dessin…",
- "Recent": "Récents"
+ "Recent": "Récents",
+ "Click the centre. Type the segments first.": "Cliquez sur le centre. Vous pouvez d'abord taper le nombre de segments.",
+ "Click the start point — on an edge, a tangent arc. Type the segments first.": "Cliquez sur le point de départ ; sur une arête, un arc tangent. Vous pouvez d'abord taper le nombre de segments.",
+ "Click the start point. Type the segments first.": "Cliquez sur le point de départ. Vous pouvez d'abord taper le nombre de segments.",
+ "Component Edit": "Édition de composant",
+ "Hide Rest of Model": "Masquer le reste du modèle",
+ "Hide Similar Components": "Masquer les composants similaires",
+ "No vanishing points: measured elevations, plans and isometrics.": "Sans points de fuite : élévations, plans et isométries à l'échelle.",
+ "Parallel Projection": "Projection parallèle",
+ "The view as the eye sees it.": "La vue telle que l'œil la voit.",
+ "Vertical lines stay vertical, the usual view for architectural presentations.": "Les verticales restent verticales, la vue habituelle des présentations d'architecture."
 }
