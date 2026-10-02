@@ -65,6 +65,15 @@ _TEX_PREFIX = "textures/"
 # whatever the user syncs them with).
 _ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
 
+# A document with more faces + edges than this is written COMPACT (no
+# indentation) and deflated at level 1. Indented, the 14 M-face model of
+# #158 was 3.3 GB of text — every coordinate on a line of its own — and
+# saving it peaked at 16 GB of memory; compact it is 1.4 GB, and level 1
+# deflates it in 4 s instead of 20 (the file grows ~35 %). Nobody reads a
+# document that size by hand, while a small one stays indented and
+# diffable, at the default level where deflating costs nothing anyway.
+_LARGE_DOCUMENT = 20_000
+
 
 # Keys the texture walk never needs to enter: pure coordinate blocks, and
 # the edge list (fixed ``_edge_json`` schema — no attrs, no textures).
@@ -467,18 +476,36 @@ def save_scene(scene, path: Path) -> dict:
         "app_version": __version__,
         "scene": payload,
     }
+    large = _element_count(payload) > _LARGE_DOCUMENT
     try:
-        doc = json.dumps(data, indent=2, allow_nan=False)
+        if large:
+            doc = json.dumps(data, separators=(",", ":"), allow_nan=False)
+        else:
+            doc = json.dumps(data, indent=2, allow_nan=False)
     except ValueError:
         # A NaN or an infinity in a coordinate (#185). Python would write
         # it as the bare word NaN — not JSON, and a broken shape for good.
         # Refuse, and leave the file on disk as it was.
         raise NonFiniteDocumentError(_non_finite_where(payload)) from None
     if blobs:
-        _write_container(path, doc, blobs)
+        _write_container(path, doc, blobs, fast=large)
     else:
         _write_atomic(path, doc.encode("utf-8"))
     return {"embedded": len(blobs), "missing": missing}
+
+
+def _element_count(payload) -> int:
+    """Faces + edges written in the payload: the scene's own, every
+    component prototype's, and every group's (nested included). Only list
+    lengths — it never walks the coordinates."""
+    total = 0
+    stack = [payload, *payload.get("protos", ())]
+    stack.extend(payload.get("groups", ()))
+    while stack:
+        node = stack.pop()
+        total += len(node.get("faces", ())) + len(node.get("edges", ()))
+        stack.extend(node.get("children", ()))
+    return total
 
 
 class NonFiniteDocumentError(ValueError):
@@ -524,9 +551,11 @@ def _write_atomic(path: Path, data: bytes) -> None:
         raise
 
 
-def _write_container(path: Path, doc: str, blobs: dict) -> None:
+def _write_container(path: Path, doc: str, blobs: dict,
+                     fast: bool = False) -> None:
     """The ZIP shape: ``document.json`` deflated, images stored as-is (PNG/JPG
-    are already compressed — deflating them again costs time for nothing)."""
+    are already compressed — deflating them again costs time for nothing).
+    ``fast`` deflates at level 1 (see ``_LARGE_DOCUMENT``)."""
     import io
     import zipfile
 
@@ -534,7 +563,7 @@ def _write_container(path: Path, doc: str, blobs: dict) -> None:
     with zipfile.ZipFile(buf, "w") as zf:
         info = zipfile.ZipInfo(_DOC_ENTRY, date_time=_ZIP_EPOCH)
         info.compress_type = zipfile.ZIP_DEFLATED
-        zf.writestr(info, doc)
+        zf.writestr(info, doc, compresslevel=1 if fast else None)
         for member in sorted(blobs):
             info = zipfile.ZipInfo(member, date_time=_ZIP_EPOCH)
             info.compress_type = zipfile.ZIP_STORED
