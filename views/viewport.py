@@ -2535,6 +2535,38 @@ class Viewport(QOpenGLWidget):
         walk(group, getattr(group, "xform", None), hidden=bool(group.hidden))
         return out
 
+    def prepare_drawing(self, progress=None) -> None:
+        """Build the drawing data of every group and prototype now, with
+        ``progress(fraction, text)`` called a few times a second — what the
+        first paint would otherwise do in one go: 55 s on a model of 21 406
+        placements, long enough for the desktop to call IngeTrazo «not
+        responding» (Marco, 01-10, #158). Pure NumPy, no GL needed."""
+        import time
+        from core.group import effective_material
+        groups = self._placements()
+        n = max(1, len(groups))
+        last = time.monotonic()
+        done: set = set()
+        for i, g in enumerate(groups):
+            if getattr(g, "billboard", False):
+                continue
+            try:
+                if getattr(g, "xform", None) is not None:
+                    key = (id(g.mesh), _material_sig(effective_material(g)))
+                    if key not in done:
+                        done.add(key)
+                        self._proto_base_chunk(g.mesh, effective_material(g))
+                    if not self._instanced_eligible(g):
+                        self._group_chunk(g)
+                else:
+                    self._group_chunk(g)
+            except Exception:                  # noqa: BLE001 - paint retries
+                pass
+            now = time.monotonic()
+            if progress is not None and now - last > 0.25:
+                progress(i / n, "Preparing the drawing…")
+                last = now
+
     def _placement_bbox(self, g):
         """World AABB of an instanced placement from its PROTOTYPE's local
         box and the placement matrix — eight corners, no bake. Reading it

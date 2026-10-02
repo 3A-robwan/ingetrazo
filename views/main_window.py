@@ -4281,16 +4281,31 @@ class MainWindow(QMainWindow):
         # seconds with nothing on screen, «feeling of freeze». Small ones
         # never show it (the dialog waits 400 ms before appearing).
         dlg, cb = self._import_progress(tr("Opening {name}…", name=path.name))
+        # The viewport stays still while the document comes in: each
+        # progress tick lets the window repaint, and a paint over a model
+        # half loaded built every drawing chunk in one go — 61 s without
+        # answering the desktop on the model of #158.
+        self.viewport.setUpdatesEnabled(False)
         try:
-            igz_format.load_into(self.viewport.scene,
-                                 slot if recovered else path, progress=cb)
-        except Exception as exc:  # noqa: BLE001 - surface any IO/parse error to the user
-            dlg.close()
-            QMessageBox.critical(self, tr("Open failed"), str(exc))
-            return False
+            try:
+                igz_format.load_into(self.viewport.scene,
+                                     slot if recovered else path, progress=cb)
+            except Exception as exc:  # noqa: BLE001 - surface any IO/parse error to the user
+                dlg.close()
+                QMessageBox.critical(self, tr("Open failed"), str(exc))
+                return False
+            self.viewport.history.clear()
+            self.viewport.reset_texture_cache()
+            # The first paint of a huge model built its drawing data in one
+            # go, long enough for the desktop to call the app «not
+            # responding»: it is built here, under the same dialog (#158).
+            try:
+                self.viewport.prepare_drawing(cb)
+            except Exception:  # noqa: BLE001 - the first paint builds it anyway
+                pass
+        finally:
+            self.viewport.setUpdatesEnabled(True)
         dlg.close()
-        self.viewport.history.clear()
-        self.viewport.reset_texture_cache()
         self._apply_camera_home()
         self._current_path = path
         self._remember_recent(path)
@@ -4356,9 +4371,14 @@ class MainWindow(QMainWindow):
         object graph, and the young-generation threshold that keeps the
         collector out of the way while drawing (see ``GC_THRESHOLD0``)."""
         import gc
+        import sys
         gc.unfreeze()                 # (in case an older session froze it)
         gc.set_threshold(self.GC_THRESHOLD0, 10, 0)
-        gc.collect()
+        # Past 40 M blocks (the plaza is 3 M; the model of #158, 58.6 M) a
+        # full collection is seconds of a window that does not answer, and
+        # the desktop says so: skipped, as the autosave housekeeping is.
+        if sys.getallocatedblocks() <= 40_000_000:
+            gc.collect()
 
     def _on_save(self) -> None:
         if self._workspace is not None:
