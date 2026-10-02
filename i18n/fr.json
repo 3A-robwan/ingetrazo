@@ -2470,5 +2470,11 @@
  "No vanishing points: measured elevations, plans and isometrics.": "Sans points de fuite : élévations, plans et isométries à l'échelle.",
  "Parallel Projection": "Projection parallèle",
  "The view as the eye sees it.": "La vue telle que l'œil la voit.",
- "Vertical lines stay vertical, the usual view for architectural presentations.": "Les verticales restent verticales, la vue habituelle des présentations d'architecture."
+ "Vertical lines stay vertical, the usual view for architectural presentations.": "Les verticales restent verticales, la vue habituelle des présentations d'architecture.",
+ "copy": "copie",
+ "original": "original",
+ "keep the base": "garder la base",
+ "move the base": "déplacer la base",
+ "Keep the base: on": "Garder la base : activé",
+ "Keep the base: off": "Garder la base : désactivé"
 }

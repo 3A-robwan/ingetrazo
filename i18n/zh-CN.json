@@ -2466,5 +2466,11 @@
  "Hide Similar Components": "隐藏类似组件",
  "Click the start point — on an edge, a tangent arc. Type the segments first.": "点击起点；在边上则绘制相切圆弧。可先输入段数。",
  "Click the start point. Type the segments first.": "点击起点。可先输入段数。",
- "Click the centre. Type the segments first.": "点击中心。可先输入段数。"
+ "Click the centre. Type the segments first.": "点击中心。可先输入段数。",
+ "copy": "副本",
+ "original": "原始",
+ "keep the base": "保留底面",
+ "move the base": "移动底面",
+ "Keep the base: on": "保留底面：开",
+ "Keep the base: off": "保留底面：关"
 }

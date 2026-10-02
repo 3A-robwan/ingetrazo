@@ -2257,5 +2257,11 @@
  "Back edges": "Tepi belakang",
  "Draw the edges hidden behind faces as dashed lines.": "Gambar tepi yang tersembunyi di balik muka sebagai garis putus-putus.",
  "The Polygon properties example extension: area, centroid and second moments of a face.": "Ekstensi contoh Properti poligon: luas, titik berat, dan momen orde kedua dari sebuah muka.",
- "Preparing the drawing…": "Menyiapkan gambar…"
+ "Preparing the drawing…": "Menyiapkan gambar…",
+ "copy": "salinan",
+ "original": "asli",
+ "keep the base": "pertahankan alas",
+ "move the base": "pindahkan alas",
+ "Keep the base: on": "Pertahankan alas: aktif",
+ "Keep the base: off": "Pertahankan alas: nonaktif"
 }

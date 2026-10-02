@@ -2465,5 +2465,11 @@
  "Hide Similar Components": "Ocultar componentes semelhantes",
  "Click the start point — on an edge, a tangent arc. Type the segments first.": "Clique no ponto inicial; sobre uma aresta, arco tangente. Digite os segmentos primeiro.",
  "Click the start point. Type the segments first.": "Clique no ponto inicial. Digite os segmentos primeiro.",
- "Click the centre. Type the segments first.": "Clique no centro. Digite os segmentos primeiro."
+ "Click the centre. Type the segments first.": "Clique no centro. Digite os segmentos primeiro.",
+ "copy": "cópia",
+ "original": "original",
+ "keep the base": "manter a base",
+ "move the base": "mover a base",
+ "Keep the base: on": "Manter a base: ativado",
+ "Keep the base: off": "Manter a base: desativado"
 }

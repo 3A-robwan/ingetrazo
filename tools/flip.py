@@ -29,7 +29,7 @@ from core.history import (
 )
 from core.i18n import tr
 from core.mesh import Edge, Face, Mesh
-from tools.base import Tool, ToolContext
+from tools.base import Tool, ToolContext, ctrl_clause
 
 # The drawing axes (core.axes): the open group's own inside it (#44).
 from core.axes import AXES as _AXES  # noqa: E402
@@ -67,6 +67,9 @@ class FlipTool(Tool):
         easy to miss."""
         return self._copy
 
+    def status_clause(self) -> str:
+        return ctrl_clause(self._copy, "copy", "original")
+
     def _toggle_copy(self, viewport, say: bool = True) -> None:
         self._copy = not self._copy
         if say:
@@ -75,6 +78,7 @@ class FlipTool(Tool):
         apply = getattr(viewport, "_apply_tool_cursor", None)
         if apply is not None:
             apply()                      # the + appears or disappears now
+        self.refresh_hint(viewport)      # …and the bar says which way
         viewport.update()
 
     def on_key_release(self, viewport, key: int) -> bool:
