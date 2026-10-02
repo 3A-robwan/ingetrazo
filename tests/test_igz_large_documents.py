@@ -79,12 +79,16 @@ def test_a_large_textured_container_reads_back_the_same(
     assert _shape(again) == _shape(scene)
 
 
-def test_the_count_includes_prototypes_and_nested_groups():
-    payload = {
-        "faces": [1, 2], "edges": [1],
-        "protos": [{"faces": [1] * 5, "edges": []}],
-        "groups": [{"proto": 0},
-                   {"faces": [1] * 3, "edges": [1],
-                    "children": [{"faces": [1] * 4, "edges": [1, 1]}]}],
-    }
-    assert igz._element_count(payload) == 3 + 5 + 4 + 6
+def test_the_count_includes_the_loose_mesh_and_each_prototype_once():
+    from core.group import Group
+    from core.mesh import Mesh
+    from PySide6.QtGui import QMatrix4x4, QVector3D as V
+    scene = Scene()
+    scene.mesh.add_face([V(0, 0, 0), V(1, 0, 0), V(1, 1, 0)])   # 1 + 3
+    proto = Mesh()
+    proto.add_face([V(0, 0, 0), V(1, 0, 0), V(0, 1, 0)])        # 1 + 3
+    for _ in range(3):                    # placed three times, written once
+        g = Group(proto)
+        g.xform = QMatrix4x4()
+        scene.groups.append(g)
+    assert igz._live_element_count(scene) == 4 + 4

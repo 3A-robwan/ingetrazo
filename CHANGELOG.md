@@ -7,6 +7,19 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Rendimiento
+- **Los modelos enormes abren 3× más rápido, guardan 3,6× más rápido y
+  pesan un tercio**: el `.igz` gana el **formato 3**. En un documento
+  grande (más de 20 000 caras y aristas) cada malla pesada guarda sus
+  puntos una sola vez, en binario dentro del mismo ZIP; la estructura
+  (grupos, capas, materiales) sigue en JSON. Con el modelo de la #158:
+  abrir 61 → 19 s y 9,7 → 4,3 GB de memoria, guardar 51 → 14 s, archivo
+  171 → 54 MB; en la plaza, guardar 2,3 → 0,9 s y abrir 1,9 → 1,1 s.
+  Comprobado malla por malla que se reabre igual que guardado en JSON
+  (vértices, aristas, caras, huecos, atributos y su orden). Los
+  documentos pequeños no cambian y siguen siendo JSON legible; los `.igz`
+  de antes abren igual. Un documento en formato 3 **no abre en versiones
+  anteriores** (avisan de que es más nuevo): actualiza antes de compartir
+  un modelo grande (@pacaeiro).
 - **Orbitar un modelo con miles de componentes es 11× más fluido**: con la
   planta industrial de la #158 (21 406 copias) cada cuadro pasaba de 1,3 s
   a 0,12 s. Las siluetas de las copias se calculan por pieza en una sola
