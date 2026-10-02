@@ -597,7 +597,9 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         return (length / 2.0) * math.tan(angle / 2.0)
 
     def vcb_caption(self) -> str:
-        return "Bulge" if self.start_point is not None else "Segments"
+        if self.start_point is None:
+            return "Segments"
+        return "Radius" if self._fillet is not None else "Bulge"
 
     def on_value(self, viewport, value) -> bool:
         if isinstance(value, tuple):
@@ -1065,6 +1067,12 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
 
     def on_segments_value(self, viewport, n: int) -> bool:
         return self._set_segments(viewport, n)
+
+    def value_is_unitless(self) -> bool:
+        """A segment count (before the centre) and a sweep angle (once the
+        arm is set) are not lengths: the document's unit must not scale
+        them (#176)."""
+        return self.start_point is None or self.arm_point is not None
 
     def vcb_caption(self) -> str:
         if self.start_point is None:

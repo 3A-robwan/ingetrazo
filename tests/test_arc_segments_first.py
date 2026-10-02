@@ -114,3 +114,12 @@ def test_the_pie_takes_the_count_too():
     tool.on_click(_ctx(vp, 1, 0))
     assert tool.on_value(vp, 90)
     assert _arc_edges(vp) == 10 + 2               # the arc + two radii
+
+
+def test_the_centre_arc_angle_is_never_a_length():
+    tool = CenterArcTool()
+    assert tool.value_is_unitless()               # the segment count
+    tool.start_point = QVector3D(0, 0, 0)
+    assert not tool.value_is_unitless()           # the radius is a length
+    tool.arm_point = QVector3D(1, 0, 0)
+    assert tool.value_is_unitless()               # «90» is 90°, in mm too
