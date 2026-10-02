@@ -542,18 +542,42 @@ def _write_container(path: Path, doc: str, blobs: dict) -> None:
     _write_atomic(path, buf.getvalue())
 
 
-def _read_document(path: Path):
+def _parse_json(text, pump=None):
+    """``json.loads`` — in a worker thread while ``pump`` keeps the window
+    answering, when given. A 3.3 GB document took 24 s in one call, and the
+    desktop flagged IngeTrazo as «not responding» after five (Marco, 01-10,
+    the model of #158); the parser lets the main thread in every ~0.4 s."""
+    if pump is None:
+        return json.loads(text, parse_constant=_note_constant)
+    import threading
+    box: dict = {}
+
+    def work():
+        try:
+            box["data"] = json.loads(text, parse_constant=_note_constant)
+        except BaseException as exc:  # noqa: BLE001 — re-raised below
+            box["error"] = exc
+    th = threading.Thread(target=work, daemon=True)
+    th.start()
+    while th.is_alive():
+        th.join(0.1)
+        pump()
+    if "error" in box:
+        raise box["error"]
+    return box["data"]
+
+
+def _read_document(path: Path, pump=None):
     """``(data, archive)`` for a document of either shape — the archive is
     ``None`` for a plain-JSON one, and stays open while the caller extracts
     embedded images."""
     raw = path.read_bytes()
     if not raw.startswith(_ZIP_MAGIC):
-        return json.loads(raw.decode("utf-8"), parse_constant=_note_constant), None
+        return _parse_json(raw.decode("utf-8"), pump), None
     import zipfile
     archive = zipfile.ZipFile(path)
     try:
-        data = json.loads(archive.read(_DOC_ENTRY).decode("utf-8"),
-                          parse_constant=_note_constant)
+        data = _parse_json(archive.read(_DOC_ENTRY).decode("utf-8"), pump)
     except KeyError:
         archive.close()
         raise ValueError(
@@ -646,7 +670,9 @@ def _load_into_inner(scene, path: Path, progress=None) -> None:
     _saw_nonfinite[0] = False
 
     tick(0.05, "Reading the document…")
-    data, archive = _read_document(path)
+    data, archive = _read_document(
+        path, pump=(lambda: tick(0.1, "Reading the document…"))
+        if progress is not None else None)
     survey = None
     try:
         if archive is not None:
@@ -712,10 +738,19 @@ def _load_into_inner(scene, path: Path, progress=None) -> None:
             logging.getLogger(__name__).warning(
                 "sheet %r skipped: %s", r.get("name", "?"), exc)
     proto_meshes: list = []
-    for raw in payload.get("protos", []):
+    import time as _time
+    raw_protos = payload.get("protos", [])
+    last = _time.monotonic()
+    for k, raw in enumerate(raw_protos):
         m = Mesh()
         _load_mesh(m, raw)
         proto_meshes.append(m)
+        if _time.monotonic() - last > 0.25:
+            # Thousands of components took 25 s here without a word to the
+            # window, which the desktop reads as a hang (#158).
+            tick(0.35 + 0.25 * k / max(1, len(raw_protos)),
+                 "Building geometry…")
+            last = _time.monotonic()
     names: list = []
 
     def _group_from(raw, depth=0):
@@ -875,7 +910,51 @@ def _load_into_inner(scene, path: Path, progress=None) -> None:
     for raw in payload.get("image_planes", []):
         scene.image_planes.append(ImagePlane.from_dict(raw))
 
+    if progress is not None:
+        _release_in_steps(data, lambda: tick(0.98, "Finishing…"))
+    data = payload = None
     scene.version += 1
+
+
+def _bulky(node) -> bool:
+    """A container worth taking apart before dropping: a long list, or a
+    dict holding one (a group, a prototype, the scene). Coordinates and
+    small face records just go with their parent."""
+    if isinstance(node, list):
+        return len(node) > 64
+    if isinstance(node, dict):
+        return any(isinstance(v, (list, dict)) and len(v) > 64
+                   for v in node.values())
+    return False
+
+
+def _release_in_steps(data, pump) -> None:
+    """Drop the parsed document a slice at a time, ``pump()`` between
+    slices. Released in one go when the loader returned, the JSON tree of
+    a 3.3 GB document — tens of millions of objects — kept the window from
+    answering for 8 s, long enough for the desktop to call IngeTrazo «not
+    responding» (#158)."""
+    import time
+    last = time.monotonic()
+    stack = [data]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            for key in list(node):
+                child = node.pop(key)
+                if _bulky(child):
+                    stack.append(child)
+        elif isinstance(node, list):
+            while node:
+                child = node.pop()
+                if _bulky(child):
+                    stack.append(child)
+                if time.monotonic() - last > 0.25:
+                    pump()
+                    last = time.monotonic()
+        if time.monotonic() - last > 0.25:
+            pump()
+            last = time.monotonic()
 
 
 def _face_attrs_from_json(raw) -> dict | None:
