@@ -346,17 +346,33 @@ class RectangleTool(PlaneLock, Tool):
         viewport.update()
 
 
+    def _toggle_center(self, viewport, say: bool = True) -> None:
+        self._set_from_center(viewport, not self._from_center)
+        flash = getattr(viewport, "flash_status", None)
+        if say and callable(flash):
+            flash(tr("Rectangle from the centre") if self._from_center
+                  else tr("Rectangle from a corner"))
+        hint = getattr(viewport, "refresh_status_hint", None)
+        if callable(hint):
+            hint()
+
+    def on_key_release(self, viewport, key: int) -> bool:
+        # Toggled on the PRESS so the pencil's badge changes at once; a Ctrl
+        # that was part of a shortcut (Ctrl+Z…) takes it back on the
+        # release (#342).
+        if key != Qt.Key_Control or not getattr(self, "_ctrl_toggled", False):
+            return False
+        self._ctrl_toggled = False
+        tapped = getattr(viewport, "ctrl_tapped", None)
+        if callable(tapped) and not tapped():
+            self._toggle_center(viewport, say=False)
+        return True
+
     def on_key(self, viewport, key: int, modifiers) -> bool:
         if key == Qt.Key_Control:
             # Ctrl = corner ⇄ centre, like Move's Ctrl = copy (issue #39).
-            self._set_from_center(viewport, not self._from_center)
-            flash = getattr(viewport, "flash_status", None)
-            if callable(flash):
-                flash(tr("Rectangle from the centre") if self._from_center
-                      else tr("Rectangle from a corner"))
-            hint = getattr(viewport, "refresh_status_hint", None)
-            if callable(hint):
-                hint()
+            self._toggle_center(viewport)
+            self._ctrl_toggled = True
             return True
         if key == Qt.Key_Down and self.start_point is not None:
             if self._arrow_square_lock:

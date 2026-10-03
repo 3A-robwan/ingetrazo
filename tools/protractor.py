@@ -140,24 +140,42 @@ class ProtractorBase(Tool):
         return True
 
     # ---- Keyboard -----------------------------------------------------------
+    def _toggle_guides(self, viewport, say: bool = True) -> None:
+        from core.i18n import tr as _tr
+        self._guides = not self._guides
+        if say:
+            viewport.flash_status(
+                _tr("Create guides: on") if self._guides
+                else _tr("Create guides: off — measure only"))
+        apply = getattr(viewport, "_apply_tool_cursor", None)
+        if apply is not None:
+            apply()
+        hint = getattr(viewport, "refresh_status_hint", None)
+        if hint is not None:
+            hint()                       # the clause says the new mode
+        viewport.update()
+
+    def on_key_release(self, viewport, key: int) -> bool:
+        # The guide toggle happens on the Ctrl PRESS, so the + shows at
+        # once; a Ctrl that turns out to be part of a shortcut (Ctrl+Z…)
+        # takes it back on the release, silently (#342, the Tape's #183).
+        if (key != Qt.Key_Control or not hasattr(type(self), "_guides")
+                or not getattr(self, "_ctrl_toggled", False)):
+            return False
+        self._ctrl_toggled = False
+        tapped = getattr(viewport, "ctrl_tapped", None)
+        if callable(tapped) and not tapped():
+            self._toggle_guides(viewport, say=False)
+        return True
+
     def on_key(self, viewport, key: int, modifiers) -> bool:
         # Ctrl toggles guide creation on the tools that leave one behind
         # (measure, or measure AND mark). Subclasses that never
         # create a guide — Rotate — take their own Ctrl first and never
         # reach here.
         if key == Qt.Key_Control and hasattr(type(self), "_guides"):
-            from core.i18n import tr as _tr
-            self._guides = not self._guides
-            viewport.flash_status(
-                _tr("Create guides: on") if self._guides
-                else _tr("Create guides: off — measure only"))
-            apply = getattr(viewport, "_apply_tool_cursor", None)
-            if apply is not None:
-                apply()
-            hint = getattr(viewport, "refresh_status_hint", None)
-            if hint is not None:
-                hint()                   # the clause says the new mode
-            viewport.update()
+            self._toggle_guides(viewport)
+            self._ctrl_toggled = True
             return True
         # Arrow keys lock the protractor plane to an axis: Right =
         # red, Left = green, Up = blue; the same arrow again releases it.
