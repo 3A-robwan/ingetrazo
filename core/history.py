@@ -1947,6 +1947,27 @@ def translate_points(scene, keys: set, delta: QVector3D) -> None:
     scene.version += 1
 
 
+def _weld_landed(mesh, moving: set) -> bool:
+    """Merge a moved vertex into the one it landed on.
+
+    Lowering a box's top edge onto its bottom edge turns the box into a
+    ramp — the endpoint snap puts each moved corner exactly on another
+    vertex. Left as two vertices at one point, the side face became a
+    zero-area sliver and the vertical edges zero-length; nothing showed it
+    until Make Group copied the geometry, welded on the way, and refused the
+    edge whose ends were now one vertex (#341, @pacaeiro). Only a move that
+    actually lands pays for the weld: the check is one pass over the
+    vertices, the weld runs when two of them share a point."""
+    moved_keys = {_key(v.position) for v in mesh.vertices if id(v) in moving}
+    if not moved_keys:
+        return False
+    if not any(_key(v.position) in moved_keys for v in mesh.vertices
+               if id(v) not in moving):
+        return False
+    mesh.weld_coincident()
+    return True
+
+
 class MoveVerticesCommand(Command):
     """Translate every shared vertex at a set of positions by ``delta``, then
     **autofold**: any face the move warped out of its plane is split into
@@ -1972,7 +1993,11 @@ class MoveVerticesCommand(Command):
             scene.version += 1
             return
         self._before = scene.mesh.capture_state()
-        translate_points(scene, {_key(p) for p in self.src}, self.delta)
+        keys = {_key(p) for p in self.src}
+        moving = {id(v) for v in scene.mesh.vertices
+                  if _key(v.position) in keys}
+        translate_points(scene, keys, self.delta)
+        _weld_landed(scene.mesh, moving)
         fold_nonplanar_faces(scene.mesh)
         self._after = scene.mesh.capture_state()
 
@@ -2907,7 +2932,10 @@ class MakeGroupCommand(Command):
             if attrs:
                 gf.attrs.update(attrs)
         for a, b in self._edge_ends:
-            gmesh.add_edge(L(a), L(b))
+            la, lb = L(a), L(b)
+            if _key(la) == _key(lb):
+                continue        # a zero-length edge is no edge (#341)
+            gmesh.add_edge(la, lb)
         for a, b, flags in self._flagged:
             va, vb = gmesh.vertex_at(L(a)), gmesh.vertex_at(L(b))
             e = (gmesh.find_edge(va, vb)
