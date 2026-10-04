@@ -2266,5 +2266,13 @@
  "keep the base": "pertahankan alas",
  "move the base": "pindahkan alas",
  "Keep the base: on": "Pertahankan alas: aktif",
- "Keep the base: off": "Pertahankan alas: nonaktif"
+ "Keep the base: off": "Pertahankan alas: nonaktif",
+ "Vertices joined": "Verteks digabungkan",
+ "Not joined: it would leave {defect}. The move was undone.": "Tidak digabungkan: akan tersisa {defect}. Pemindahan dibatalkan.",
+ "a face doubled over another": "sebuah muka yang menumpuk di atas muka lain",
+ "two faces overlapping in one plane": "dua muka yang tumpang tindih dalam satu bidang",
+ "a face that touches itself": "sebuah muka yang menyentuh dirinya sendiri",
+ "a face whose sides cross": "sebuah muka dengan sisi yang bersilangan",
+ "a face with no area": "sebuah muka tanpa luas",
+ "an edge of zero length": "sebuah tepi dengan panjang nol"
 }

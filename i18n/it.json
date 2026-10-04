@@ -2476,5 +2476,13 @@
  "keep the base": "mantieni la base",
  "move the base": "sposta la base",
  "Keep the base: on": "Mantieni la base: attivo",
- "Keep the base: off": "Mantieni la base: disattivo"
+ "Keep the base: off": "Mantieni la base: disattivo",
+ "Vertices joined": "Vertici uniti",
+ "Not joined: it would leave {defect}. The move was undone.": "Non uniti: resterebbe {defect}. Lo spostamento è stato annullato.",
+ "a face doubled over another": "una faccia doppia sopra un'altra",
+ "two faces overlapping in one plane": "due facce sovrapposte nello stesso piano",
+ "a face that touches itself": "una faccia che tocca sé stessa",
+ "a face whose sides cross": "una faccia con lati che si incrociano",
+ "a face with no area": "una faccia senza area",
+ "an edge of zero length": "uno spigolo di lunghezza zero"
 }

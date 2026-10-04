@@ -61,10 +61,12 @@ from core.topology import (
     _key,
     _loop_edges,
     carve_loop_by_chords,
+    defects_near,
     find_containing_face,
     fold_nonplanar_faces,
     heal_overlapping_faces,
     loop_inside_face,
+    new_defects,
     orient_coplanar_faces,
     orphaned_edges_at,
     subtract_loop_from_face,
@@ -80,6 +82,13 @@ def _find_face_by_loop(mesh, loop_positions) -> Optional[Face]:
         if frozenset(_key(p) for p in f.vertices) == target:
             return f
     return None
+
+
+class CommandRejected(Exception):
+    """A command declining to happen, on purpose: it has put the scene back
+    the way it found it and says why in plain words. :class:`History` takes
+    it as a no-op — nothing on the undo stack, nothing in the error log —
+    and keeps the reason in ``last_rejected`` for the tool to show."""
 
 
 class Command(ABC):
@@ -159,6 +168,8 @@ class History:
         self.redo_stack: list[Command] = []
         #: Message describing the last rolled-back failure (UI may flash it).
         self.last_error: Optional[str] = None
+        #: Why the last command declined to happen (:class:`CommandRejected`).
+        self.last_rejected: Optional[str] = None
 
     def execute(self, cmd: Command) -> None:
         _t0 = _time_mod.perf_counter() if _PERF else 0.0
@@ -167,8 +178,15 @@ class History:
             _plog("command.snapshot",
                   (_time_mod.perf_counter() - _t0) * 1000.0,
                   extra=type(cmd).__name__)
+        self.last_rejected = None
         try:
             cmd.do(self.scene)
+        except CommandRejected as exc:
+            self.scene.mesh.restore_state(snapshot)
+            self.scene.version += 1
+            self.last_error = None
+            self.last_rejected = str(exc)
+            return
         except Exception as exc:
             self.scene.mesh.restore_state(snapshot)
             self.scene.selection.clear()
@@ -2010,6 +2028,19 @@ def translate_points(scene, keys: set, delta: QVector3D) -> None:
     scene.version += 1
 
 
+def defect_names() -> dict:
+    """The words a refused weld uses for each defect kind."""
+    from core.i18n import tr
+    return {
+        "duplicate_face": tr("a face doubled over another"),
+        "overlapping_face": tr("two faces overlapping in one plane"),
+        "pinched_face": tr("a face that touches itself"),
+        "crossed_face": tr("a face whose sides cross"),
+        "flat_face": tr("a face with no area"),
+        "zero_edge": tr("an edge of zero length"),
+    }
+
+
 def _weld_landed(mesh, moving: set) -> bool:
     """Merge a moved vertex into the one it landed on.
 
@@ -2042,13 +2073,22 @@ class MoveVerticesCommand(Command):
     exactly on another vertex (an endpoint snap does this constantly) the undo
     dragged the innocent coincident vertex along too, warping the drawing. The
     before-snapshot was already being captured every time — restoring it is the
-    exact inverse for every case (plain move, fold, landed-on-vertex)."""
+    exact inverse for every case (plain move, fold, landed-on-vertex).
+
+    A move that lands on other vertices joins them — and is **refused**
+    (:class:`CommandRejected`, scene untouched) when the join leaves a
+    defect that was not there before around the landing: a face doubled
+    over another or overlapping one in its plane, pinched, crossed or
+    flattened to nothing. Only a landing
+    pays for the check, and only over the faces it touches."""
 
     def __init__(self, positions: Iterable[QVector3D], delta: QVector3D) -> None:
         self.src = [QVector3D(p) for p in positions]
         self.delta = QVector3D(delta)
         self._before: Optional[dict] = None
         self._after: Optional[dict] = None
+        #: Whether the move joined moved vertices into ones it landed on.
+        self.welded = False
 
     def do(self, scene) -> None:
         if self._after is not None:  # redo
@@ -2059,9 +2099,30 @@ class MoveVerticesCommand(Command):
         keys = {_key(p) for p in self.src}
         moving = {id(v) for v in scene.mesh.vertices
                   if _key(v.position) in keys}
+        landing = {_key(p + self.delta) for p in self.src}
+        before = None
+        if any(_key(v.position) in landing for v in scene.mesh.vertices
+               if id(v) not in moving):
+            # Something stands where the move lands: note how healthy the
+            # neighbourhood is now, to judge the join against it.
+            before = defects_near(
+                [v for v in scene.mesh.vertices
+                 if _key(v.position) in keys or _key(v.position) in landing])
         translate_points(scene, keys, self.delta)
-        _weld_landed(scene.mesh, moving)
+        self.welded = _weld_landed(scene.mesh, moving)
         fold_nonplanar_faces(scene.mesh)
+        if self.welded and before is not None:
+            after = defects_near([v for v in scene.mesh.vertices
+                                  if _key(v.position) in landing])
+            worse = new_defects(before, after)
+            if worse:
+                from core.i18n import tr
+                scene.mesh.restore_state(self._before)
+                scene.version += 1
+                self.welded = False
+                raise CommandRejected(tr(
+                    "Not joined: it would leave {defect}. The move was "
+                    "undone.", defect=defect_names()[worse[0]]))
         self._after = scene.mesh.capture_state()
 
     def undo(self, scene) -> None:
@@ -4049,8 +4110,17 @@ class CompoundCommand(Command):
         self.commands: list[Command] = list(commands)
 
     def do(self, scene) -> None:
-        for cmd in self.commands:
-            cmd.do(scene)
+        done = []
+        try:
+            for cmd in self.commands:
+                cmd.do(scene)
+                done.append(cmd)
+        except CommandRejected:
+            # One part declined: the rest goes back too (a group moved
+            # with the vertices lives outside the mesh snapshot).
+            for cmd in reversed(done):
+                cmd.undo(scene)
+            raise
 
     def undo(self, scene) -> None:
         for cmd in reversed(self.commands):

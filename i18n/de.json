@@ -2502,5 +2502,13 @@
  "copy": "Kopie",
  "keep the base": "Basis behalten",
  "move the base": "Basis verschieben",
- "original": "Original"
+ "original": "Original",
+ "Vertices joined": "Eckpunkte verbunden",
+ "Not joined: it would leave {defect}. The move was undone.": "Nicht verbunden: es bliebe {defect}. Das Verschieben wurde rückgängig gemacht.",
+ "a face doubled over another": "eine Fläche doppelt über einer anderen",
+ "two faces overlapping in one plane": "zwei sich überlappende Flächen in einer Ebene",
+ "a face that touches itself": "eine Fläche, die sich selbst berührt",
+ "a face whose sides cross": "eine Fläche mit sich kreuzenden Seiten",
+ "a face with no area": "eine Fläche ohne Inhalt",
+ "an edge of zero length": "eine Kante der Länge null"
 }

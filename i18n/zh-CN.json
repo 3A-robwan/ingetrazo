@@ -2475,5 +2475,13 @@
  "keep the base": "保留底面",
  "move the base": "移动底面",
  "Keep the base: on": "保留底面：开",
- "Keep the base: off": "保留底面：关"
+ "Keep the base: off": "保留底面：关",
+ "Vertices joined": "顶点已合并",
+ "Not joined: it would leave {defect}. The move was undone.": "未合并：将会留下{defect}。移动已撤销。",
+ "a face doubled over another": "一个与另一个面重叠的重复面",
+ "two faces overlapping in one plane": "同一平面内两个重叠的面",
+ "a face that touches itself": "一个自身相接的面",
+ "a face whose sides cross": "一个边相交的面",
+ "a face with no area": "一个面积为零的面",
+ "an edge of zero length": "一条长度为零的边"
 }

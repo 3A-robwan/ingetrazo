@@ -7765,6 +7765,15 @@ class Viewport(QOpenGLWidget):
                     return fp
         return base
 
+    def _still_face_under(self, px: float, py: float) -> bool:
+        """Whether a face the drag is NOT bending is under the cursor —
+        the «On face» cue never names the face being moved."""
+        face, grp = self.pick_face_any(px, py)
+        if face is None:
+            return False
+        moving = getattr(self.active_tool, "moving_face_ids", None)
+        return not (grp is None and callable(moving) and id(face) in moving())
+
     def _hover_face_plane(self, cursor):
         """World plane of an unselected face under the cursor, or None."""
         face, grp = self.pick_face_placement(cursor[0], cursor[1])
@@ -7774,6 +7783,14 @@ class Viewport(QOpenGLWidget):
         owner = self._owner_of(grp) if grp is not None else None
         if (owner is not None and owner in sel) or (grp is None and face in sel):
             return None
+        if grp is None:
+            # A face the drag is bending (one corner on a grabbed vertex)
+            # is not somewhere to land: the point would follow the face,
+            # the face the point, and the geometry shook under a still
+            # mouse.
+            moving = getattr(self.active_tool, "moving_face_ids", None)
+            if callable(moving) and id(face) in moving():
+                return None
         from core.snap import face_plane_world
         return face_plane_world(face, getattr(grp, "xform", None))
 
@@ -12947,7 +12964,7 @@ class Viewport(QOpenGLWidget):
             inference_angle_deg=self.inference_angle_deg,
             is_occluded=self._is_occluded,
             are_occluded=None if _NO_SNAP_FAST else self._occluded_many,
-            face_under_cursor=self.pick_face_any(px_x, px_y)[0] is not None,
+            face_under_cursor=self._still_face_under(px_x, px_y),
             edge_threshold_px=self.edge_snap_threshold_px,
             magnetic_axis_deg=getattr(self.active_tool, "magnetic_axis_deg", None),
             screen_axis_px=getattr(self.active_tool, "screen_axis_px", None),
@@ -13408,7 +13425,7 @@ class Viewport(QOpenGLWidget):
             inference_angle_deg=self.inference_angle_deg,
             is_occluded=self._is_occluded,
             are_occluded=None if _NO_SNAP_FAST else self._occluded_many,
-            face_under_cursor=self.pick_face_any(px_x, px_y)[0] is not None,
+            face_under_cursor=self._still_face_under(px_x, px_y),
             edge_threshold_px=self.edge_snap_threshold_px,
             magnetic_axis_deg=getattr(self.active_tool, "magnetic_axis_deg", None),
             screen_axis_px=getattr(self.active_tool, "screen_axis_px", None),

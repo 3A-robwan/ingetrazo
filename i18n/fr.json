@@ -2479,5 +2479,13 @@
  "Keep the base: off": "Garder la base : désactivé",
  "Deselect everything: edges, faces, groups and dimensions.": "Tout désélectionner : arêtes, faces, groupes et cotes.",
  "Select None": "Ne rien sélectionner",
- "Selection cleared ({n} entities)": "Sélection effacée ({n} entités)"
+ "Selection cleared ({n} entities)": "Sélection effacée ({n} entités)",
+ "Vertices joined": "Sommets fusionnés",
+ "Not joined: it would leave {defect}. The move was undone.": "Non fusionnés : il resterait {defect}. Le déplacement a été annulé.",
+ "a face doubled over another": "une face doublée sur une autre",
+ "two faces overlapping in one plane": "deux faces qui se chevauchent dans un même plan",
+ "a face that touches itself": "une face qui se touche elle-même",
+ "a face whose sides cross": "une face dont les côtés se croisent",
+ "a face with no area": "une face sans aire",
+ "an edge of zero length": "une arête de longueur nulle"
 }

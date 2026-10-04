@@ -539,6 +539,15 @@ class MoveTool(Tool):
             return None
         return edges, groups
 
+    def moving_face_ids(self) -> set:
+        """The loose faces the drag bends — any face with a corner on a
+        grabbed vertex. The viewport keeps the cursor from landing on
+        them (it chased its own face and shook)."""
+        if self.grab is None or self._copy:
+            return set()
+        return {id(f) for v in self._verts
+                for e in getattr(v, "edges", ()) for f in e.faces}
+
     # ---- Rotation grips (issue #115) ----------------------------------------
     @property
     def _drag(self):
@@ -656,7 +665,22 @@ class MoveTool(Tool):
 
     # ---- Internals ----------------------------------------------------------
     def _gather(self, ctx: ToolContext):
+        vertex = self._hovered_vertex(ctx)
+        if vertex is not None:
+            return [], [QVector3D(vertex.position)]
         return gather_targets(ctx)
+
+    @staticmethod
+    def _hovered_vertex(ctx: ToolContext):
+        """With nothing selected, a grab ON a corner (the Endpoint snap of
+        loose geometry) takes that one vertex — not the edge or face it
+        belongs to, which is what the pick under the cursor would give."""
+        viewport = ctx.viewport
+        snap = getattr(ctx, "snap", None)
+        if (viewport.scene.selection or snap is None
+                or snap.kind != "endpoint" or snap.context):
+            return None
+        return viewport.scene.mesh.vertex_at(snap.point)
 
     def _gather_copy_entities(self, ctx: ToolContext) -> None:
         """The faces/edges copy mode duplicates, and the wireframe segments
@@ -879,8 +903,23 @@ class MoveTool(Tool):
                 viewport.history.execute(commands[0])
             elif commands:
                 viewport.history.execute(CompoundCommand(commands))
+            self._tell_join(viewport, commands)
         self._reset()
         viewport.update()
+
+    @staticmethod
+    def _tell_join(viewport, commands) -> None:
+        """Say what became of a landing on other vertices: joined, or
+        refused (and the move undone) because the join would break a
+        face."""
+        flash = getattr(viewport, "flash_status", None)
+        if flash is None:
+            return
+        refused = getattr(viewport.history, "last_rejected", None)
+        if refused:
+            flash(refused, 8000)
+        elif any(getattr(c, "welded", False) for c in commands):
+            flash(tr("Vertices joined"))
 
     def _reset(self) -> None:
         self.start_point = None
