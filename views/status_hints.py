@@ -68,8 +68,8 @@ HINTS: dict = {
     "offset": ("Click a face, or connected edges, to offset.",
                "Move to set the offset, or type it and Enter."),
     "fillet": {
-        "idle": "Click an edge to round it (or select edges first); type the radius and Enter.",
-        "sizing": "Move to set the radius, or type it and Enter; click to round. 'Ns' = segments.",
+        "idle": "Click an edge (or select edges first); type the size and Enter.",
+        "sizing": "Move to set the size, or type it and Enter; click to apply. 'Ns' = segments, '0.3p' = profile.",
     },
     # Short on purpose: the Ctrl clause these two now carry says what they
     # leave behind, so repeating "to pull a guide" here only ate the room

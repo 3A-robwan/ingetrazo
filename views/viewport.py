@@ -12635,6 +12635,10 @@ class Viewport(QOpenGLWidget):
                                            "i", "n", "f", "t", "x", "*", "s")):
                 ev.accept()
                 return True
+            # "0.3p", the profile of a bevel — P is Push/Pull otherwise.
+            if t == "p" and hasattr(self.active_tool, "on_profile_value"):
+                ev.accept()
+                return True
         return super().event(ev)
 
     def _tool_claims_key(self, ev) -> bool:
@@ -13164,6 +13168,14 @@ class Viewport(QOpenGLWidget):
                             "Type the count alone here, e.g. 3x"))
                 self._set_value_buffer("")
                 return True
+            if isinstance(value, tuple) and value and value[0] == "profile":
+                # "0.3p": the profile of a bevel. Only tools that declare
+                # it understand.
+                handler = getattr(self.active_tool, "on_profile_value", None)
+                if handler is not None:
+                    handler(self, value[1])
+                self._set_value_buffer("")
+                return True
             if isinstance(value, tuple) and value and value[0] == "radius":
                 # "2r": the 2-point arc takes a RADIUS instead
                 # of the bulge. Only tools that declare it understand.
@@ -13205,6 +13217,12 @@ class Viewport(QOpenGLWidget):
             return True
         if arrays and text.lower() == "x" and self._current_token_tail():
             # "3x" — only after a digit: bare X stays the Text tool shortcut.
+            self._set_value_buffer(self._value_buffer + text)
+            return True
+        if (text.lower() == "p" and self._current_token_tail()
+                and hasattr(self.active_tool, "on_profile_value")):
+            # "0.3p" — only after a digit, and only for a tool that takes a
+            # profile: bare P stays the Push/Pull shortcut.
             self._set_value_buffer(self._value_buffer + text)
             return True
         if arrays and text == "/" and not self._value_buffer:
@@ -13296,6 +13314,12 @@ class Viewport(QOpenGLWidget):
             if m is None:
                 return None
             return ("radius", float(m.group(1)))
+        if stripped.lower().endswith("p") and ":" not in stripped:
+            # "0.3p": the profile of a bevel (0 to 1, no unit).
+            m = re.fullmatch(r"(\d+\.?\d*|\.\d+)p", stripped.lower())
+            if m is None:
+                return None
+            return ("profile", float(m.group(1)))
         if stripped.lower().endswith("s") and ":" not in stripped:
             # "12s": the segment count of an arc / the sides of
             # a circle. Only tools that declare it understand.
