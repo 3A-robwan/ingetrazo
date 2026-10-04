@@ -143,6 +143,15 @@ follow [SemVer](https://semver.org).
   por el grupo de detrás ni quita «Crear grupo» del menú; igual en Mover y
   en el Borrador (#276, #363, #378).
 
+- **Un sólido nuevo salía con la cara de abajo invertida si en el modelo
+  había otra pieza abierta** (un cubo al que le borraste una cara): la
+  corrección de orientación miraba si TODO el modelo estaba cerrado, así
+  que una sola pieza abierta la apagaba para todos; agrupar el cubo
+  abierto lo «arreglaba» y explotarlo lo volvía a romper. Ahora se decide
+  por cada sólido. Por prudencia, en un modelo con piezas abiertas una
+  corrección solo se queda si deja el sólido más coherente que antes
+  (probado con la plaza: corrige cuatro sólidos y deja intacto un quinto
+  que habría estropeado) (#230, @Rainjalin).
 - **Bajar una arista sobre otra dejaba vértices dobles**: al hacer una
   rampa con Mover, cada esquina caía sobre otra pero quedaban dos vértices
   en el mismo punto, con una cara sin área que hacía fallar Crear grupo y

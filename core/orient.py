@@ -475,8 +475,20 @@ def orient_outward(mesh, seed: int = 12345, only=None) -> list:
     # above are still computed for open meshes (a plan mixing raised rooms
     # with flat floors is open as a whole, yet its interior walls are real
     # partitions the volumetric queries must skip).
-    if not is_closed(mesh):
-        return []
+    mesh_closed = is_closed(mesh)
+    if not mesh_closed:
+        if only is None:
+            return []
+        # A scoped pass (an edit's own solids) judges closure per
+        # component: one open piece elsewhere in the mesh used to stop the
+        # pass for every solid, and a cube pushed beside a cube with a
+        # face deleted kept its base reversed (#230). An open component
+        # still has no outside, so its faces are never turned.
+        open_comps = {comp_of[f] for e in mesh.edges if len(e.faces) == 1
+                      for f in e.faces if f in comp_of}
+        scope = [f for f in scope if comp_of[f] not in open_comps]
+        if not scope:
+            return []
     rng = random.Random(seed)
     base_by_comp = _boundary_base(set(boundary))
     to_flip = []
@@ -489,6 +501,25 @@ def orient_outward(mesh, seed: int = 12345, only=None) -> list:
                             mask=base_by_comp[c] & (sp.face_idx != fidx[f])) \
                 == "inward":
             to_flip.append(f)
+    # Through an open mesh (the scoped path above) the flips are checked
+    # before they stay: a solid whose shared edges disagree MORE after the
+    # flips than before was misread by the parity rays, and keeps the
+    # windings it had. Measured on plaza.igz: of five solids this path
+    # would turn, four came out more consistent and one — a 51-face solid
+    # consistent to begin with — would have lost 52 edges (#230).
+    saved = {}
+    before_bad = {}
+    if not mesh_closed and to_flip:
+        import copy
+        for f in to_flip:
+            saved[f] = (copy.deepcopy(f.attrs), list(f.loop),
+                        [list(h) for h in f.hole_loops])
+        members: dict = {}
+        flip_comps = {comp_of[f] for f in to_flip}
+        for f in scope:
+            if comp_of[f] in flip_comps:
+                members.setdefault(comp_of[f], []).append(f)
+        before_bad = {c: _incoherent_edges(fs) for c, fs in members.items()}
     for f in to_flip:
         # Flip in place: reversing the loops reverses the winding (so the normal
         # flips) while keeping the *same* Face object and its shared edges/
@@ -497,4 +528,31 @@ def orient_outward(mesh, seed: int = 12345, only=None) -> list:
         # side keeps its own paint (``turn_face_over``): this pass corrects
         # windings, it must not move a brick texture indoors.
         turn_face_over(f)
+    if before_bad:
+        worse = {c for c, fs in members.items()
+                 if _incoherent_edges(fs) > before_bad[c]}
+        if worse:
+            for f in to_flip:
+                if comp_of[f] in worse:
+                    attrs, loop, holes = saved[f]
+                    f.attrs = attrs
+                    f.loop[:] = loop
+                    for h, old in zip(f.hole_loops, holes):
+                        h[:] = old
+            to_flip = [f for f in to_flip if comp_of[f] not in worse]
     return to_flip
+
+
+def _incoherent_edges(faces) -> int:
+    """How many edges two of ``faces`` both walk in the same direction. In
+    a consistently wound solid every shared edge is walked once each way,
+    so this counts the disagreements, independently of any ray."""
+    uses: dict = {}
+    for f in faces:
+        for loop in (f.loop, *f.hole_loops):
+            n = len(loop)
+            for i in range(n):
+                a, b = loop[i], loop[(i + 1) % n]
+                uses.setdefault(frozenset((id(a), id(b))), []).append(
+                    (id(a), id(b)))
+    return sum(1 for u in uses.values() if len(u) == 2 and u[0] == u[1])

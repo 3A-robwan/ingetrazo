@@ -1526,10 +1526,15 @@ class PushPullTool(Tool):
         # parity pass per mouse move only made the drag lag; the commit runs
         # it for real. A sheet-path push whose result is still open has
         # nothing to orient either way (open meshes never flip; interior
-        # marking is recomputed by the next solid op).
-        if not preview and (not sheet_fast or is_closed(scene.mesh)):
-            orient_outward(scene.mesh,
-                           only=self._touched_faces(scene.mesh, seedkeys))
+        # marking is recomputed by the next solid op). What counts is the
+        # pushed solid, not the whole mesh: an open piece elsewhere left a
+        # new box with its base reversed (#230).
+        if not preview:
+            touched = self._touched_faces(scene.mesh, seedkeys)
+            if (not sheet_fast or is_closed(scene.mesh)
+                    or (touched and _component_is_closed(scene.mesh,
+                                                         touched[0]))):
+                orient_outward(scene.mesh, only=touched)
 
     @staticmethod
     def _touched_faces(mesh, seedkeys: set):
