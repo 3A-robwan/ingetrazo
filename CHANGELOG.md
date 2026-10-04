@@ -152,6 +152,13 @@ follow [SemVer](https://semver.org).
   corrección solo se queda si deja el sólido más coherente que antes
   (probado con la plaza: corrige cuatro sólidos y deja intacto un quinto
   que habría estropeado) (#230, @Rainjalin).
+- **Restar un tercer sólido a un muro con dos puertas fallaba** con «Ese
+  sólido tiene un fallo que la operación no puede leer»: con dos huecos
+  alineados, la cara del muro se triangula con una arista larga que pasa
+  por las esquinas de los dos huecos, lo que para dibujar está bien pero
+  la operación de sólidos no lo acepta. Ahora, solo cuando la operación lo
+  rechaza, esos triángulos se parten en esas esquinas y se reintenta; lo
+  que ya funcionaba se procesa exactamente igual (#227, @fafecm).
 - **Bajar una arista sobre otra dejaba vértices dobles**: al hacer una
   rampa con Mover, cada esquina caía sobre otra pero quedaban dos vértices
   en el mismo punto, con una cara sin área que hacía fallar Crear grupo y
