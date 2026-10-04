@@ -8003,8 +8003,12 @@ class Viewport(QOpenGLWidget):
                 # differs. Deterministic mix, no hash() — the disk digest
                 # reuses this term across runs.
                 hid ^= ((i + 1) * 2654435761) & 0xFFFFFFFF
-        return (len(mesh.vertices), len(mesh.edges), len(mesh.faces),
-                round(s, 4), a, soft, hid)
+        fp = (len(mesh.vertices), len(mesh.edges), len(mesh.faces),
+              round(s, 4), a, soft, hid)
+        # Reverse Faces changes none of the above (#197): the mesh counts
+        # its flips, and only a flipped mesh carries the extra term.
+        wr = getattr(mesh, "_winding_rev", 0)
+        return fp + (("winding", wr),) if wr else fp
 
     def _group_fp(self, group):
         """Fingerprint of a group's mesh, memoised per scene version — the
@@ -8719,6 +8723,10 @@ class Viewport(QOpenGLWidget):
         import hashlib
         h = hashlib.sha1()
         h.update(repr((fp[0], fp[1], fp[2], fp[3], fp[5])).encode())
+        if len(fp) > 7 and fp[7][0] == "winding":
+            # Flipped this session (#197): never the digest of the same
+            # mesh before the flip, which would serve its old winding.
+            h.update(repr(fp[7]).encode())
         if fp[6]:
             # Hidden-edge term, only when some edge IS hidden: meshes without
             # any (the overwhelming majority) keep their pre-existing digests,

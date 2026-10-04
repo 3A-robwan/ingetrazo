@@ -748,6 +748,23 @@ class FlipFacesCommand(Command):
             f.loop.reverse()
             for h in getattr(f, "hole_loops", []) or []:
                 h.reverse()
+        # A reversed loop changes no count, coordinate or paint — all a
+        # cached group chunk is checked against — so the group went on
+        # drawing the old winding until some edit changed a count (#197).
+        # Each mesh holding a flipped face says so; the others keep theirs.
+        from core.group import iter_placements
+        ids = {id(f) for f in self._faces}
+        meshes = [getattr(scene, "mesh", None),
+                  getattr(scene, "loose_mesh", None)]
+        meshes += [pg.mesh for g in getattr(scene, "groups", [])
+                   for pg, _m in iter_placements(g)]
+        seen: set = set()
+        for m in meshes:
+            if m is None or id(m) in seen:
+                continue
+            seen.add(id(m))
+            if any(id(f) in ids for f in m.faces):
+                m._winding_rev = getattr(m, "_winding_rev", 0) + 1
         _dirty_group_chunks(scene)
         scene.version += 1
 

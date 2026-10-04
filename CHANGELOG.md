@@ -53,6 +53,11 @@ follow [SemVer](https://semver.org).
   al acercar: el visor no dibujaba nada a más de 10 km del ojo. El límite
   lejano crece ahora con la distancia de la cámara; a distancias normales
   no cambia nada (#340).
+- **Invertir caras dentro de un grupo no se veía** hasta borrar la cara y
+  deshacer: la cara sí se invertía, pero el visor seguía dibujando el
+  grupo como estaba, porque invertir no cambia ni el número de caras ni
+  sus coordenadas, que es lo que el visor vigilaba. Ahora se ve al
+  instante, también al deshacer (#197, @fafecm, @joejivaros).
 
 ## [0.5.7] — 2026-09-30
 
