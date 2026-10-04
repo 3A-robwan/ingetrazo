@@ -41,6 +41,19 @@ follow [SemVer](https://semver.org).
   por encima de 18 GB a 32 ms por movimiento y 11,7 GB; con Línea, 71 ms.
   Los modelos normales usan el índice de siempre.
 
+### Corregido
+- **Alejar mucho con la rueda dejaba el modelo sin poder guardarse**:
+  pasado el límite de 10 km, el punto al que mira la cámara seguía
+  alejándose un 11 % por paso; la vista se volvía lenta y blanca y al
+  final la cámara tomaba un valor inválido que el guardado rechazaba.
+  Ahora el zoom se detiene en el límite, la cámara nunca toma un valor
+  inválido y, si lo tuviera, el guardado conserva la última vista buena
+  (#383, probablemente también #242).
+- **Al alejar un modelo grande desaparecía su parte del fondo** y volvía
+  al acercar: el visor no dibujaba nada a más de 10 km del ojo. El límite
+  lejano crece ahora con la distancia de la cámara; a distancias normales
+  no cambia nada (#340).
+
 ## [0.5.7] — 2026-09-30
 
 **Ventanas paramétricas, la selección con puntos y una semana de pedidos

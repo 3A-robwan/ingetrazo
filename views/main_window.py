@@ -4072,8 +4072,14 @@ class MainWindow(QMainWindow):
 
     def _camera_dict(self) -> dict:
         """The live camera as the document keeps it (the .skp format
-        saves the camera in the file too; @pacaeiro, issue #60)."""
+        saves the camera in the file too; @pacaeiro, issue #60).
+
+        A camera that is not a real pose (NaN or inf) is not written: the
+        save refused the whole document over it and the user's work could
+        not be saved (#383). The document keeps the view it had."""
         cam = self.viewport.camera
+        if not cam.is_finite():
+            return getattr(self.viewport.scene, "camera_home", None)
         t = cam.target
         out = {"target": [float(t.x()), float(t.y()), float(t.z())]}
         for k in self._CAMERA_FIELDS:
