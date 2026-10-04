@@ -132,10 +132,9 @@ class Driver:
         # No autosave: a run killed mid-gesture would leave a slot behind,
         # and the next open of that document would stop on the «recover the
         # auto-saved copy?» dialog instead of measuring.
-        from PySide6.QtCore import QSettings
-        st_ = QSettings()
-        st_.setValue("general/autosave", "0")
-        st_.setValue("general/backup", "0")
+        from core import general_settings
+        general_settings.set_value("autosave", "0")
+        general_settings.set_value("backup", "0")
         from views.main_window import MainWindow
         self.win = MainWindow()
         self.vp = self.win.viewport

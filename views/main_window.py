@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core import general_settings as _gs
 from core.i18n import (LANGUAGE_NAMES, available_languages, current_language,
                        set_language, tr)
 from views.theme import style as theme_style
@@ -245,7 +246,7 @@ class MainWindow(QMainWindow):
         self.viewport = Viewport(self)
         try:                                        # issue #56
             self.viewport.history.max_steps = int(
-                QSettings().value("general/undo_steps", 200))
+                _gs.value("undo_steps", 200))
         except (TypeError, ValueError):
             self.viewport.history.max_steps = 200
         self.viewport.glReady.connect(self._on_gl_ready)
@@ -417,8 +418,8 @@ class MainWindow(QMainWindow):
             timer = self._autosave_timer = QTimer(self)
             timer.timeout.connect(self._on_autosave_tick)
         st = QSettings()
-        enabled = str(st.value("general/autosave", "1")) != "0"
-        minutes = max(1, min(60, int(st.value("general/autosave_min", 5))))
+        enabled = str(_gs.value("autosave", "1", st)) != "0"
+        minutes = max(1, min(60, int(_gs.value("autosave_min", 5, st))))
         timer.stop()
         if enabled:
             timer.start(minutes * 60 * 1000)
@@ -4530,7 +4531,7 @@ class MainWindow(QMainWindow):
         # Backup BEFORE writing (Preferences ▸ General): the previous good
         # version survives even a save that dies mid-write — which a syncing
         # drive has actually produced (pCloud truncation).
-        if str(QSettings().value("general/backup", "1")) != "0" \
+        if str(_gs.value("backup", "1")) != "0" \
                 and path.is_file():
             import shutil
             try:

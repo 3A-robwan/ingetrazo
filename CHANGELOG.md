@@ -58,6 +58,13 @@ follow [SemVer](https://semver.org).
   grupo como estaba, porque invertir no cambia ni el número de caras ni
   sus coordenadas, que es lo que el visor vigilaba. Ahora se ve al
   instante, también al deshacer (#197, @fafecm, @joejivaros).
+- **Las preferencias de General se perdían al reiniciar**: el tema volvía
+  siempre a oscuro, y si habías desactivado el autoguardado o la copia
+  `.bak`, o cambiado el intervalo, los pasos de deshacer o el servidor
+  gráfico, volvían a su valor por defecto. Se guardaban bien, pero se
+  buscaban con un nombre que Qt solo reconoce dentro de la misma sesión.
+  Ahora se leen también los valores que ya guardaste con versiones
+  anteriores (#266, diagnosticado por @parampreetss).
 
 ## [0.5.7] — 2026-09-30
 

@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core import general_settings as _gs
 from core.i18n import LANGUAGE_NAMES as _LANGUAGE_NAMES
 from core.i18n import available_languages, current_language, tr
 
@@ -92,15 +93,14 @@ class PreferencesDialog(QDialog):
 
         row = QHBoxLayout()
         self._autosave = QCheckBox(tr("Auto-save every"))
-        self._autosave.setChecked(str(st.value("general/autosave", "1"))
+        self._autosave.setChecked(str(_gs.value("autosave", "1", st))
                                   != "0")
         row.addWidget(self._autosave)
         self._autosave_min = QSpinBox()
         self._autosave_min.setRange(1, 60)
         self._autosave_min.setSuffix(" " + tr("min"))
         try:
-            self._autosave_min.setValue(int(st.value("general/autosave_min",
-                                                     5)))
+            self._autosave_min.setValue(int(_gs.value("autosave_min", 5, st)))
         except (TypeError, ValueError):
             self._autosave_min.setValue(5)
         self._autosave.toggled.connect(self._autosave_min.setEnabled)
@@ -111,13 +111,13 @@ class PreferencesDialog(QDialog):
 
         self._backup = QCheckBox(tr("Keep a backup of the previous save "
                                     "(.igz.bak)"))
-        self._backup.setChecked(str(st.value("general/backup", "1")) != "0")
+        self._backup.setChecked(str(_gs.value("backup", "1", st)) != "0")
         form.addRow("", self._backup)
 
         self._undo_steps = QSpinBox()
         self._undo_steps.setRange(0, 5000)
         self._undo_steps.setSpecialValueText(tr("unlimited"))
-        self._undo_steps.setValue(int(st.value("general/undo_steps", 200)))
+        self._undo_steps.setValue(int(_gs.value("undo_steps", 200, st)))
         self._undo_steps.setToolTip(tr(
             "Steps kept for Undo. Each one holds a snapshot of the model, "
             "so fewer steps mean less memory on a big model; 0 = unlimited."))
@@ -183,7 +183,7 @@ class PreferencesDialog(QDialog):
                            (WAYLAND, tr("Wayland")), (XCB, tr("X11 (XWayland)"))):
             self._platform.addItem(label, key)
         self._platform.setCurrentIndex(max(0, self._platform.findData(
-            str(st.value("general/platform", AUTO) or AUTO))))
+            str(_gs.value("platform", AUTO, st) or AUTO))))
         self._platform.setToolTip(tr(
             "Which display server Qt draws through. Under Wayland with a "
             "125 % / 150 % display scale the viewport stutters; X11 "
@@ -397,19 +397,19 @@ class PreferencesDialog(QDialog):
             if act is not None:
                 act.setChecked(True)
 
-        st.setValue("general/autosave",
-                    "1" if self._autosave.isChecked() else "0")
-        st.setValue("general/autosave_min", self._autosave_min.value())
-        st.setValue("general/backup", "1" if self._backup.isChecked() else "0")
+        _gs.set_value("autosave", "1" if self._autosave.isChecked() else "0",
+                      st)
+        _gs.set_value("autosave_min", self._autosave_min.value(), st)
+        _gs.set_value("backup", "1" if self._backup.isChecked() else "0", st)
         st.setValue("section/ask_name",
                     "1" if self._ask_section.isChecked() else "0")
         st.setValue("new_document/scale_figure",
                     "1" if self._scale_figure.isChecked() else "0")
-        st.setValue("general/undo_steps", int(self._undo_steps.value()))
+        _gs.set_value("undo_steps", int(self._undo_steps.value()), st)
         history = getattr(getattr(self._window, "viewport", None), "history", None)
         if history is not None:
             history.max_steps = int(self._undo_steps.value())
-        st.setValue("general/platform", self._platform.currentData())
+        _gs.set_value("platform", self._platform.currentData(), st)
         setup = getattr(self._window, "_setup_autosave", None)
         if callable(setup):
             setup()                     # re-arm the timer with the new pace
