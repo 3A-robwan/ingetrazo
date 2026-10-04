@@ -1224,6 +1224,16 @@ def compute_snap(
     # through the reference just clicked, and a chord of the next circle
     # turned the angle with the cursor's distance (issue #140, @pacaeiro).
     line_inferences = allow_axis and not radial_arm
+    # A point acquired where the operation STARTED adds nothing: every line
+    # through the start along an axis is the axis inference itself. Left in,
+    # its derived «From point» outranked the axis cue it derives from, so
+    # dragging an edge along red read «From point» all the way and even
+    # nudged the point off the cursor (#368, @pacaeiro — the family where a
+    # derived inference must never beat what it comes from). It still counts
+    # as one of TWO acquired points: their crossing is a real inference.
+    if (acquired_point is not None and start_point is not None
+            and (acquired_point - start_point).lengthSquared() < 1e-12):
+        acquired_point = None
 
     # 1. Explicit axis lock (arrow keys). Use the viewport's camera-aware
     #    projection so locks to Z (vertical) actually move along Z. Existing
