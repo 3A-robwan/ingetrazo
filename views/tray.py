@@ -1052,6 +1052,8 @@ class ComponentsPanel(QWidget):
     panel costs a handful of pixmap loads and never touches the GL renderer."""
 
     COLS = 3
+    #: Rows from which the «In model» list offers its name filter.
+    FILTER_FROM = 8
 
     def __init__(self, window) -> None:
         super().__init__()
@@ -1118,49 +1120,167 @@ class ComponentsPanel(QWidget):
         # from; it says nothing about what you already have, which is what
         # you actually look for when you want to find or re-place a piece.
         lay.addWidget(QLabel(f"<b>{tr('In model')}</b>"))
+        # A long list is searched by name rather than scrolled (the list
+        # «can get quite big», PR #4 review). Only shown once it is long.
+        self._in_model_filter = QLineEdit()
+        self._in_model_filter.setPlaceholderText(tr("Filter by name…"))
+        self._in_model_filter.setClearButtonEnabled(True)
+        self._in_model_filter.textChanged.connect(self._apply_in_model_filter)
+        lay.addWidget(self._in_model_filter)
         self._in_model = QListWidget()
         self._in_model.setToolTip(tr(
             "Components placed in this drawing — click one to select its "
             "copies"))
         self._in_model.itemClicked.connect(self._select_component)
+        # Each row shows what the component looks like
+        # (views/component_thumbs.py), not only its name.
+        from views.component_thumbs import SIZE as _THUMB
+        self._in_model.setIconSize(QSize(_THUMB, _THUMB))
+        # Right-click a row: the same two moves the viewport's menu offers,
+        # from the list — which is where a long one is searched anyway.
+        self._in_model.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._in_model.customContextMenuRequested.connect(
+            self._in_model_menu)
         lay.addWidget(self._in_model)
+        # The definitions of another document, kept here unplaced: a
+        # library drawn from a file of one's own.
+        from_file = QPushButton(tr("Components from File…"))
+        from_file.setToolTip(tr(
+            "Add the components of another IngeTrazo document to this "
+            "list, kept in the file and ready to place or swap in"))
+        from_file.clicked.connect(window._on_components_from_file)
+        lay.addWidget(from_file)
         self.refresh_in_model()
 
     def _components_in_model(self) -> list:
-        """``[(name, faces, [groups])]`` per distinct prototype, most copies
-        first. Instances share their prototype mesh, so identity groups them —
-        no geometry is walked."""
+        """``[(name, faces, [groups], template)]`` per distinct prototype,
+        most copies first. Instances share their prototype mesh, so identity
+        groups them — no geometry is walked. ``template`` is the definition
+        kept in the file (``None`` when it is not kept); a kept one with no
+        copy placed is a row too, with an empty list."""
+        from core.kept_components import kept_template
+        scene = self._window.viewport.scene
         by_proto: dict = {}
-        for g in self._window.viewport.scene.groups:
+        for g in scene.groups:
             if not g.is_component() or getattr(g, "billboard", False):
                 continue
             by_proto.setdefault(id(g.mesh), []).append(g)
-        rows = [(gs[0].name, len(gs[0].mesh.faces), gs)
+        rows = [(gs[0].name, len(gs[0].mesh.faces), gs,
+                 kept_template(scene, gs[0].mesh))
                 for gs in by_proto.values()]
-        rows.sort(key=lambda r: (-len(r[2]), r[0].lower()))
+        rows += [(t.name, len(t.mesh.faces), [], t)
+                 for t in getattr(scene, "kept_components", None) or ()
+                 if id(t.mesh) not in by_proto]
+        rows.sort(key=lambda r: (-len(r[2]), (r[0] or "").lower()))
         return rows
 
     def refresh_in_model(self) -> None:
+        from views.component_thumbs import thumbnail
         self._in_model.clear()
-        for name, faces, gs in self._components_in_model():
+        for name, faces, gs, kept in self._components_in_model():
             copies = len(gs)
             label = f"{name}  ({copies}×, {faces} " + tr("Faces").lower() + ")"
+            if kept is not None:
+                label += "  · " + tr("kept")
             item = QListWidgetItem(label)
+            item.setIcon(QIcon(thumbnail(gs[0] if gs else kept)))
             item.setData(Qt.UserRole, gs)
+            item.setData(Qt.UserRole + 1, kept)
             self._in_model.addItem(item)
         if self._in_model.count() == 0:
             self._in_model.addItem(QListWidgetItem(tr("No components yet")))
+        self._in_model_filter.setVisible(
+            self._in_model.count() >= self.FILTER_FROM
+            or bool(self._in_model_filter.text()))
+        self._apply_in_model_filter()
+
+    def _apply_in_model_filter(self, _text=None) -> None:
+        """Hide the rows whose name does not hold the filter text (any
+        case, accents as typed). The list keeps its rows; only their
+        visibility changes, so a refresh does not lose the filter."""
+        needle = self._in_model_filter.text().strip().casefold()
+        for i in range(self._in_model.count()):
+            item = self._in_model.item(i)
+            groups = item.data(Qt.UserRole) or []
+            kept = item.data(Qt.UserRole + 1)
+            definition = groups[0] if groups else kept
+            name = (definition.name or "") if definition is not None else ""
+            item.setHidden(bool(needle) and definition is not None
+                           and needle not in name.casefold())
         fit_rows(self._in_model, max_rows=12)
 
     def _select_component(self, item) -> None:
         groups = item.data(Qt.UserRole)
-        if not groups:
+        if groups:
+            self._select_groups(groups)
+
+    def _in_model_actions(self, groups, kept=None) -> list:
+        """``[(text, callback, checked, tip)]`` for a row of the «In model»
+        list — its right-click menu, kept apart so it can be read without
+        opening one. ``callback`` None = shown greyed; ``checked`` None =
+        not a check entry; ``tip`` None = no tooltip."""
+        from core.kept_components import make_template, place_copy
+        definition = kept if kept is not None else groups[0]
+        swap = [g for g in self._window.viewport.scene.selection
+                if isinstance(g, Group) and g.is_component()
+                and g.mesh is not definition.mesh]
+        out = [(tr("Select Instances ({n})", n=len(groups)),
+                (lambda: self._select_groups(groups)) if groups else None,
+                None, None)]
+        if swap:
+            out.append((tr("Replace {n} Selected with This", n=len(swap)),
+                        lambda: self._window.replace_selection_with(
+                            definition), None, None))
+        else:
+            out.append((tr("Replace Selection with This"), None, None,
+                        tr("Select the instances of another component in "
+                           "the model first")))
+        out.append((tr("Place a Copy"),
+                    lambda: self._window._start_place(place_copy(
+                        kept if kept is not None
+                        else make_template(definition))), None, None))
+        out.append((tr("Keep in File"),
+                    lambda: self._window.keep_component(
+                        definition, kept is None), kept is not None,
+                    tr("Keep this definition in the file even with no copy "
+                       "placed, to place it or swap copies for it later")))
+        out.append((tr("Rename…"),
+                    lambda: self._window.rename_component(definition),
+                    None, tr("Renames every copy of this component")))
+        return out
+
+    def _in_model_menu(self, pos) -> None:
+        item = self._in_model.itemAt(pos)
+        if item is None:
             return
+        groups = item.data(Qt.UserRole) or []
+        kept = item.data(Qt.UserRole + 1)
+        if not groups and kept is None:
+            return                          # «No components yet»
+        menu = QMenu(self._in_model)
+        menu.setToolTipsVisible(True)
+        for text, callback, checked, tip in self._in_model_actions(
+                groups, kept):
+            act = menu.addAction(text)
+            if checked is not None:
+                act.setCheckable(True)
+                act.setChecked(checked)
+            if tip:
+                act.setToolTip(tip)
+            if callback is None:
+                act.setEnabled(False)
+            else:
+                act.triggered.connect(lambda _c=False, cb=callback: cb())
+        menu.exec(self._in_model.viewport().mapToGlobal(pos))
+
+    def _select_groups(self, groups) -> None:
         scene = self._window.viewport.scene
         scene.selection.clear()
         scene.selection.update(groups)
         scene.bump_view()
         self._window.viewport.update()
+        self._window.statusBar().showMessage(
+            tr("{n} entities selected", n=len(groups)), 2500)
 
 
 class PartsPanel(QWidget):

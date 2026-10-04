@@ -2600,6 +2600,224 @@ class MainWindow(QMainWindow):
             self.viewport.history.execute(MakeUniqueCommand(g))
         self.viewport.update()
 
+    def _replacement_choices(self, sel) -> list:
+        """``[(label, instance)]``: one row per component definition in the
+        model that the selection could be swapped for — one instance stands
+        for its definition. The selected components' own definitions are
+        left out, and so are the face-me cutouts, as the tray does."""
+        own = {id(g.mesh) for g in sel
+               if isinstance(g, Group) and g.is_component()}
+        scene = self.viewport.scene
+        pool = list(scene.groups)
+        ctx = scene.edit_group
+        if ctx is not None:
+            pool += [c for c in (ctx.children or ()) if c not in pool]
+        by_proto: dict = {}
+        for g in pool:
+            if (not isinstance(g, Group) or not g.is_component()
+                    or getattr(g, "billboard", False) or id(g.mesh) in own):
+                continue
+            by_proto.setdefault(id(g.mesh), []).append(g)
+        # Definitions kept in the file count even with no copy placed:
+        # (definition, copies) per prototype.
+        rows = [(gs[0], len(gs)) for gs in by_proto.values()]
+        rows += [(t, 0) for t in scene.kept_components
+                 if id(t.mesh) not in by_proto and id(t.mesh) not in own]
+        rows.sort(key=lambda r: ((r[0].name or "").lower(), -r[1]))
+        out = []
+        seen: set = set()
+        for definition, n in rows:
+            name = definition.name or tr("Component")
+            label = f"{name}  ({n}×)"
+            k = 2
+            while label in seen:                # two definitions, one name
+                label = f"{name} [{k}]  ({n}×)"
+                k += 1
+            seen.add(label)
+            out.append((label, definition))
+        return out
+
+    def _on_replace_component(self) -> None:
+        """Replace Component…: the selected component instances take
+        another definition from the model, each keeping its place, turn and
+        scale. Select ▸ All Instances first to swap every copy."""
+        from PySide6.QtWidgets import QInputDialog
+        sel = list(self.viewport.scene.selection)
+        targets = [g for g in sel if isinstance(g, Group) and g.is_component()]
+        if not targets:
+            self.viewport.flash_status(tr("Select a component first"))
+            return
+        choices = self._replacement_choices(sel)
+        if not choices:
+            self.viewport.flash_status(tr(
+                "There is no other component in the model to replace it with"))
+            return
+        labels = [lb for lb, _g in choices]
+        label, ok = QInputDialog.getItem(
+            self, tr("Replace Component"),
+            tr("Replace {n} selected instances with:", n=len(targets)),
+            labels, 0, False)
+        if not ok or label not in labels:
+            return
+        self.replace_selection_with(choices[labels.index(label)][1])
+
+    def keep_component(self, definition, keep: bool = True) -> None:
+        """Keep in File on or off for ``definition``'s component (an
+        instance or a kept template), undoable."""
+        from core.history import KeepComponentCommand
+        self.viewport.history.execute(KeepComponentCommand(definition, keep))
+        self.viewport.notify_scene_changed()
+        if keep:
+            text = tr("{name} is kept in the file, even with no copy placed",
+                      name=definition.name)
+        else:
+            text = tr("{name} is no longer kept in the file",
+                      name=definition.name)
+        self.statusBar().showMessage(text, 4000)
+
+    def replace_selection_with(self, source) -> int:
+        """Swap the selected component instances for ``source``'s
+        definition, as one undo step; how many changed. The menu's dialog
+        and the tray's «In model» list both land here."""
+        from core.history import (CompoundCommand, KeepComponentCommand,
+                                  ReplaceComponentCommand)
+        from core.kept_components import orphaned_by
+        cmd = ReplaceComponentCommand(
+            [g for g in self.viewport.scene.selection
+             if isinstance(g, Group)], source)
+        if not cmd.targets:
+            return 0
+        # Swapping every copy away would drop a definition from the file
+        # for good: say which, and offer to keep it — in the same undo step.
+        orphans = orphaned_by(self.viewport.scene, cmd.targets)
+        steps = [cmd]
+        if orphans:
+            keep = self._ask_keep_orphans(orphans)
+            if keep is None:
+                return 0
+            if keep:
+                steps = [KeepComponentCommand(g) for g in orphans] + [cmd]
+        self.viewport.history.execute(
+            steps[0] if len(steps) == 1 else CompoundCommand(steps))
+        self.viewport.notify_scene_changed()
+        self.viewport.update()
+        self.statusBar().showMessage(tr(
+            "{n} instances replaced with {name}", n=len(cmd.targets),
+            name=source.name), 4000)
+        return len(cmd.targets)
+
+    def _ask_keep_orphans(self, orphans):
+        """True = keep them in the file, False = let them go, None =
+        cancel the replacement."""
+        names = ", ".join(sorted({g.name or tr("Component") for g in orphans}))
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Question)
+        box.setWindowTitle(tr("Replace Component"))
+        box.setText(tr("No copy of {names} will be left in the model.",
+                       names=names))
+        box.setInformativeText(tr(
+            "Keep it in the file, to place it or swap back to it later?"))
+        keep = box.addButton(tr("Keep in File"), QMessageBox.AcceptRole)
+        drop = box.addButton(tr("Let It Go"), QMessageBox.DestructiveRole)
+        box.addButton(QMessageBox.Cancel)
+        box.setDefaultButton(keep)
+        box.exec()
+        if box.clickedButton() is keep:
+            return True
+        if box.clickedButton() is drop:
+            return False
+        return None
+
+    def keep_selected_components(self, keep: bool = True) -> None:
+        """Keep in File, on or off, for every component definition the
+        selection uses — one undo step."""
+        from core.history import CompoundCommand, KeepComponentCommand
+        seen: set = set()
+        cmds = []
+        for g in self.viewport.scene.selection:
+            if (isinstance(g, Group) and g.is_component()
+                    and id(g.mesh) not in seen):
+                seen.add(id(g.mesh))
+                cmds.append(KeepComponentCommand(g, keep))
+        if not cmds:
+            return
+        self.viewport.history.execute(
+            cmds[0] if len(cmds) == 1 else CompoundCommand(cmds))
+        self.viewport.notify_scene_changed()
+        if keep:
+            text = tr("{n} components kept in the file", n=len(cmds))
+        else:
+            text = tr("{n} components no longer kept in the file",
+                      n=len(cmds))
+        self.statusBar().showMessage(text, 4000)
+
+    def rename_component(self, definition) -> None:
+        """Rename a component definition: every copy, placed or nested,
+        and the kept template take the new name, as one undo step."""
+        from core.history import CompoundCommand, RenameGroupCommand
+        from core.kept_components import copies_of, kept_template
+        scene = self.viewport.scene
+        name, ok = _prompts.get_text(
+            self, tr("Rename Component"), tr("Component name:"),
+            text=definition.name or "")
+        name = name.strip()
+        if not ok or not name or name == definition.name:
+            return
+        targets = copies_of(scene, definition.mesh)
+        kept = kept_template(scene, definition.mesh)
+        if kept is not None and kept not in targets:
+            targets.append(kept)
+        if definition not in targets:
+            targets.append(definition)
+        self.viewport.history.execute(CompoundCommand(
+            [RenameGroupCommand(g, name) for g in targets]))
+        self.viewport.notify_scene_changed()
+
+    def _on_components_from_file(self) -> None:
+        start = (str(self._current_path.parent)
+                 if getattr(self, "_current_path", None) else "")
+        path, _ = file_dialogs.getOpenFileName(
+            self, tr("Components from File"), start,
+            tr("IngeTrazo document (*.igz)"))
+        if not path:
+            return
+        try:
+            n = self.import_kept_components(path)
+        except Exception as exc:  # noqa: BLE001 - any unreadable file
+            QMessageBox.warning(self, tr("Components from File"),
+                                tr("Could not read {p}: {e}", p=path, e=exc))
+            return
+        if n:
+            text = tr("{n} components added to the list, ready to place",
+                      n=n)
+        else:
+            text = tr("That file holds no components")
+        self.statusBar().showMessage(text, 5000)
+
+    def import_kept_components(self, path) -> int:
+        """Bring every component definition of another document into this
+        one as KEPT components — in the list, none placed: a library to
+        draw from. Its materials and layers come along by name, as Insert
+        does. Returns how many; nothing changes for a file without one."""
+        from core.history import AddKeptComponentsCommand
+        from core.insert import ensure_layers, merge_materials
+        from core.kept_components import definitions_of
+        from core.scene import Scene as _Scene
+        from formats import igz as _igz
+        temp = _Scene()
+        _igz.load_into(temp, Path(path))       # raises before anything moves
+        templates = definitions_of(temp)
+        if not templates:
+            return 0
+        scene = self.viewport.scene
+        for t in templates:
+            merge_materials(getattr(temp, "materials", {}) or {},
+                            scene.materials, t)
+            ensure_layers(scene, t)
+        self.viewport.history.execute(AddKeptComponentsCommand(templates))
+        self.viewport.notify_scene_changed()
+        return len(templates)
+
     @_repeatable("Merge Groups")
     def _on_merge_groups(self) -> None:
         from core.history import MergeGroupsCommand
@@ -3227,6 +3445,19 @@ class MainWindow(QMainWindow):
                 menu.addAction(tr("Merge Groups"), self._on_merge_groups)
             if any(isinstance(e, Group) and e.is_component() for e in sel):
                 menu.addAction(tr("Make Unique"), self._on_make_unique)
+                if self._replacement_choices(sel):
+                    menu.addAction(tr("Replace Component…"),
+                                   self._on_replace_component)
+                from core.kept_components import kept_template
+                comps = [e for e in sel
+                         if isinstance(e, Group) and e.is_component()]
+                kept = all(kept_template(self.viewport.scene, g.mesh)
+                           is not None for g in comps)
+                act = menu.addAction(tr("Keep in File"))
+                act.setCheckable(True)
+                act.setChecked(kept)
+                act.triggered.connect(
+                    lambda on: self.keep_selected_components(bool(on)))
             if len(groups) == 1 and len(sel) == 1:
                 menu.addAction(tr("Change Axes"),
                                lambda g=groups[0]: self._on_change_axes(g))
@@ -3343,7 +3574,8 @@ class MainWindow(QMainWindow):
         touches or what it shares (issue #106, @pacaeiro). Each entry acts
         in the current editing context only, like Select All."""
         from core.select_ops import (all_connected, bounding_edges,
-                                     same_layer, same_material)
+                                     same_definition, same_layer,
+                                     same_material)
         has_mesh = any(isinstance(e, (Edge, Face)) for e in sel)
         has_face = any(isinstance(e, Face) for e in sel)
         has_group = any(isinstance(e, Group) for e in sel)
@@ -3376,6 +3608,11 @@ class MainWindow(QMainWindow):
                 grow(lambda s: same_material(scene, s)))
         sub.addAction(tr("All on Same Layer")).triggered.connect(
             grow(lambda s: same_layer(scene, s)))
+        if any(isinstance(e, Group) and e.is_component() for e in sel):
+            # Every copy of the selected components — the first half of
+            # swapping them all for another (Replace Component…).
+            sub.addAction(tr("All Instances")).triggered.connect(
+                grow(lambda s: same_definition(scene, s)))
 
     def _add_layer_submenu(self, menu, sel) -> None:
         """Right-click ▸ Layer ▸ the document's layers, the selection's own

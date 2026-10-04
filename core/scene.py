@@ -80,6 +80,13 @@ class Scene:
     # presets — kept with the document so every frame of the file offers
     # them again (Marco, 2026-09-02).
     custom_scales: list = field(default_factory=list)
+    #: Component definitions the document keeps with no copy placed —
+    #: each a placement-free template :class:`~core.group.Group` (identity
+    #: ``xform``) that shares its prototype with any copies still in the
+    #: model. They never draw, pick or export; they wait in the «In model»
+    #: list to be placed again or to replace other copies. See
+    #: :mod:`core.kept_components`.
+    kept_components: list = field(default_factory=list)
     # Display style for dimension annotations (edited from the Tray).
     #: ``norma`` is the drafting standard the dimensions obey — ISO (and so
     #: the Spanish UNE) or the German/Japanese one. It belongs to the
@@ -590,7 +597,8 @@ class Scene:
                 or self.tile_layer or self.geo_paths or self.terrain
                 or self.guides or self.geo_points or self.text_labels
                 or self.saved_views or self.compositions
-                or self.image_planes or self.plugin_data):
+                or self.image_planes or self.plugin_data
+                or self.kept_components):
             self.mesh.clear()
             self.groups.clear()
             self.dimensions.clear()
@@ -602,6 +610,7 @@ class Scene:
             self.saved_views.clear()
             self.compositions.clear()
             self.custom_scales.clear()
+            self.kept_components.clear()
             self.plugin_data = {}
             self.selection.clear()
             from core.layers import DEFAULT_LAYER, Layer

@@ -3167,6 +3167,115 @@ class MakeUniqueCommand(Command):
         scene.version += 1
 
 
+class ReplaceComponentCommand(Command):
+    """Replace Component: each target instance takes ``source``'s
+    definition and keeps its own placement.
+
+    What a copy shares — the prototype mesh, the subgroups inside it, the
+    name and what was generated or tagged with it (3D text, BIM tag,
+    extensions' data, face-me) — comes from ``source``; what belongs to
+    this one copy stays: its matrix, layer, paint, visibility and uid, so a
+    scene that hides it still finds it. The source's origin lands where the
+    target's sat, turned and scaled the way the target was.
+
+    Targets that already share ``source``'s definition, and anything that is
+    not a component instance, are left alone."""
+
+    _SHARED = ("mesh", "children", "name", "axes", "component", "text3d",
+               "ifc", "ext", "billboard", "exploded")
+
+    def __init__(self, targets, source) -> None:
+        self.source = source
+        self.targets = [g for g in targets
+                        if g is not source and g.is_component()
+                        and g.mesh is not source.mesh]
+        self._before: list = []
+
+    def do(self, scene) -> None:
+        import copy
+        from core.group import copy_group
+        from PySide6.QtGui import QMatrix4x4
+        src = self.source
+        self._before = [{k: getattr(g, k) for k in self._SHARED}
+                        for g in self.targets]
+        for g in self.targets:
+            g.mesh = src.mesh
+            # Shared like a copy's subgroups are (copy_group): an edit
+            # inside any instance reaches all of them.
+            g.children = [copy_group(c, _in_definition=True)
+                          for c in (src.children or ())]
+            g.name = src.name
+            g.axes = QMatrix4x4(src.axes) if src.axes is not None else None
+            g.component = True
+            g.text3d = dict(src.text3d) if src.text3d else None
+            g.ifc = dict(src.ifc) if src.ifc else None
+            g.ext = copy.deepcopy(src.ext) if src.ext else None
+            g.billboard = src.billboard
+            g.exploded = dict(src.exploded) if src.exploded else None
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        for g, before in zip(self.targets, self._before):
+            for k, v in before.items():
+                setattr(g, k, v)
+        scene.version += 1
+
+
+class KeepComponentCommand(Command):
+    """Keep in File, on or off, for the definition ``instance`` uses
+    (``instance`` may be a kept template itself). On: a placement-free
+    template joins ``scene.kept_components``, so the definition stays in
+    the document with no copy placed. Off: it leaves, and a definition with
+    no copy left is gone when the file is saved."""
+
+    def __init__(self, instance, keep: bool = True) -> None:
+        self.instance = instance
+        self.keep = bool(keep)
+        self._template = None
+        self._index = None
+
+    def do(self, scene) -> None:
+        from core.kept_components import kept_template, make_template
+        current = kept_template(scene, self.instance.mesh)
+        if self.keep and current is None:
+            self._template = self._template or make_template(self.instance)
+            scene.kept_components.append(self._template)
+            self._index = None
+        elif not self.keep and current is not None:
+            self._template = current
+            self._index = scene.kept_components.index(current)
+            scene.kept_components.remove(current)
+        else:
+            self._template = None           # already as asked: a no-op
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        if self._template is not None:
+            if self.keep:
+                scene.kept_components.remove(self._template)
+            else:
+                scene.kept_components.insert(self._index, self._template)
+        scene.version += 1
+
+
+class AddKeptComponentsCommand(Command):
+    """Bring ready-made definitions into the document as kept components
+    (no copy placed) — «Components from File…». Undo takes them out."""
+
+    def __init__(self, templates) -> None:
+        self.templates = list(templates)
+
+    def do(self, scene) -> None:
+        scene.kept_components.extend(self.templates)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        for t in self.templates:
+            if t in scene.kept_components:
+                scene.kept_components.remove(t)
+        scene.version += 1
+
+
 class GroupToComponentCommand(Command):
     """Convert a CLASSIC group into a component instance in place: its mesh
     becomes the shared definition (world frame == local frame) under an

@@ -448,7 +448,8 @@ def save_scene(scene, path: Path) -> dict:
     geom: dict | None = {} if large else None
     payload = _mesh_json(mesh, geom)
     groups = getattr(scene, "groups", None)
-    if groups:
+    kept = getattr(scene, "kept_components", None)
+    if groups or kept:
         # Component prototypes: each shared instance mesh is written ONCE —
         # including the ones only NESTED placements reference, which is what
         # keeps a component's internal repetition (the hedge: 9600 faces
@@ -521,7 +522,12 @@ def save_scene(scene, path: Path) -> dict:
                 entry["children"] = [_entry(c) for c in kids]
             return entry
 
-        payload["groups"] = [_entry(g) for g in groups]
+        payload["groups"] = [_entry(g) for g in groups or ()]
+        if kept:
+            # Definitions kept with no copy placed: written like instances
+            # through the SAME prototype table, so one still in use is not
+            # written twice. Older readers ignore the key (and lose them).
+            payload["kept_components"] = [_entry(t) for t in kept]
         if protos:
             payload["protos"] = protos
     layers = getattr(scene, "layers", None)
@@ -676,7 +682,8 @@ def _live_element_count(scene) -> int:
     mesh = scene.mesh if hasattr(scene, "mesh") else scene
     total = len(mesh.faces) + len(mesh.edges)
     seen: set = set()
-    stack = list(getattr(scene, "groups", None) or ())
+    stack = (list(getattr(scene, "groups", None) or ())
+             + list(getattr(scene, "kept_components", None) or ()))
     while stack:
         g = stack.pop()
         m = getattr(g, "mesh", None)
@@ -1030,6 +1037,11 @@ def _load_into_inner(scene, path: Path, progress=None) -> None:
         if i % 50 == 0:
             tick(0.6 + 0.35 * i / max(1, len(raw_groups)), "Placing groups…")
         scene.groups.append(_group_from(raw))
+    scene.kept_components = [
+        t for t in (_group_from(raw) for raw in
+                    payload.get("kept_components", []) or []
+                    if isinstance(raw, dict))
+        if t.is_component()]
     tick(0.96, "Finishing…")
     if names:
         from core.group import reserve_group_names
