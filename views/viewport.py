@@ -11232,9 +11232,12 @@ class Viewport(QOpenGLWidget):
             import numpy as np
             best = None  # (t, group)
             idx = self._pick_index(near=("px", screen_x, screen_y))
+            loose_t = np.inf
             if idx.entities:
                 face_t = self._hover_face_t(idx, origin, direction)
                 if face_t is not None:
+                    loose_t = float(np.where(idx.ent_loose, face_t,
+                                             np.inf).min())
                     face_t = np.where(idx.ent_loose, np.inf, face_t)
                     i = int(np.argmin(face_t))
                     if np.isfinite(face_t[i]):
@@ -11256,6 +11259,14 @@ class Viewport(QOpenGLWidget):
                             if t is not None and (best is None or t < best[0]):
                                 best = (t, self._owner_of(g))
             if best is not None:
+                # A loose face clearly in FRONT hides the group: what the
+                # cursor shows is that face, and every caller asks for the
+                # group it can see (#276, #363, #378 — a loose box before
+                # a component could not be clicked). Coplanar faces keep
+                # the old answer.
+                eps = self._coplanar_eps(origin, direction, best[0])
+                if np.isfinite(loose_t) and loose_t < best[0] - eps:
+                    return None
                 return best[1]
         # Edge fallback (cursor over empty space, or a lines-only group):
         # screen-space distance to every group hard edge, batched over the
@@ -11864,6 +11875,28 @@ class Viewport(QOpenGLWidget):
         super().leaveEvent(ev)
 
     # ---- Input --------------------------------------------------------------
+    def _context_pick(self, x: float, y: float):
+        """Right-click at ``(x, y)``: select the thing under the cursor
+        before the menu opens — unless it is already selected, which keeps
+        the selection as it is. Returns that thing (or ``None``).
+
+        «Under the cursor» is what the cursor SHOWS: a group behind a
+        selected loose face used to take the right-click and drop the
+        selection, and «Make Group» with it (#378)."""
+        picked = (self.pick_text_label(x, y, rect_only=True)
+                  or self.pick_group(x, y) or self.pick_edge(x, y)
+                  or self.pick_geopath(x, y) or self.pick_dimension(x, y)
+                  or self.pick_text_label(x, y)
+                  or self.pick_section_plane(x, y)
+                  or self.pick_guide(x, y)
+                  or self.pick_face(x, y)
+                  or self.pick_image_plane(x, y)
+                  or self.pick_locked_image_plane(x, y))
+        if picked is not None and picked not in self.scene.selection:
+            self.scene.select([picked])
+            self.update()
+        return picked
+
     def contextMenuEvent(self, ev) -> None:
         """Right-click: select what's under the cursor and open
         a context menu of actions relevant to the current selection."""
@@ -11879,18 +11912,7 @@ class Viewport(QOpenGLWidget):
         # Where the menu was opened, for entries that act at the cursor
         # (Texture ▸ Position puts its pins on the tile under it).
         self._context_pixel = (x, y)
-        picked = (self.pick_text_label(x, y, rect_only=True)
-                  or self.pick_group(x, y) or self.pick_edge(x, y)
-                  or self.pick_geopath(x, y) or self.pick_dimension(x, y)
-                  or self.pick_text_label(x, y)
-                  or self.pick_section_plane(x, y)
-                  or self.pick_guide(x, y)
-                  or self.pick_face(x, y)
-                  or self.pick_image_plane(x, y)
-                  or self.pick_locked_image_plane(x, y))
-        if picked is not None and picked not in self.scene.selection:
-            self.scene.select([picked])
-            self.update()
+        picked = self._context_pick(x, y)
         # A locked image under the cursor is offered even when the click
         # landed on geometry drawn over it (the plaza on its orthomosaic):
         # the menu is the only way back to Unlock / Delete for it.

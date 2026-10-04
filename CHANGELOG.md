@@ -65,6 +65,12 @@ follow [SemVer](https://semver.org).
   buscaban con un nombre que Qt solo reconoce dentro de la misma sesión.
   Ahora se leen también los valores que ya guardaste con versiones
   anteriores (#266, diagnosticado por @parampreetss).
+- **Una cara suelta delante de un grupo no se podía seleccionar**: el
+  clic se lo llevaba el grupo de detrás (una caja dentro de un componente
+  cóncavo, una pieza suelta delante de un mueble agrupado). Ahora gana lo
+  que se ve, también con el clic derecho, que ya no cambia la selección
+  por el grupo de detrás ni quita «Crear grupo» del menú; igual en Mover y
+  en el Borrador (#276, #363, #378).
 
 ## [0.5.7] — 2026-09-30
 
