@@ -2885,5 +2885,9 @@
  "Yellow": "Kuning",
  "Colour of the details of the icons and of the toolbar buttons under the mouse. «Same as the system» uses the desktop's accent colour. The selection in the 3D view stays orange. Applies at once.": "Warna detail ikon dan tombol bilah alat di bawah tetikus. «Sama dengan sistem» memakai warna aksen desktop. Pilihan di tampilan 3D tetap oranye. Langsung diterapkan.",
  "Export STL": "Ekspor STL",
- "Unit of the STL file (3D printing programs expect millimetres)": "Satuan berkas STL (program cetak 3D mengharapkan milimeter)"
+ "Unit of the STL file (3D printing programs expect millimetres)": "Satuan berkas STL (program cetak 3D mengharapkan milimeter)",
+ "Join Segments": "Gabungkan segmen",
+ "Join collinear segments into single lines: the selected ones, or all of them when nothing is selected.": "Gabungkan segmen segaris menjadi satu garis: yang dipilih, atau semuanya bila tidak ada yang dipilih.",
+ "Removed {n} intermediate points": "{n} titik antara dihapus",
+ "No collinear segments to join.": "Tidak ada segmen segaris untuk digabungkan."
 }

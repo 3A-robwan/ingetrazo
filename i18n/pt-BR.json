@@ -2891,5 +2891,9 @@
  "Yellow": "Amarelo",
  "Colour of the details of the icons and of the toolbar buttons under the mouse. «Same as the system» uses the desktop's accent colour. The selection in the 3D view stays orange. Applies at once.": "Cor dos detalhes dos ícones e dos botões das barras sob o mouse. «Igual ao sistema» usa a cor de destaque da área de trabalho. A seleção na vista 3D continua laranja. Aplica-se na hora.",
  "Export STL": "Exportar STL",
- "Unit of the STL file (3D printing programs expect millimetres)": "Unidade do arquivo STL (os programas de impressão 3D esperam milímetros)"
+ "Unit of the STL file (3D printing programs expect millimetres)": "Unidade do arquivo STL (os programas de impressão 3D esperam milímetros)",
+ "Join Segments": "Unir segmentos",
+ "Join collinear segments into single lines: the selected ones, or all of them when nothing is selected.": "Une os segmentos colineares em linhas únicas: os selecionados ou, sem seleção, todos.",
+ "Removed {n} intermediate points": "Removidos {n} pontos intermediários",
+ "No collinear segments to join.": "Nenhum segmento colinear para unir."
 }
