@@ -2476,5 +2476,8 @@
  "keep the base": "garder la base",
  "move the base": "déplacer la base",
  "Keep the base: on": "Garder la base : activé",
- "Keep the base: off": "Garder la base : désactivé"
+ "Keep the base: off": "Garder la base : désactivé",
+ "Deselect everything: edges, faces, groups and dimensions.": "Tout désélectionner : arêtes, faces, groupes et cotes.",
+ "Select None": "Ne rien sélectionner",
+ "Selection cleared ({n} entities)": "Sélection effacée ({n} entités)"
 }
