@@ -13,6 +13,8 @@ from pathlib import Path, PurePosixPath
 
 from PySide6.QtGui import QVector3D
 
+from .meshexport import export_triangles
+
 # Cream painted on faces with no material colour (mirrors the viewport default).
 _DEFAULT_COLOR = (0.96, 0.95, 0.925)
 
@@ -89,7 +91,7 @@ def save_obj(scene, path) -> None:
             sh = tex.get("sh", 1.0) or 1.0
             rot = float(tex.get("rot", 0.0))
             uvw = tex.get("uvw")
-            for tri in face.triangulate():
+            for tri in export_triangles(face):
                 if uvw:
                     from core.texture import affine_uv
                     uv = affine_uv(uvw, list(tri))   # imported explicit UVs
@@ -103,7 +105,7 @@ def save_obj(scene, path) -> None:
             materials.setdefault(key, {"color": col, "map": None})
             if face.attrs.get("mat") and "mat" not in materials[key]:
                 materials[key]["mat"] = face.attrs["mat"]
-            for tri in face.triangulate():
+            for tri in export_triangles(face):
                 groups.setdefault(key, []).append(
                     [(vidx(tri[k]), None) for k in range(3)])
 
