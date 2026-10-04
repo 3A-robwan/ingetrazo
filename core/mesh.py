@@ -534,6 +534,40 @@ class Mesh:
         self._mut_serial += 1
         return len(doomed)
 
+    def relink_vertices(self, vertices) -> None:
+        """Re-attach vertices a previous :meth:`drop_orphan_vertices` took
+        out (redo), preserving their identity; a position already filed
+        under another vertex keeps that one."""
+        present = {id(v) for v in self.vertices}
+        for v in vertices:
+            if id(v) in present:
+                continue
+            self.vertices.append(v)
+            present.add(id(v))
+            self._registry.setdefault(_key(v.position), v)
+        self._chunk_dirty = True
+        self._mut_serial += 1
+
+    def drop_orphan_vertices(self, vertices) -> int:
+        """Drop the given vertices that nothing references any more — the
+        targeted twin of :meth:`prune_orphan_vertices`, for an undo that
+        knows exactly which vertices it created (no pass over the model).
+        A face's corners always carry its boundary edges, so a vertex with
+        no edges is in no face. The registry is cleaned by identity."""
+        doomed = {id(v) for v in vertices if not v.edges}
+        doomed &= {id(v) for v in self.vertices}
+        if not doomed:
+            return 0
+        self.vertices[:] = [v for v in self.vertices if id(v) not in doomed]
+        for v in vertices:
+            if id(v) in doomed:
+                k = _key(v.position)
+                if self._registry.get(k) is v:
+                    del self._registry[k]
+        self._chunk_dirty = True
+        self._mut_serial += 1
+        return len(doomed)
+
     # ---- Bulk construction (imports / .igz load) ----------------------------
     def bulk_weld(self, pos):
         """Weld a ``(P, 3)`` float array of positions into shared vertices —

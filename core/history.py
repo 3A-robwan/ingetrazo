@@ -562,10 +562,39 @@ class AddFaceCommand(Command):
                 [list(loop) for loop in self.preset_holes]
                 if self.preset_holes else None
             )
+            # What add_face is about to create besides the face — its
+            # boundary edges and corners that were not there yet — so undo
+            # takes them back with it (#355).
+            loops = [self.vertices] + (holes or [])
+            pairs = [(lp[i], lp[(i + 1) % len(lp)])
+                     for lp in loops for i in range(len(lp))]
+            had_v = {id(v) for p in self.vertices + [q for h in holes or []
+                                                     for q in h]
+                     for v in [m.vertex_at(p)] if v is not None}
+            had_e = set()
+            for a, b in pairs:
+                va, vb = m.vertex_at(a), m.vertex_at(b)
+                e = m.find_edge(va, vb) if va is not None and vb is not None else None
+                if e is not None:
+                    had_e.add(id(e))
             self.face = m.add_face(self.vertices, holes)
+            # Edges are remembered by the corners they join, not as
+            # objects: redo's relink_face builds fresh Edge objects.
+            self._made_pairs = set()
+            self._made_vertices = []
+            for lp in (self.face.loop, *self.face.hole_loops):
+                for i in range(len(lp)):
+                    a, b = lp[i], lp[(i + 1) % len(lp)]
+                    e = m.find_edge(a, b)
+                    if e is not None and id(e) not in had_e:
+                        self._made_pairs.add(frozenset((id(a), id(b))))
+                for v in lp:
+                    if id(v) not in had_v:
+                        self._made_vertices.append(v)
             if self.attrs:
                 self.face.attrs.update(self.attrs)
         else:
+            m.relink_vertices(getattr(self, "_made_vertices", ()))
             m.relink_face(self.face)  # redo
 
         if not self.auto:
@@ -639,6 +668,23 @@ class AddFaceCommand(Command):
         self._punches = []
         if self.face is not None:
             m.remove_face(self.face)
+            # The edges and corners this face brought with it go too, when
+            # nothing else uses them (#355, @pacaeiro: «undo leaves edges
+            # behind»). remove_face keeps edges on purpose — they may border
+            # other faces — so only the ones this command made are candidates.
+            made = getattr(self, "_made_pairs", ())
+            for lp in (self.face.loop, *self.face.hole_loops):
+                for i in range(len(lp)):
+                    a, b = lp[i], lp[(i + 1) % len(lp)]
+                    if frozenset((id(a), id(b))) not in made:
+                        continue
+                    e = m.find_edge(a, b)
+                    if e is not None and not e.faces:
+                        m.remove_edge(e)
+                        sel = scene.selection
+                        if e in sel:
+                            sel.remove(e)
+            m.drop_orphan_vertices(getattr(self, "_made_vertices", ()))
         scene.version += 1
 
 
