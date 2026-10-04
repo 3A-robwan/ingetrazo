@@ -97,6 +97,36 @@ def test_a_short_piece_far_out_still_joins():
     assert len(m.edges) == 1
 
 
+def _line_into_fillet(r, segs):
+    # A 20 mm line, then a 90° fillet of radius r in ``segs`` facets,
+    # NOT tagged as a curve (an imported or exploded arc).
+    m = Mesh()
+    pts = [V(-0.02, 0), V(0, 0)]
+    pts += [V(r * math.sin(a), r - r * math.cos(a))
+            for a in (math.pi / 2 * k / segs for k in range(1, segs + 1))]
+    return m, _polyline(m, pts)
+
+
+def test_a_small_fillet_keeps_its_first_facet():
+    # Review of the PR: in mm work a 2-3 mm fillet on sheet metal is
+    # everyday, and its first facet sits a few thousandths of a mm off the
+    # line it leaves. Near the origin that is a thousand float32 steps:
+    # a corner, not a stray point.
+    for r in (0.002, 0.003, 0.010):
+        for segs in (6, 12, 24):         # facets the 0.1 mm weld can hold
+            m, edges = _line_into_fillet(r, segs)
+            join_edges(m, edges)
+            assert len(m.edges) == segs + 1, (r, segs)
+
+
+def test_mm_pieces_near_the_origin_still_join():
+    m = Mesh()
+    a, d = V(0.012, -0.004, 0.0015), V(0.0031, 0.0017, -0.0009)
+    edges = _polyline(m, [a + d * t for t in (0.0, 0.13, 0.5, 0.77, 1.0)])
+    join_edges(m, edges)
+    assert len(m.edges) == 1
+
+
 def test_a_t_junction_is_kept():
     m = Mesh()
     edges = _polyline(m, [V(0, 0), V(1, 0), V(2, 0)])

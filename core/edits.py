@@ -20,6 +20,7 @@ Kept in its own module to avoid an import cycle: ``history`` imports
 """
 from __future__ import annotations
 
+import math
 from typing import Iterable, Sequence
 
 from PySide6.QtGui import QVector3D
@@ -566,11 +567,34 @@ def divide_edges(mesh, edges, n: int) -> int:
     return cuts
 
 
-# How far a point may sit off the line through its neighbours and still go
-# (the mesh's own stitch tolerance, ~0.1 mm). A distance, not an angle:
-# the weld rounds every vertex, which tilts a 2 cm piece more than a real
-# 0.1° kink in a 10 m line, yet moves the point less than this.
-_JOIN_TOL = 1e-4
+# How far a point may sit off the line through its neighbours and still go.
+# A distance, not an angle: float32 coordinates tilt a 2 cm piece 300 m
+# out more than a real 0.1° kink in a 10 m line, yet move the point far
+# less. And it follows that precision, not a fixed figure: a few float32
+# steps of the coordinates' size (~1e-7 each), so mm work near the origin
+# gets a thousandth of a mm, and the first facet of a 2 mm fillet is never
+# taken for part of the line it leaves. Capped at the mesh's own stitch
+# tolerance (0.1 mm); beyond that the point is not on the line.
+_JOIN_TOL_FLOOR = 1e-6
+_JOIN_TOL_REL = 1e-6
+_JOIN_TOL_MAX = 1e-4
+
+
+def _off_line(p, a, b) -> tuple:
+    """Distance from ``p`` to the line through ``a`` and ``b``, and the
+    tolerance the size of those coordinates allows it — in double
+    precision, so the test adds no float32 noise of its own."""
+    p, a, b = ((q.x(), q.y(), q.z()) for q in (p, a, b))
+    ab = [b[i] - a[i] for i in range(3)]
+    ap = [p[i] - a[i] for i in range(3)]
+    cross = (ap[1] * ab[2] - ap[2] * ab[1],
+             ap[2] * ab[0] - ap[0] * ab[2],
+             ap[0] * ab[1] - ap[1] * ab[0])
+    off = math.sqrt(sum(c * c for c in cross)) / math.sqrt(
+        sum(c * c for c in ab))
+    size = max(abs(c) for q in (p, a, b) for c in q)
+    tol = min(_JOIN_TOL_MAX, _JOIN_TOL_FLOOR + _JOIN_TOL_REL * size)
+    return off, tol
 
 
 def join_edges(mesh, edges) -> list:
@@ -606,10 +630,9 @@ def join_edges(mesh, edges) -> list:
             continue
         if not mesh.collapsible_vertex(v):
             continue
-        a, b = e1.other(v).position, e2.other(v).position
-        ab = b - a
-        off = QVector3D.crossProduct(v.position - a, ab).length() / ab.length()
-        if off > _JOIN_TOL:
+        off, tol = _off_line(v.position, e1.other(v).position,
+                             e2.other(v).position)
+        if off > tol:
             continue
         if mesh.find_edge(e1.other(v), e2.other(v)) is not None:
             continue                     # the whole line is there already
