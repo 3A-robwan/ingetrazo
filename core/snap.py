@@ -848,6 +848,10 @@ def _extension_snap(
         if best_hit is None or dh < best_hit[0]:
             best_hit = (dh, hit)
     if best_hit is not None:
+        if (best_hit[1] - from_end).lengthSquared() < 1e-12:
+            # The extension «crosses» its neighbour at its own end: that
+            # point is the Endpoint, not an Intersection (#357).
+            return SnapResult(best_hit[1], "endpoint", COLOR_ENDPOINT)
         return SnapResult(best_hit[1], "intersection", COLOR_ENDPOINT,
                           guide=(from_end, best_hit[1]))
     return SnapResult(proj, "extension", COLOR_EXTENSION, guide=(from_end, proj))
@@ -1089,10 +1093,18 @@ def _intersection_snap(
             if is_occluded is not None and is_occluded(hit):
                 continue
             if best is None or dh < best[0]:
-                best = (dh, hit)
+                best = (dh, hit, e1, e2)
     if best is None:
         return None
-    return SnapResult(best[1], "intersection", COLOR_ENDPOINT)
+    hit = best[1]
+    corners = (best[2].a, best[2].b, best[3].a, best[3].b)
+    if any((hit - c).lengthSquared() < 1e-12 for c in corners):
+        # Two edges meeting at a shared corner «intersect» there, and
+        # between the endpoint rule's radius and this one the corner came
+        # back labelled Intersection. Same point, so it keeps the snap —
+        # under its true name (#357, @kellytait).
+        return SnapResult(hit, "endpoint", COLOR_ENDPOINT)
+    return SnapResult(hit, "intersection", COLOR_ENDPOINT)
 
 
 def _lock_line_snaps(
