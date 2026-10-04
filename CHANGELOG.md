@@ -187,6 +187,11 @@ follow [SemVer](https://semver.org).
   Arthur031221).
 - **El cuentagotas no actualizaba la muestra «Activo»** del panel
   Materiales (#47, #264, @canalsecuario-blip).
+- **Voltear no hacía nada con un grupo formado por otros grupos** (un
+  mueble con sus piezas agrupadas): la herramienta medía la caja del grupo
+  solo con su malla propia, que en ese caso está vacía, así que no había
+  planos que elegir. Ahora mide también las piezas de dentro; voltear una
+  copia (Ctrl) también las lleva (#380).
 - **El resaltado de una cara dentro de un componente se dibujaba lejos de
   la pieza** en un componente colocado y luego explotado (#246,
   @felixriestra).

@@ -204,26 +204,31 @@ class FlipTool(Tool):
 
     # ---- Internals ----------------------------------------------------------
     def _bounds(self, viewport):
+        import numpy as np
+        from core.group import placement_points
         sel = viewport.scene.selection
-        pts: list[QVector3D] = []
+        arrays: list = []
+        pts: list = []
         for ent in sel:
             if isinstance(ent, Group):
-                xf = getattr(ent, "xform", None)
-                for v in ent.mesh.vertices:
-                    p = v.position
-                    pts.append(xf.map(p) if xf is not None else QVector3D(p))
+                # Its nested placements too: a group made of groups keeps
+                # its geometry there and its own mesh empty, and the box
+                # came out empty — no planes, nothing to click (#380).
+                # Kept as arrays: this runs on every hover.
+                arr = placement_points(ent)
+                if len(arr):
+                    arrays.append(arr)
             elif isinstance(ent, Face):
-                pts.extend(QVector3D(v) for v in ent.vertices)
+                pts.extend((v.x(), v.y(), v.z()) for v in ent.vertices)
             elif isinstance(ent, Edge):
-                pts.append(QVector3D(ent.a))
-                pts.append(QVector3D(ent.b))
-        if not pts:
+                pts.extend((p.x(), p.y(), p.z()) for p in (ent.a, ent.b))
+        if pts:
+            arrays.append(np.asarray(pts, dtype=np.float64))
+        if not arrays:
             return None, None
-        lo = QVector3D(min(p.x() for p in pts), min(p.y() for p in pts),
-                       min(p.z() for p in pts))
-        hi = QVector3D(max(p.x() for p in pts), max(p.y() for p in pts),
-                       max(p.z() for p in pts))
-        return lo, hi
+        allp = np.concatenate(arrays)
+        lo, hi = allp.min(axis=0), allp.max(axis=0)
+        return QVector3D(*lo.tolist()), QVector3D(*hi.tolist())
 
     def _targets(self, viewport, full: bool = False):
         sel = viewport.scene.selection
