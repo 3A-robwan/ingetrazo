@@ -6,6 +6,48 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+### Añadido
+- **Materiales recientes**: el panel Materiales guarda, bajo «Activo», los
+  seis últimos materiales con los que pintaste, el más nuevo primero. Un
+  clic vuelve a dejarlo activo tal como lo usaste (imagen con su tamaño,
+  giro y tinte, o el color; transparencia; nombre), sin buscar el mismo
+  ladrillo en la biblioteca cada vez (#263, @canalsecuario-blip).
+- **Botones Paralela / Perspectiva / Dos puntos** en la barra de vistas
+  estándar: un clic en vez de ir al menú Cámara. Siguen a la proyección
+  la cambie quien la cambie (Mayús+P, una escena, una vista guardada)
+  (#292, @canalsecuario-blip).
+- **Editar componentes con el resto apartado** (Cámara ▸ Edición de
+  componentes): **Alt+Q** oculta el resto del modelo y lo vuelve a mostrar
+  como estaba, y **Alt+W** quita de la vista y de la selección las otras
+  copias del componente que editas (#237, @canalsecuario-blip).
+- **Arcos: el número de segmentos antes de dibujar**, como los lados del
+  círculo: un número tecleado antes del primer clic fija los segmentos de
+  los arcos de dos y tres puntos, del arco por centro y del sector, y
+  «Ns» lo cambia en cualquier momento; el número se queda para los
+  siguientes arcos. El ángulo del arco por centro ya no se lee como una
+  longitud, y al redondear una esquina la casilla dice «Radio» (#290,
+  @canalsecuario-blip; #298, @pacaeiro).
+- **Edición ▸ Seleccionar nada (Ctrl+T)**, la pareja de Seleccionar todo;
+  no marca el documento como modificado (#367, @pacaeiro, #349).
+- **Mover, Rotar y Voltear muestran un + en el cursor** mientras Ctrl hace
+  una copia, como la Cinta y el Transportador con sus guías: antes solo lo
+  decía la barra de estado y se descubría después del clic si se había
+  movido el original o una copia (#262, @vicc3d).
+- **Compositor: la vista previa de la cota en cadena y desde línea base**
+  es la cota que se va a colocar (líneas de referencia, extremos y valor),
+  también recta cuando Mayús la fuerza horizontal o vertical (#351,
+  @tonfdd).
+
+### Cambiado
+- **Atajos nuevos**: **Ctrl+1…7** para las vistas estándar (Superior,
+  Frontal, Derecha, Isométrica, Posterior, Izquierda, Inferior: las cuatro
+  de cada día bajo la mano izquierda), **Mayús+F** para Redondear 3D (F
+  sigue siendo Equidistancia) y **Ctrl+H / Ctrl+Mayús+H** para Ocultar y
+  Mostrar todo (#258, #259, #261, @canalsecuario-blip).
+- **Empujar/Tirar: el toque de Ctrl se arma al soltar la tecla**, y la
+  barra de estado dice si deja la cara de partida, así Ctrl+Z u otro atajo
+  ya no lo cambian por el camino (#322, #345, @pacaeiro).
+
 ### Rendimiento
 - **Los modelos enormes abren 3× más rápido, guardan 3,6× más rápido y
   pesan un tercio**: el `.igz` gana el **formato 3**. En un documento
@@ -41,6 +83,35 @@ follow [SemVer](https://semver.org).
   por encima de 18 GB a 32 ms por movimiento y 11,7 GB; con Línea, 71 ms.
   Los modelos normales usan el índice de siempre.
 
+- **Pasar el cursor con Línea y arrastrar con Mover, hasta 2× más rápido
+  en modelos grandes**: la distancia a las aristas de los grupos se mide
+  solo en las celdas de pantalla cercanas al cursor, la oclusión de los
+  candidatos se pregunta por lotes y el centro de un círculo se busca en
+  el registro de la malla. En una ciudad de 331 000 caras: pasar el cursor
+  con Línea 103 → 60 ms por movimiento, arrastrar con Mover 101 → 49 ms;
+  los puntos que se enganchan son los mismos (#312, @orianbsilva).
+- **Mover un objeto muy pesado dentro de un modelo grande**: los grupos de
+  más de 8 192 triángulos se dividen en celdas, y un rayo solo prueba las
+  que cruza. Arrastrar un sofá de 107 000 triángulos en una sala de
+  306 000 caras pasó de 565 a 134 ms por paso (mediana) (#346,
+  @orianbsilva).
+- **Primera persona fluida en edificios grandes**: los sensores de pared
+  solo preguntan hasta donde alcanzan. Caminar mirando alrededor en un
+  edificio de 1,1 millones de caras pasó de 38 a 64 fotogramas por
+  segundo, sin tirones (#361, @orianbsilva).
+- **Una escena que solo mueve la cámara ya no redibuja el modelo entero** ni
+  marca el documento como modificado (~120 ms menos por escena en un
+  edificio de 1,1 millones de caras) (#360, @orianbsilva).
+- **La caja de edición de un grupo ya no hunde los fotogramas al acercar
+  mucho la vista**: sus trazos los dibuja el sombreador en vez de
+  recalcularse en cada cuadro (#247, @FG-RVT).
+- **Abrir un documento enorme ya no deja la ventana «sin responder»**: el
+  documento se lee en segundo plano mientras avanza la barra de progreso,
+  el dibujo se prepara bajo el mismo cuadro («Preparando el dibujo…») y el
+  zoom ya no da tirones entre giro y giro de la rueda. Los documentos
+  grandes se guardan compactos y se comprimen más rápido: en la plaza,
+  guardar 2,3 → 1,6 s solo por esto (#158, @pacaeiro).
+
 ### Corregido
 - **Alejar mucho con la rueda dejaba el modelo sin poder guardarse**:
   pasado el límite de 10 km, el punto al que mira la cámara seguía
@@ -71,6 +142,67 @@ follow [SemVer](https://semver.org).
   que se ve, también con el clic derecho, que ya no cambia la selección
   por el grupo de detrás ni quita «Crear grupo» del menú; igual en Mover y
   en el Borrador (#276, #363, #378).
+
+- **Bajar una arista sobre otra dejaba vértices dobles**: al hacer una
+  rampa con Mover, cada esquina caía sobre otra pero quedaban dos vértices
+  en el mismo punto, con una cara sin área que hacía fallar Crear grupo y
+  Crear componente. Ahora las esquinas se funden y queda un sólido limpio
+  (#341, @pacaeiro).
+- **Ctrl+Z cambiaba en silencio el modo Ctrl** del Transportador (guías),
+  Escalar (desde el centro) y Rectángulo (desde el centro), igual que el
+  de copia en Mover, Rotar y Voltear: un Ctrl que resulta ser parte de un
+  atajo ya no cuenta (#342, @pacaeiro; #262, @vicc3d).
+- **Deshacer dejaba aristas sueltas**: al deshacer una cara añadida (la
+  copia de un giro o de un movimiento, un pegado) quedaba su contorno; ahora
+  se van también las aristas y esquinas que trajo (#355, @pacaeiro).
+- **Una esquina limpia se anunciaba como «Intersección»** en vez de
+  «Extremo» a unos píxeles de ella; era el mismo punto con otro nombre
+  (#357, diagnosticado por @kellytait).
+- **Al mover una arista, «Desde el punto» le ganaba al eje**: tras pausar
+  en la esquina de partida, arrastrar por el eje rojo decía «Desde el
+  punto» todo el camino y desplazaba el punto unos centímetros del cursor
+  (#368, @pacaeiro).
+- **Exportar a COLLADA, glTF/GLB, OBJ o STL podía incluir triángulos sin
+  área**, que otros programas rechazan (una puerta entera por 56 de 3 884);
+  ya no se escriben y la superficie exportada no cambia (#314,
+  @ales-limon).
+- **No se podía teclear «16s»** para los segmentos de un círculo o un arco:
+  la «s» nunca llegaba a la casilla de medidas (#252, Discussion #267,
+  Arthur031221).
+- **El cuentagotas no actualizaba la muestra «Activo»** del panel
+  Materiales (#47, #264, @canalsecuario-blip).
+- **El resaltado de una cara dentro de un componente se dibujaba lejos de
+  la pieza** en un componente colocado y luego explotado (#246,
+  @felixriestra).
+
+### Seguridad
+- **Un `.igz` manipulado podía meter un archivo privado en el siguiente
+  guardado o exportación**, nombrándolo como textura (por ejemplo, una
+  clave SSH): solo se guardan o copian archivos que de verdad son imágenes
+  (@vicc3d).
+- **Un servidor de biblioteca en línea comprometido podía escribir fuera de
+  su caché** (por ejemplo, un complemento que se cargaría al arrancar): los
+  nombres de modelo que no son nombres simples se rechazan (@vicc3d).
+- **Una página web abierta en el mismo equipo podía enviar órdenes al
+  puente de IA**, incluida la ejecución de código, mientras estaba
+  encendido: el puente cierra la conexión en la primera línea que no es una
+  orden suya (#335, @WatchmanReeves).
+
+### Traducciones
+- **Francés** (#295, @YannFR81) y **alemán** (#365, @PESI3D), completados
+  con las frases añadidas después.
+- **El español habla de «tú» en todo el programa** y recupera las tildes
+  que faltaban (#352, @kant).
+
+### Para desarrolladores
+- **La suite rápida pasa en Windows** (fuentes para la plataforma
+  offscreen, lecturas en UTF-8, una ruta POSIX) (#288, @orianbsilva).
+- **`scripts/bench_interaction.py`**: un banco que mide lo que siente la
+  mano en el ratón (cada evento hasta que su fotograma está en pantalla),
+  con mediana y p95 por gesto (#308, @orianbsilva).
+- Interruptores para diagnosticar: `INGETRAZO_NO_SNAP_FAST=1`,
+  `INGETRAZO_SCENE_ALWAYS_BUMP=1` e `INGETRAZO_NO_WALK_REACH=1` devuelven
+  el comportamiento anterior de cada optimización (@orianbsilva).
 
 ## [0.5.7] — 2026-09-30
 
