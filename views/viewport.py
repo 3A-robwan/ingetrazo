@@ -7500,6 +7500,10 @@ class Viewport(QOpenGLWidget):
             result = label_provider()
             if result is None:
                 return
+            # Extension tools are outside the viewport's control. A malformed
+            # value_label() must not break the OpenGL paint loop repeatedly.
+            if not isinstance(result, (tuple, list)) or len(result) != 2:
+                return
             text, mid_world = result
             if mid_world is None:        # VCB-only value (Walkthrough eye height)
                 return
