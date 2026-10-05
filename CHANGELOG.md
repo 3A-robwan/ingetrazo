@@ -505,6 +505,7 @@ pequeños que llegaron por correo y por GitHub.
   local (#130).
 
 ### Corregido
+- **El compositor de láminas acotaba en metros aunque el documento estuviera en pies** (#403): una cota, una cota de radio o diámetro y una cota de nivel nuevas nacen en la unidad y la precisión del documento. Cada una guarda la suya; cambiar el documento después no reescribe las que ya están en la lámina. La cota de nivel muestra y edita Nivel y Datum en esa unidad (pies y pulgadas se editan en pies decimales; el texto de la lámina sigue en forma de carpintero). Una lámina vieja, sin unidad guardada, sigue leyendo «+0.15».
 - **Renderizar con Blender no generaba imagen en el Flatpak** («Python file
   … could not be opened»), ni en el AppImage con el Blender de Flathub: el
   script de render ahora viaja junto al trabajo, en una carpeta que Blender

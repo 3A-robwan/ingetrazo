@@ -183,6 +183,63 @@ def format_length(metres: float, units: str = "m", decimals: int = 2) -> str:
     return f"{_fixed(metres, n)} m"
 
 
+def _length_per_metre(units: str) -> float:
+    """How many of ``units`` are in one metre. Feet-and-inches and
+    fractional feet count as decimal feet; fractional inches as decimal
+    inches — a spinbox has one number, and the sheet text keeps the
+    carpenter form."""
+    u = units or "m"
+    if u in ("in", "in-frac"):
+        return 1.0 / IN_M
+    if u in ("ft", "ft-in", "ft-in-frac"):
+        return 1.0 / FT_M
+    return {"m": 1.0, "cm": 100.0, "mm": 1000.0}.get(u, 1.0)
+
+
+def length_number(metres: float, units: str = "m") -> float:
+    """The number a length spinbox shows for a value stored in metres."""
+    return float(metres) * _length_per_metre(units)
+
+
+def metres_from_number(number: float, units: str = "m") -> float:
+    """The metres a length spinbox's number stands for."""
+    return float(number) / _length_per_metre(units)
+
+
+def length_suffix(units: str = "m") -> str:
+    """The suffix on that spinbox."""
+    u = units or "m"
+    if u in ("in", "in-frac"):
+        return '"'
+    if u in ("ft", "ft-in", "ft-in-frac"):
+        return "'"
+    if u == "cm":
+        return " cm"
+    if u == "mm":
+        return " mm"
+    return " m"
+
+
+def format_signed_level(metres: float, units: str = "m",
+                        decimals: int = 2) -> str:
+    """A level mark's number. Metres stay «+0.15» / «-0.30» / «±0.00» —
+    the text already printed on every sheet. Any other unit is that same
+    sign in front of :func:`format_length` («+0'5.91"», «±0.00 cm»)."""
+    u = units or "m"
+    d = max(0, int(decimals))
+    v = float(metres)
+    if u == "m":
+        if round(v, d) == 0:
+            return "±" + f"{0.0:.{d}f}"
+        return f"{v:+.{d}f}"
+    shown = format_length(abs(v), u, d)
+    if shown == format_length(0.0, u, d):
+        return "±" + shown
+    if v < 0:
+        return format_length(v, u, d)
+    return "+" + shown
+
+
 # ---- The model's units (issue #33, @pacaeiro) -------------------------------
 #
 # «Myself, when doing architecture I work in meters and with mechanical

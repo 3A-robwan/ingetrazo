@@ -5926,6 +5926,10 @@ class ComposerWindow(QMainWindow):
                 item.a_world = list(hit_a[2])
         elif mode == "nivel":
             style = dict(getattr(self, "_last_nivel_style", None) or {})
+            # Born in the document's units. A remembered look may carry a
+            # unit from the last mark; the document wins, the same way a
+            # new cota does (issue #403).
+            style.update(self._document_length_style())
             item = NivelItem(x_mm=x0, y_mm=y0, **style)
             # An elevation's page rows ARE the model's heights, so even a
             # click that snapped to nothing knows its own level.
@@ -6015,6 +6019,10 @@ class ComposerWindow(QMainWindow):
         DIMLINEAR) instead of measuring the segment itself."""
         n = self.comp.frames[0].scale_n if self.comp.frames else 100.0
         style = dict(getattr(self, "_last_cota_style", None) or {})
+        # The document's units, every time. The remembered style used to
+        # carry ``units`` and ``decimals``, so a feet document still bore
+        # metre cotas (issue #403). The look (text, ends, colour) stays.
+        style.update(self._document_length_style())
         # The gap line → baseline. Rafael's sheet shows about a quarter of
         # the text height (AutoCAD's DIMGAP); 0.5 mm reads like it at the
         # 2.5 mm text a new cota takes.
@@ -6114,9 +6122,10 @@ class ComposerWindow(QMainWindow):
              else (self.comp.frames[0].scale_n if self.comp.frames else 100.0))
         style = dict(getattr(self, "_last_cota_style", None) or {})
         keep = {k: v for k, v in style.items()
-                if k in ("text_mm", "decimals", "units", "stroke_mm",
+                if k in ("text_mm", "stroke_mm",
                          "color", "text_color", "ends", "text_bg",
                          "text_bg_opacity", "offset_mm")}
+        keep.update(self._document_length_style())
         item = CotaRadialItem(
             x_mm=centre[0], y_mm=centre[1], radius_mm=r, scale_n=n,
             kind=("diameter" if kind == "diameter" else "radius"),
@@ -7089,7 +7098,7 @@ class ComposerWindow(QMainWindow):
         self.cota_text_mm.valueChanged.connect(self._on_cota_props)
         form.addRow(tr("Text height"), self.cota_text_mm)
         self.cota_decimals = QDoubleSpinBox()
-        self.cota_decimals.setRange(0, 4)
+        self.cota_decimals.setRange(0, 6)
         self.cota_decimals.setDecimals(0)
         self.cota_decimals.valueChanged.connect(self._on_cota_props)
         form.addRow(tr("Decimals"), self.cota_decimals)
@@ -7250,6 +7259,16 @@ class ComposerWindow(QMainWindow):
         form.addRow(tr("Symbol"), self.nv_symbol)
         self.nv_state = QLabel("")
         form.addRow("", self.nv_state)
+        self.nv_units = QComboBox()
+        from core.units import UNIT_CHOICES
+        self.nv_units.addItems(list(UNIT_CHOICES))
+        self.nv_units.setToolTip(tr(
+            "How the measurement reads: metres, centimetres, millimetres, "
+            "decimal inches or feet, feet-and-inches, or fractional inches "
+            "(1 1/2\"). For fractions, Decimals picks the finest denominator: "
+            "0 = whole inches, 1 = 1/4, 2 = 1/16, 3 = 1/32, 4 = 1/64."))
+        self.nv_units.currentTextChanged.connect(self._on_nivel_props)
+        form.addRow(tr("Units"), self.nv_units)
         self.nv_z = QDoubleSpinBox()
         self.nv_z.setRange(-100000.0, 100000.0)
         self.nv_z.setDecimals(3)
@@ -7269,7 +7288,7 @@ class ComposerWindow(QMainWindow):
         self.nv_datum.valueChanged.connect(self._on_nivel_props)
         form.addRow(tr("Datum"), self.nv_datum)
         self.nv_decimals = QDoubleSpinBox()
-        self.nv_decimals.setRange(0, 4)
+        self.nv_decimals.setRange(0, 6)
         self.nv_decimals.setDecimals(0)
         self.nv_decimals.valueChanged.connect(self._on_nivel_props)
         form.addRow(tr("Decimals"), self.nv_decimals)
@@ -7409,7 +7428,7 @@ class ComposerWindow(QMainWindow):
         self.crad_text_mm.valueChanged.connect(self._on_cota_rad_props)
         form.addRow(tr("Text height"), self.crad_text_mm)
         self.crad_decimals = QDoubleSpinBox()
-        self.crad_decimals.setRange(0, 4)
+        self.crad_decimals.setRange(0, 6)
         self.crad_decimals.setDecimals(0)
         self.crad_decimals.valueChanged.connect(self._on_cota_rad_props)
         form.addRow(tr("Decimals"), self.crad_decimals)
@@ -8443,9 +8462,13 @@ class ComposerWindow(QMainWindow):
                     tr("Anchored to the model: reads its height")
                     if m.anchored else tr("Free mark: type the level"))
                 self.nv_z.setEnabled(not m.anchored)
-                self.nv_z.setValue(float(m.a_world[2]) if m.anchored
-                                   else float(m.z_m))
-                self.nv_datum.setValue(float(m.datum_m))
+                units = getattr(m, "units", "m") or "m"
+                if self.nv_units.currentText() != units:
+                    self.nv_units.setCurrentText(units)
+                z_show = (float(m.a_world[2]) if m.anchored and m.a_world
+                          else float(m.z_m))
+                self._show_nivel_length(self.nv_z, z_show, units)
+                self._show_nivel_length(self.nv_datum, float(m.datum_m), units)
                 self.nv_decimals.setValue(int(m.decimals))
                 self.nv_size.setValue(float(m.size_mm))
                 self.nv_line.setValue(float(m.line_mm))
@@ -9340,8 +9363,8 @@ class ComposerWindow(QMainWindow):
                           "text_bg_opacity"),
         EtiquetaItem: ("size_pt", "bold", "italic", "underline", "color",
                        "bg_color", "bg_opacity", "arrow", "stroke_mm"),
-        NivelItem: ("symbol", "text", "decimals", "size_mm", "line_mm",
-                    "stroke_mm", "color", "datum_m"),
+        NivelItem: ("symbol", "text", "units", "decimals", "size_mm",
+                    "line_mm", "stroke_mm", "color", "datum_m"),
         LlamadaItem: ("shape", "size_mm", "stroke_mm", "color"),
         Cajetin: Cajetin.LOOK_FIELDS,
     }
@@ -10336,6 +10359,18 @@ class ComposerWindow(QMainWindow):
         finally:
             self._updating = False
 
+    def _document_length_style(self) -> dict:
+        """Unit and precision a new sheet annotation is born with: the
+        document's, the same pair the model's dimensions follow."""
+        from core.units import model_units_of
+        try:
+            scene = self._scene()
+        except AttributeError:
+            scene = None
+        chosen = model_units_of(scene)
+        return {"units": chosen["length"],
+                "decimals": int(chosen["precision"])}
+
     def dimension_norma(self) -> str:
         """The drafting standard the DOCUMENT's dimensions obey — ``"iso"``
         (the default, and so UNE) or ``"din"`` (German/Japanese). It lives
@@ -11050,26 +11085,70 @@ class ComposerWindow(QMainWindow):
             "stroke_mm": float(self.ll_stroke.value()),
             "follow": self.ll_follow.isChecked()})
 
+    def _show_nivel_length(self, spin, metres: float, units: str) -> None:
+        """Show a stored metre value in the mark's unit. Feet-and-inches
+        edit as decimal feet; the text on the sheet stays feet-and-inches."""
+        from core.units import length_number, length_suffix
+        spin.setSuffix(length_suffix(units))
+        lo = length_number(-100000.0, units)
+        hi = length_number(100000.0, units)
+        spin.setRange(min(lo, hi), max(lo, hi))
+        spin.setValue(length_number(float(metres), units))
+
+    def _metres_from_nivel_spin(self, spin, units: str,
+                               stored_metres: float) -> float:
+        """The metres the spin names. An untouched box is rounded to its
+        decimals, so it still means the stored height; a box the user
+        edited means the number it shows."""
+        from core.units import length_number, metres_from_number
+        shown = float(spin.value())
+        exact = length_number(float(stored_metres), units)
+        half = 0.5 * 10 ** (-int(spin.decimals()))
+        if abs(shown - exact) <= half + 1e-9:
+            return float(stored_metres)
+        return metres_from_number(shown, units)
+
     def _on_nivel_props(self, *_a) -> None:
         item = self._selected_item()
         if self._updating or not isinstance(item, NivelCanvasItem):
             return
         item.prepareGeometryChange()
+        new_units = self.nv_units.currentText() or "m"
+        old_units = getattr(item.model, "units", "m") or "m"
+        stored_z = (float(item.model.a_world[2])
+                    if item.model.anchored and item.model.a_world
+                    else float(item.model.z_m))
+        # The spins still show the previous unit while the combo has
+        # already moved. Read them in that unit, then rescaling leaves
+        # the stored metres where they were.
+        read_units = old_units if new_units != old_units else new_units
+        z_m = self._metres_from_nivel_spin(self.nv_z, read_units, stored_z)
+        datum_m = self._metres_from_nivel_spin(
+            self.nv_datum, read_units, float(item.model.datum_m))
+        if new_units != old_units:
+            self._updating = True
+            try:
+                self._show_nivel_length(self.nv_z, z_m, new_units)
+                self._show_nivel_length(self.nv_datum, datum_m, new_units)
+            finally:
+                self._updating = False
         changes = {
             "text": self.nv_text.text(),
             "symbol": self.nv_symbol.currentData() or "triangle",
-            "datum_m": float(self.nv_datum.value()),
+            "units": new_units,
+            "datum_m": datum_m,
             "decimals": int(self.nv_decimals.value()),
             "size_mm": float(self.nv_size.value()),
             "line_mm": float(self.nv_line.value()),
             "mirror": self.nv_mirror.isChecked(),
             "stroke_mm": float(self.nv_stroke.value())}
         if not item.model.anchored:
-            changes["z_m"] = float(self.nv_z.value())
+            changes["z_m"] = z_m
         self._panel_edit(item, changes)
-        # the next mark inherits the look (the last style is remembered)
+        # the next mark inherits the look. Units and decimals do not:
+        # the next mark is born in the document's (issue #403).
         self._last_nivel_style = {k: changes[k] for k in
-                                  ("text", "symbol", "datum_m", "decimals",
+                                  ("text", "symbol", "datum_m",
                                    "size_mm", "line_mm", "mirror",
                                    "stroke_mm")}
 
@@ -11183,10 +11262,10 @@ class ComposerWindow(QMainWindow):
 
     #: Style fields a new cota inherits from the last one edited (the usual
     #: convention: new dimensions take the current style settings).
-    _COTA_STYLE_FIELDS = ("text_mm", "decimals", "ends", "stroke_mm",
+    _COTA_STYLE_FIELDS = ("text_mm", "ends", "stroke_mm",
                           "color", "offset_mm",
                           "text_color", "text_bg",
-                          "text_bg_opacity", "units")
+                          "text_bg_opacity")
 
     #: QSettings key of the remembered cota style. Each bump is a decision
     #: that changed what a field means or what a new cota should be born
@@ -11196,12 +11275,16 @@ class ComposerWindow(QMainWindow):
     #: (2026-09-20): ISO only — a remembered «tick» / «end» / «centered»
     #: no longer travels. «3» (same day): the gap is measured to the
     #: baseline and born at 0.5 mm — a remembered 0.8 meant the old,
-    #: larger gap.
-    _COTA_STYLE_KEY = "composer/default_cota_style_3"
+    #: larger gap. «4» (issue #403): units and decimals come from the
+    #: document at birth, so a remembered «m» no longer beats a feet file.
+    _COTA_STYLE_KEY = "composer/default_cota_style_4"
     _COTA_STYLE_KEYS_OLD = (
-        ("composer/default_cota_style_2", ("offset_mm",)),
+        ("composer/default_cota_style_3", ("units", "decimals")),
+        ("composer/default_cota_style_2",
+         ("offset_mm", "units", "decimals")),
         ("composer/default_cota_style",
-         ("ends", "text_along", "text_pos", "offset_mm")),
+         ("ends", "text_along", "text_pos", "offset_mm",
+          "units", "decimals")),
     )
     _COTA_STYLE_KEY_OLD = _COTA_STYLE_KEYS_OLD[-1][0]
 
