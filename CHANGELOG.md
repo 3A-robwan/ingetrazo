@@ -27,6 +27,23 @@ follow [SemVer](https://semver.org).
   siguientes arcos. El ángulo del arco por centro ya no se lee como una
   longitud, y al redondear una esquina la casilla dice «Radio» (#290,
   @canalsecuario-blip; #298, @pacaeiro).
+- **Reemplazar componente**: con el clic derecho, «Seleccionar ▸ Todas
+  las copias» y «Reemplazar componente…» cambian de una vez todas las
+  copias de un componente por otro (la silla provisional por la
+  definitiva), conservando su posición, giro, escala, capa y material.
+  La lista «En el modelo» de la bandeja trae miniaturas, filtro por
+  nombre, renombrar todas las copias y **Guardar en el archivo** para
+  conservar un componente aunque no quede ninguna copia colocada; y
+  «Componentes de archivo…» trae los de otro `.igz` como biblioteca. Un
+  documento con componentes guardados así los pierde si se abre en una
+  versión anterior (@canalsecuario-blip, ingetrazo-dev#4).
+- **Redondear 3D también bisela** (Mayús+F): chaflán, curva ajustable,
+  perfiles de escalones, cornisa y moldura, o uno dibujado a mano; cuatro
+  formas de medir (radio, distancia en cada cara, ancho o profundidad);
+  esquinas rellenas o en muesca; y biselar solo los vértices. Un panel
+  abajo a la izquierda reúne todos los ajustes con vista previa en vivo.
+  Con los ajustes de siempre redondea exactamente como antes
+  (@canalsecuario-blip, ingetrazo-dev#5).
 - **Edición ▸ Seleccionar nada (Ctrl+T)**, la pareja de Seleccionar todo;
   no marca el documento como modificado (#367, @pacaeiro, #349).
 - **Mover, Rotar y Voltear muestran un + en el cursor** mientras Ctrl hace
