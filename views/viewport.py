@@ -697,6 +697,38 @@ def _point_to_segment_distance_2d(p, a, b) -> float:
 # ---- Viewport --------------------------------------------------------------
 
 _IMPERIAL_UNITS = {"in": 0.0254, '"': 0.0254, "ft": 0.3048, "'": 0.3048}
+
+#: What a keyboard or an autocorrect types for the marks the value box
+#: reads: a Mac turns " into ” and ' into ’ on its own, and 1⅜" has its
+#: fraction in one character. They used to be dropped, the entry could not
+#: be read, and the rectangle took the cursor's size (#189).
+_TYPED_EQUIVALENTS = {
+    "”": '"', "“": '"', "″": '"', "＂": '"',
+    "’": "'", "‘": "'", "′": "'", "＇": "'",
+    "½": "1/2", "⅓": "1/3", "⅔": "2/3", "¼": "1/4", "¾": "3/4",
+    "⅕": "1/5", "⅖": "2/5", "⅗": "3/5", "⅘": "4/5", "⅙": "1/6",
+    "⅚": "5/6", "⅐": "1/7", "⅛": "1/8", "⅜": "3/8", "⅝": "5/8",
+    "⅞": "7/8", "⅑": "1/9", "⅒": "1/10",
+}
+
+
+def _plain_typed(text: str, before: str = "") -> str:
+    """``text`` with the characters of :data:`_TYPED_EQUIVALENTS` spelled
+    the way the parser reads them. A one-character fraction after a digit
+    becomes a mixed number (``1⅜`` → ``1 3/8``); ``before`` is what the
+    entry holds already, for a character typed on its own."""
+    out = []
+    prev = before[-1:] if before else ""
+    for ch in text:
+        rep = _TYPED_EQUIVALENTS.get(ch)
+        if rep is None:
+            out.append(ch)
+        elif "/" in rep:
+            out.append((" " if prev.isdigit() else "") + rep)
+        else:
+            out.append(rep)
+        prev = out[-1][-1:] if out[-1] else prev
+    return "".join(out)
 _METRIC_UNITS = {"": 1.0, "m": 1.0, "cm": 0.01, "mm": 0.001}
 
 
@@ -13300,6 +13332,12 @@ class Viewport(QOpenGLWidget):
             # "/3": the internal-array divisor opens the buffer.
             self._set_value_buffer(text)
             return True
+        if text in _TYPED_EQUIVALENTS and self._current_token_tail():
+            # ” ’ ⅜ … after a digit: spelled the way the parser reads them
+            # (#189). Like " and ', they mean nothing on their own.
+            self._set_value_buffer(
+                self._value_buffer + _plain_typed(text, self._value_buffer))
+            return True
         if text and (text.isdigit()
                      or text in (".", ",", ";", " ", "-", ":", "\"", "'", "/")
                      or text.lower() in ("m", "c", "r", "i", "n", "f", "t", "s")):
@@ -13357,6 +13395,14 @@ class Viewport(QOpenGLWidget):
         only several values (the Rectangle), where a lone decimal could never
         be meant; a user who wants decimals there separates with ``;``
         (``1,5;2,5``), which is the usual rule in comma-decimal locales."""
+        buffer = _plain_typed(buffer)
+        if comma_lists:
+            # A comma beside a space, or after a mark or a unit, can't be
+            # a decimal point: «1 3/8", 1 3/16"» and «1220, 2440» are two
+            # fields. Mixed inches always carry a space, so the old rule
+            # below read their comma as decimal and refused the whole
+            # entry (#189). «2,5» between two digits keeps its meaning.
+            buffer = re.sub(r"(?<=[^\d\s]),|,(?=\s)|(?<=\s),", ";", buffer)
         if (comma_lists and ";" not in buffer
                 and not any(ch.isspace() for ch in buffer.strip())):
             buffer = buffer.replace(",", " ")

@@ -165,6 +165,23 @@ def unit_label(code: str) -> str:
     return tr(UNIT_LABELS[code]) if code in UNIT_LABELS else code
 
 
+#: How a dialog's length box reads in each unit: suffix and decimals. The
+#: imperial ones with inches take inches (a 3D text 2" tall), decimal feet
+#: take feet.
+_ENTRY = {"m": (" m", 3), "cm": (" cm", 2), "mm": (" mm", 1),
+          "in": (" in", 3), "in-frac": (" in", 3), "ft-in": (" in", 3),
+          "ft-in-frac": (" in", 3), "ft": (" ft", 3)}
+
+
+def entry_unit() -> tuple:
+    """``(suffix, metres_per_unit, decimals)`` for a dialog box that takes
+    a length in the model's unit: a millimetre document asks for
+    millimetres, not metres (#287)."""
+    unit = model_unit()
+    suffix, decimals = _ENTRY.get(unit, (" m", 3))
+    return suffix, _BARE_SCALE.get(unit, 1.0), decimals
+
+
 #: Set while the value being read is not a length (see ``unitless_numbers``).
 _UNITLESS = False
 

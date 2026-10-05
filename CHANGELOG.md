@@ -194,6 +194,17 @@ follow [SemVer](https://semver.org).
   para Zoom a la selección, al copiar los atajos de otro programa), ninguno
   respondía. Ahora la tecla se queda con el primero y el aviso de la
   importación dice cuáles se quitaron (#323, @tomlai-git).
+- **Las medidas del rectángulo con coma y espacio no se leían** y el
+  rectángulo salía del tamaño del cursor: en `1 3/8", 1 3/16"` o
+  `1220, 2440` la coma se tomaba por decimal (las pulgadas mixtas siempre
+  llevan un espacio). Ahora una coma junto a un espacio, o tras una marca
+  o una unidad, separa las dos medidas; `2,5` sigue siendo 2,5. Y se leen
+  las comillas tipográficas que pone el Mac (`”`, `’`) y las fracciones de
+  un solo carácter (`⅜`, `½`), que antes ni entraban en la casilla (#189,
+  @smcardle, @Loonster83).
+- **El Texto 3D pedía la altura y la extrusión en metros** aunque el
+  documento estuviera en milímetros: ahora las pide en la unidad del
+  documento (mm, cm, m, pulgadas o pies) (#287, @ea2ehc).
 - **Bajar una arista sobre otra dejaba vértices dobles**: al hacer una
   rampa con Mover, cada esquina caía sobre otra pero quedaban dos vértices
   en el mismo punto, con una cara sin área que hacía fallar Crear grupo y
