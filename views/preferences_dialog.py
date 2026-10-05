@@ -303,26 +303,24 @@ class PreferencesDialog(QDialog):
         # property of the document (it travels in the .igz), shown here
         # because this is where people look for it (Marco, 2026-09-21).
         from core import units as _units
+        from views.units_panel import UnitsPanel
         scene = getattr(getattr(self._window, "viewport", None), "scene", None)
         current = _units.model_units_of(scene)
-        un = QWidget()
-        form = QFormLayout(un)
-        self._unit = QComboBox()
-        for code in _units.UNIT_CHOICES:
-            self._unit.addItem(_units.unit_label(code), code)
-        self._unit.setCurrentIndex(max(0, self._unit.findData(
-            current.get("length", "m"))))
-        form.addRow(tr("Length unit"), self._unit)
-        self._decimals = QSpinBox()
-        self._decimals.setRange(0, 6)
-        self._decimals.setValue(int(current.get("precision", 2)))
-        form.addRow(tr("Decimals"), self._decimals)
+        # The units panel (profile, length, area, volume, angle, decimal
+        # separator, preview): everything a readout is shown with. Its rows
+        # and the ones below share one form, like the other pages.
+        self._units_panel = UnitsPanel(current)
+        form = self._units_panel.form
         # Issue #121: the choice used to live only in the open document, so
         # every new file went back to metres.
         self._units_for_new = QCheckBox(tr("Also use for new documents"))
         self._units_for_new.setChecked(
             _units.new_document_units() == current)
         form.addRow("", self._units_for_new)
+        from views.units_start_dialog import ask_at_start
+        self._units_at_start = QCheckBox(tr("Ask which units to use at startup"))
+        self._units_at_start.setChecked(ask_at_start())
+        form.addRow("", self._units_at_start)
         note = QLabel(tr(
             "These are the units of the document you have open — they are "
             "saved with it. A number typed without a unit is in this unit "
@@ -330,8 +328,15 @@ class PreferencesDialog(QDialog):
             "every length and area on screen is shown in it. The dimension "
             "style follows it; its own panel can still set it apart."))
         note.setWordWrap(True)
+        from views.theme import style as theme_style
+        theme_style(note, "color:{muted}; font-size:11px;")
         form.addRow("", note)
+        un = QWidget()
+        page = QVBoxLayout(un)
+        page.addWidget(self._units_panel)
+        page.addStretch(1)
         tabs.addTab(un, tr("Units"))
+        self._units_page = un
 
         # ---- Keyboard shortcuts (issue #138) -------------------------------
         from views.shortcuts import ShortcutsPanel
@@ -345,6 +350,10 @@ class PreferencesDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    def show_units_page(self) -> None:
+        """Open on the Units page (Window ▸ Units…, Ctrl+U)."""
+        self._tabs.setCurrentWidget(self._units_page)
+
     def show_shortcut_of(self, action) -> None:
         """Open on the Keyboard shortcuts page with ``action`` picked."""
         self._tabs.setCurrentWidget(self._shortcuts)
@@ -357,14 +366,15 @@ class PreferencesDialog(QDialog):
         # Units of the open document (issue #33).
         from core import units as _units
         scene = getattr(getattr(self._window, "viewport", None), "scene", None)
-        chosen = {"length": str(self._unit.currentData()),
-                  "precision": int(self._decimals.value())}
+        chosen = self._units_panel.settings()
         if scene is not None and chosen != _units.model_units_of(scene):
             _units.apply_units(scene, chosen)
             scene.version += 1
             self._window.viewport.update()
         if self._units_for_new.isChecked():
             _units.remember_new_document_units(chosen)
+        from views.units_start_dialog import set_ask_at_start
+        set_ask_at_start(self._units_at_start.isChecked())
 
         # Language: same contract as the menu (persists; applies on restart).
         # Reverting a still-pending change back to the running language just

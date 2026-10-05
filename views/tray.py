@@ -65,7 +65,7 @@ from georef.tiles import DEFAULT_SOURCE_ID, PRESETS, TileLayer, custom_source
 from tools.paint import RECENT_MAX, PaintTool
 
 from core.paths import app_root
-from core.units import fmt_area, fmt_len
+from core.units import fmt_area, fmt_len, fmt_volume
 
 _TEX_DIR = app_root() / "resources" / "textures"
 #: RAL Classic — the paint standard a drawing can be specified in. Its names
@@ -3341,7 +3341,7 @@ class EntityInfoPanel(QWidget):
                 # The usual «Solid Group» / «Solid Component» with its
                 # volume, the Solid Tools' own test (core.solids).
                 vol = self._solid_volume(e)
-                solid = (f"<br>{tr('Volume')}: {vol:.3f} m³"
+                solid = (f"<br>{tr('Volume')}: {fmt_volume(vol)}"
                          if vol is not None else "")
                 if e.is_component():
                     # Entity Info usually tells a component from a group and

@@ -696,68 +696,12 @@ def _point_to_segment_distance_2d(p, a, b) -> float:
 
 # ---- Viewport --------------------------------------------------------------
 
-_IMPERIAL_UNITS = {"in": 0.0254, '"': 0.0254, "ft": 0.3048, "'": 0.3048}
-
-#: What a keyboard or an autocorrect types for the marks the value box
-#: reads: a Mac turns " into ” and ' into ’ on its own, and 1⅜" has its
-#: fraction in one character. They used to be dropped, the entry could not
-#: be read, and the rectangle took the cursor's size (#189).
-_TYPED_EQUIVALENTS = {
-    "”": '"', "“": '"', "″": '"', "＂": '"',
-    "’": "'", "‘": "'", "′": "'", "＇": "'",
-    "½": "1/2", "⅓": "1/3", "⅔": "2/3", "¼": "1/4", "¾": "3/4",
-    "⅕": "1/5", "⅖": "2/5", "⅗": "3/5", "⅘": "4/5", "⅙": "1/6",
-    "⅚": "5/6", "⅐": "1/7", "⅛": "1/8", "⅜": "3/8", "⅝": "5/8",
-    "⅞": "7/8", "⅑": "1/9", "⅒": "1/10",
-}
-
-
-def _plain_typed(text: str, before: str = "") -> str:
-    """``text`` with the characters of :data:`_TYPED_EQUIVALENTS` spelled
-    the way the parser reads them. A one-character fraction after a digit
-    becomes a mixed number (``1⅜`` → ``1 3/8``); ``before`` is what the
-    entry holds already, for a character typed on its own."""
-    out = []
-    prev = before[-1:] if before else ""
-    for ch in text:
-        rep = _TYPED_EQUIVALENTS.get(ch)
-        if rep is None:
-            out.append(ch)
-        elif "/" in rep:
-            out.append((" " if prev.isdigit() else "") + rep)
-        else:
-            out.append(rep)
-        prev = out[-1][-1:] if out[-1] else prev
-    return "".join(out)
-_METRIC_UNITS = {"": 1.0, "m": 1.0, "cm": 0.01, "mm": 0.001}
-
-
 def _parse_number(tok: str):
     """``2``, ``2.5``, ``.5``, ``3/4`` (a fraction), ``1-1/2`` (a mixed
-    number, the hyphen form) → float, else None."""
-    m = re.fullmatch(r"(?:(\d+)-)?(\d+\.?\d*|\.\d+)(?:/(\d+\.?\d*))?", tok)
-    if m is None:
-        return None
-    v = float(m.group(2))
-    if m.group(3):
-        d = float(m.group(3))
-        if d == 0:
-            return None
-        v /= d
-    elif m.group(1):
-        return None                      # "1-2" without a fraction: not ours
-    if m.group(1):
-        v += float(m.group(1))
-    # A number too long for a float comes back as inf, and inf − inf is
-    # NaN a few steps later: a coordinate no tool can recover from (#185).
-    # So does a finite one too big for the geometry's float32 coordinates
-    # (1e34 overflows them): nothing typed in a model is ever that large.
-    return v if math.isfinite(v) and abs(v) <= _MAX_TYPED else None
-
-
-#: The largest number the value box takes (in whatever unit it is typed):
-#: a UTM northing is ~1e7 m, a kilometre in millimetres 1e6.
-_MAX_TYPED = 1e9
+    number, the hyphen form) → float, else None — ``core.units`` reads it,
+    refusing a number too long for a float or too big for a model (#185)."""
+    from core.units import _number
+    return _number(tok)
 
 
 def _is_chord(modifiers) -> bool:
@@ -771,64 +715,45 @@ def _is_chord(modifiers) -> bool:
 
 def _merge_mixed_numbers(fields: list) -> list:
     """The usual ``1 1/2"``: a whole number followed by a fraction field is
-    ONE mixed number, not two fields — joined with the hyphen form."""
+    ONE mixed number, not two fields — joined with the hyphen form. And a
+    feet field followed by inches that carry their mark is ONE length, the
+    way it is written: ``5' 3 1/2"`` → ``5'3-1/2"`` (a 5 ft × 3 in
+    rectangle is typed ``5';3"``)."""
     out = []
     i = 0
     while i < len(fields):
         f = fields[i]
         nxt = fields[i + 1] if i + 1 < len(fields) else None
         if (nxt is not None
-                and re.fullmatch(r"-?\d+(?:'\d*)?", f)
+                and re.fullmatch(r"-?\d+(?:'-?\d*)?", f)
                 and re.fullmatch(r"\d+/\d+(?:mm|cm|m|in|ft|\"|')?", nxt.lower())):
             # 1 1/2" → 1-1/2"; 1'6 1/2" → 1'6-1/2"; 1' 1/2" → 1'1/2"
-            joint = "" if f.endswith("'") else "-"
+            joint = "" if f.endswith(("'", "-")) else "-"
             out.append(f"{f}{joint}{nxt}")
             i += 2
             continue
         out.append(f)
         i += 1
-    return out
+    joined = []
+    for f in out:
+        if (joined and re.fullmatch(r"-?[\d./-]+'", joined[-1])
+                and re.fullmatch(r"[\d./-]+(?:\"|in)", f.lower())):
+            joined[-1] += f
+        else:
+            joined.append(f)
+    return joined
 
 
 def _parse_length_field(field: str):
     """One typed length in metres: metric or imperial, the usual forms.
 
-    ``2`` (metres) · ``30cm`` · ``1500mm`` · ``2"`` / ``2in`` · ``1'`` /
-    ``1ft`` · ``1'6"`` · ``3/4"`` · ``1'3/4"``. A leading minus is kept.
-    Returns None when the field is not a length."""
-    f = field.strip().lower()
-    sign = 1.0
-    if f.startswith("-"):
-        sign, f = -1.0, f[1:]
-    if not f:
-        return None
-    # feet-and-inches: <feet>'<inches>" (inches optional, may be a fraction)
-    m = re.fullmatch(r"([^'\"]+)'([^'\"]*)\"?", f)
-    if m is not None and m.group(2):
-        # 1'6 1/2" arrives from the buffer merge as 1'6-1/2"
-        feet = _parse_number(m.group(1))
-        inches = _parse_number(m.group(2))
-        if feet is None or inches is None:
-            return None
-        return sign * (feet * 0.3048 + inches * 0.0254)
-    m = re.fullmatch(r"(.+?)(mm|cm|m|in|ft|\"|')?", f)
-    if m is None:
-        return None
-    num = _parse_number(m.group(1))
-    if num is None:
-        return None
-    unit = m.group(2) or ""
-    if unit == "":
-        # No unit typed: the model's (issue #33) — 2 is 2 m in a metric
-        # document, 2 mm in a millimetre one.
-        from core.units import bare_number_scale
-        return sign * num * bare_number_scale()
-    scale = _METRIC_UNITS.get(unit)
-    if scale is None:
-        scale = _IMPERIAL_UNITS.get(unit)
-    if scale is None:
-        return None
-    return sign * num * scale
+    ``2`` (the document's unit, issue #33) · ``30cm`` · ``1500mm`` ·
+    ``1m20`` · ``2"`` / ``2in`` · ``1'`` / ``1ft`` · ``1'6"`` · ``3/4"`` ·
+    ``1'3/4"``. A leading minus is kept. Returns None when the field is not
+    a length. The reading itself lives in ``core.units.parse``, the one
+    every length field shares."""
+    from core.units import parse_length_field
+    return parse_length_field(field)
 
 
 class _AltWatch(QObject):
@@ -13313,6 +13238,17 @@ class Viewport(QOpenGLWidget):
             # shortcut never fired and each try added a «1» — a 35-digit
             # number, inf in the geometry's floats, then NaN (#185).
             return False
+        from core.units import VULGAR_FRACTIONS, plain_marks
+        if text in VULGAR_FRACTIONS:
+            # ⅜, ½…: the fraction as digits, after a space when it follows
+            # a whole number (1⅜ → 1 3/8). A keyboard that types them, or
+            # smart quotes (”), made the value box drop keys (#189).
+            if not self._value_buffer:
+                self._set_value_buffer(plain_marks(text))
+            else:
+                self._set_value_buffer(plain_marks(self._value_buffer + text))
+            return True
+        text = plain_marks(text)
         arrays = getattr(self.active_tool, "accepts_array", False)
         if arrays and text == "*":
             # "*3" / "3*": the array multiplier ("x" works too).
@@ -13331,12 +13267,6 @@ class Viewport(QOpenGLWidget):
         if arrays and text == "/" and not self._value_buffer:
             # "/3": the internal-array divisor opens the buffer.
             self._set_value_buffer(text)
-            return True
-        if text in _TYPED_EQUIVALENTS and self._current_token_tail():
-            # ” ’ ⅜ … after a digit: spelled the way the parser reads them
-            # (#189). Like " and ', they mean nothing on their own.
-            self._set_value_buffer(
-                self._value_buffer + _plain_typed(text, self._value_buffer))
             return True
         if text and (text.isdigit()
                      or text in (".", ",", ";", " ", "-", ":", "\"", "'", "/")
@@ -13395,14 +13325,11 @@ class Viewport(QOpenGLWidget):
         only several values (the Rectangle), where a lone decimal could never
         be meant; a user who wants decimals there separates with ``;``
         (``1,5;2,5``), which is the usual rule in comma-decimal locales."""
-        buffer = _plain_typed(buffer)
-        if comma_lists:
-            # A comma beside a space, or after a mark or a unit, can't be
-            # a decimal point: «1 3/8", 1 3/16"» and «1220, 2440» are two
-            # fields. Mixed inches always carry a space, so the old rule
-            # below read their comma as decimal and refused the whole
-            # entry (#189). «2,5» between two digits keeps its meaning.
-            buffer = re.sub(r"(?<=[^\d\s]),|,(?=\s)|(?<=\s),", ";", buffer)
+        from core.units import plain_marks
+        buffer = plain_marks(buffer)
+        # A comma followed by a space separates values: a decimal comma
+        # never has one after it. «1 3/8", 1 3/16"» is two lengths (#189).
+        buffer = re.sub(r",\s+", ";", buffer.strip())
         if (comma_lists and ";" not in buffer
                 and not any(ch.isspace() for ch in buffer.strip())):
             buffer = buffer.replace(",", " ")
@@ -13456,7 +13383,11 @@ class Viewport(QOpenGLWidget):
                 return None
             return ("ratio", math.degrees(math.atan2(rise, run)))
         nums = []
-        for p in _merge_mixed_numbers(normalized.split()):
+        # «;» is a hard separator: «5';3"» stays two values, while «5' 3"»
+        # is one length, written the usual way.
+        fields = [f for group in buffer.replace(",", ".").split(";")
+                  for f in _merge_mixed_numbers(group.split())]
+        for p in fields:
             v = _parse_length_field(p)
             if v is None:
                 return None

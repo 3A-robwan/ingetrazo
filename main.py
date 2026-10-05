@@ -505,6 +505,10 @@ def main() -> int:
         if doc.exists():
             _open_document_in(window, doc)
     window.show()
+    from PySide6.QtCore import QTimer
+    # Which units to work in, once the window is up (off for good with
+    # «Don't show this at startup»; Preferences ▸ Units turns it back on).
+    QTimer.singleShot(0, window.offer_units_at_start)
     _offer_appimage_integration(window)
     return app.exec()
 

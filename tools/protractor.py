@@ -511,7 +511,8 @@ class ProtractorTool(ProtractorBase):
         deg = self._display_deg(self.hover_point)
         if deg is None:
             return None
-        return (f"{deg:+.1f}°", self.hover_point)
+        from core.units import fmt_angle_deg
+        return (fmt_angle_deg(deg, signed=True), self.hover_point)
 
     def vcb_caption(self) -> str:
         return "Angle"
@@ -522,8 +523,10 @@ class ProtractorTool(ProtractorBase):
         if not self._guides:
             # Measure only: report the angle and leave nothing behind.
             from core.i18n import tr as _tr
+            from core.units import fmt_angle_deg
             viewport.flash_status(
-                _tr("Angle: {a}°").format(a=f"{deg:+.1f}"), 4000)
+                _tr("Angle: {a}").format(a=fmt_angle_deg(deg, signed=True)),
+                4000)
             self._reset()
             viewport.update()
             return

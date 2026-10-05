@@ -202,7 +202,8 @@ class SolidInspectorDialog(QDialog):
                 problems += 1
             table.setItem(i, 2, status)
             table.setItem(i, 3, QTableWidgetItem(_problem_text(rep)))
-            vol = (f"{rep['volume']:.3f} m³"
+            from core.units import fmt_volume
+            vol = (fmt_volume(rep['volume'])
                    if rep["volume"] is not None else "—")
             table.setItem(i, 4, QTableWidgetItem(vol))
         table.resizeRowsToContents()

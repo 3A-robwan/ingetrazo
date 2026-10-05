@@ -344,7 +344,8 @@ class RotateTool(ProtractorBase):
         deg = self._display_deg(self.hover_point)
         if deg is None:
             return None
-        return (f"{deg:+.1f}°", self.hover_point)
+        from core.units import fmt_angle_deg
+        return (fmt_angle_deg(deg, signed=True), self.hover_point)
 
     def vcb_caption(self) -> str:
         return "Angle"

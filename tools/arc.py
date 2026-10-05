@@ -1063,7 +1063,9 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
             r = math.hypot(QVector3D.dotProduct(d, u),
                            QVector3D.dotProduct(d, v))
             return ("R " + fmt_len(r), self.hover_point)
-        return (f"{self._sweep_to(self.hover_point):+.1f}°", self.hover_point)
+        from core.units import fmt_angle_deg
+        return (fmt_angle_deg(self._sweep_to(self.hover_point), signed=True),
+                self.hover_point)
 
     def on_segments_value(self, viewport, n: int) -> bool:
         return self._set_segments(viewport, n)

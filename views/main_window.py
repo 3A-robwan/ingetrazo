@@ -1392,6 +1392,15 @@ class MainWindow(QMainWindow):
         window_menu.addAction(self._act_sidebar)
 
         window_menu.addSeparator()
+        # Ctrl+U: the units panel straight away (the Preferences page).
+        units_action = QAction(tr("Units…"), self)
+        units_action.setShortcut(QKeySequence("Ctrl+U"))
+        units_action.setStatusTip(tr(
+            "Choose the units lengths, areas, volumes and angles are shown "
+            "and typed in."))
+        units_action.triggered.connect(self._on_units)
+        window_menu.addAction(units_action)
+        self._act_units = units_action
         prefs_action = QAction(tr("Preferences…"), self)
         prefs_action.setStatusTip(tr(
             "Change the units, auto-save, icons and the rest of the "
@@ -1759,13 +1768,30 @@ class MainWindow(QMainWindow):
         """Window ▸ Preferences: the scattered QSettings in one dialog."""
         self.open_preferences()
 
-    def open_preferences(self, shortcut_of=None) -> None:
+    def _on_units(self) -> None:
+        """Window ▸ Units… (Ctrl+U): Preferences on its Units page."""
+        self.open_preferences(page="units")
+
+    def offer_units_at_start(self) -> None:
+        """The units question at startup, while the document is still the
+        new, untouched one (a file opened from the command line has its
+        own units and is never asked about)."""
+        if (self._current_path is not None
+                or self.viewport.scene.version != self._saved_version):
+            return
+        from views.units_start_dialog import offer_at_start
+        offer_at_start(self)
+
+    def open_preferences(self, shortcut_of=None, page=None) -> None:
         """Preferences; on the Keyboard shortcuts page with that action
-        picked when ``shortcut_of`` is given (right click in F3)."""
+        picked when ``shortcut_of`` is given (right click in F3), or on
+        ``page`` (``"units"``)."""
         from views.preferences_dialog import PreferencesDialog
         dlg = PreferencesDialog(self)
         if shortcut_of is not None:
             dlg.show_shortcut_of(shortcut_of)
+        elif page == "units":
+            dlg.show_units_page()
         dlg.exec()
         # Freed now, not when the window goes: each opening used to leave
         # a hidden dialog hanging from the window until the app closed.
@@ -5015,17 +5041,17 @@ class MainWindow(QMainWindow):
         thickness) → the parameters dict, or ``None`` when cancelled or
         blank. ``params`` pre-fills it (editing an existing text).
 
-        Height and thickness read in the MODEL's unit, as every other
-        length does (Marco, 2026-09-20: «debería ser la unidad en metros»,
-        when metres were the only one; #287: a millimetre model asked for
-        metres), with no low ceiling: Rafael typed «20» for the extrusion
-        and a 10 m cap refused it (2026-09-16, f000845) — the cap was the
-        fault, not the unit. The parameters stay in metres."""
+        Height and thickness are kept in METRES, the model's unit (Marco,
+        2026-09-20), and shown and typed in the DOCUMENT's units like every
+        other readout (#287: a millimetre model showed them in metres) — a
+        bare «20» is 20 mm there, «2cm» is 2 cm anywhere. No low ceiling:
+        Rafael typed «20» for the extrusion and a 10 m cap refused it
+        (2026-09-16, f000845) — the cap was the fault, not the unit."""
         from PySide6.QtWidgets import (QCheckBox, QDialog, QDialogButtonBox,
-                                       QDoubleSpinBox, QFontComboBox,
-                                       QFormLayout, QLineEdit)
+                                       QFontComboBox, QFormLayout, QLineEdit)
         from PySide6.QtGui import QFont
         from core.text3d import text_params
+        from views.length_field import LengthSpinBox
         params = params or {}
         dlg = QDialog(self)
         dlg.setWindowTitle(tr("3D Text"))
@@ -5043,21 +5069,11 @@ class MainWindow(QMainWindow):
         italic_check = QCheckBox()
         italic_check.setChecked(bool(params.get("italic", False)))
         form.addRow(tr("Italic:"), italic_check)
-        from core.units import entry_unit
-        suffix, per_unit, decimals = entry_unit()
-        height_spin = QDoubleSpinBox()
-        height_spin.setDecimals(decimals)
-        height_spin.setRange(0.001 / per_unit, 1000.0 / per_unit)
-        height_spin.setSingleStep(0.05 / per_unit)
-        height_spin.setValue(float(params.get("height", 0.25)) / per_unit)
-        height_spin.setSuffix(suffix)
+        height_spin = LengthSpinBox(minimum=0.001, maximum=1000.0)
+        height_spin.setValue(float(params.get("height", 0.25)))
         form.addRow(tr("Height:"), height_spin)
-        depth_spin = QDoubleSpinBox()
-        depth_spin.setDecimals(decimals)
-        depth_spin.setRange(0.0, 1000.0 / per_unit)
-        depth_spin.setSingleStep(0.01 / per_unit)
-        depth_spin.setValue(float(params.get("thickness", 0.05)) / per_unit)
-        depth_spin.setSuffix(suffix)
+        depth_spin = LengthSpinBox(minimum=0.0, maximum=1000.0)
+        depth_spin.setValue(float(params.get("thickness", 0.05)))
         depth_spin.setToolTip(tr("0 leaves flat faces (no extrusion)"))
         form.addRow(tr("Extruded:"), depth_spin)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok
@@ -5072,8 +5088,8 @@ class MainWindow(QMainWindow):
             return None
         return text_params(
             text, font_box.currentFont().family(), bold_check.isChecked(),
-            italic_check.isChecked(), height_spin.value() * per_unit,
-            depth_spin.value() * per_unit)
+            italic_check.isChecked(), height_spin.value(),
+            depth_spin.value())
 
     @_repeatable("3D Text")
     def _on_insert_3d_text(self) -> None:

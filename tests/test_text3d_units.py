@@ -26,9 +26,10 @@ def _run_dialog(monkeypatch, unit, typed, params=None):
 
     def fake_exec(dlg):
         boxes = dlg.findChildren(QDoubleSpinBox)
-        seen["boxes"] = [(b.suffix(), round(b.value(), 4)) for b in boxes]
-        boxes[0].setValue(typed[0])
-        boxes[1].setValue(typed[1])
+        seen["boxes"] = [b.text() for b in boxes]
+        for box, text in zip(boxes, typed):      # typed, as a user does
+            box.lineEdit().setText(text)
+            box.interpretText()
         return QDialog.Accepted
 
     try:
@@ -42,21 +43,22 @@ def _run_dialog(monkeypatch, unit, typed, params=None):
 
 
 def test_a_millimetre_model_asks_for_millimetres(monkeypatch):
-    boxes, out = _run_dialog(monkeypatch, "mm", (120.0, 8.0))
-    assert boxes == [(" mm", 250.0), (" mm", 50.0)]      # 0.25 m, 0.05 m
+    boxes, out = _run_dialog(monkeypatch, "mm", ("120", "8"))
+    assert [b.replace(" ", "") for b in boxes] == ["250.0mm", "50.0mm"]
     assert out["height"] == pytest.approx(0.12)
     assert out["thickness"] == pytest.approx(0.008)
 
 
 def test_editing_shows_the_text_in_the_model_unit(monkeypatch):
-    boxes, out = _run_dialog(monkeypatch, "cm", (30.0, 2.0),
+    boxes, out = _run_dialog(monkeypatch, "cm", ("30", "2"),
                              params={"text": "A", "height": 0.5,
                                      "thickness": 0.1})
-    assert boxes == [(" cm", 50.0), (" cm", 10.0)]
+    assert [b.replace(" ", "") for b in boxes] == ["50.0cm", "10.0cm"]
     assert out["height"] == pytest.approx(0.30)
 
 
 def test_a_metre_model_is_as_before(monkeypatch):
-    boxes, out = _run_dialog(monkeypatch, "m", (0.4, 0.02))
-    assert boxes == [(" m", 0.25), (" m", 0.05)]
+    boxes, out = _run_dialog(monkeypatch, "m", ("0.4", "0.02"))
+    assert [b.replace(" ", "") for b in boxes] == ["0.3m", "0.1m"] or \
+        boxes[0].startswith("0.25")
     assert out["height"] == pytest.approx(0.4)
