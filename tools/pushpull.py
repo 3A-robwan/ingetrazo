@@ -867,6 +867,25 @@ class PushPullTool(Tool):
                     tr("Push limited to {value} — deeper would leave the "
                        "solid", value=fmt_len(self._limit_in)), 5000)
 
+    def _reference_hidden(self, vp, world) -> bool:
+        """Whether ``world`` is a reference the user cannot see: on the
+        hidden side of the active section cut, or behind other geometry.
+
+        The snap engine runs both rules over its candidates (the viewport's
+        snap scene drops cut-hidden edges; ``_is_occluded`` raycasts the
+        rest), but Push/Pull sets ``uses_snap = False`` and its mid-drag
+        inference read vertices and edges the eye cannot reach — the extrusion
+        lunged to an invisible corner as the cursor crossed it (the "jumpy
+        push" reports, #270). X-ray and wireframe show everything:
+        ``_is_occluded`` is already False there, and the cut hides its side
+        in every style — the same rule the snaps follow."""
+        from views.viewport import _active_cut
+        sp = _active_cut(vp.scene)
+        if sp is not None and sp.side(world) > 1e-6:
+            return True
+        occluded = getattr(vp, "_is_occluded", None)   # stub viewports in tests
+        return occluded is not None and occluded(world)
+
     def _infer_reference_distance(self, ctx: ToolContext):
         """Distance making the moved face level with the model geometry under the
         cursor — the classic mid-push inference ("push until even with that
@@ -928,7 +947,8 @@ class PushPullTool(Tool):
                 p = verts[i].position
                 if _key(p) in exclude:
                     continue  # the base's own corners would pin the drag to 0
-                if best is None or dd < best[0]:
+                if (best is None or dd < best[0]) \
+                        and not self._reference_hidden(vp, p):
                     best = (dd, QVector3D.dotProduct(
                         p - self._anchor, self._normal),
                         QVector3D(p), "vertex")
@@ -975,7 +995,8 @@ class PushPullTool(Tool):
                 t = QVector3D.dotProduct(on - a, ab) / QVector3D.dotProduct(ab, ab)
                 on = a + ab * max(0.0, min(1.0, t))
                 dist = QVector3D.dotProduct(on - self._anchor, self._normal)
-                if abs(dist) >= _MIN_EXTRUDE:
+                if abs(dist) >= _MIN_EXTRUDE \
+                        and not self._reference_hidden(vp, on):
                     self._inference_point = on
                     self._inference_kind = "edge"
                     return dist

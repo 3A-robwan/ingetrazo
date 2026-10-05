@@ -224,6 +224,14 @@ follow [SemVer](https://semver.org).
   guardar 2,3 → 1,6 s solo por esto (#158, @pacaeiro).
 
 ### Corregido
+- **Empujar ya no salta a referencias que no se ven** (#270, #384,
+  @FG-RVT): la distancia que Empujar/Tirar deduce a mitad de arrastre leía
+  cualquier vértice o arista bajo el cursor, aunque estuviera tapado por
+  geometría o cortado por un plano de sección, y la extrusión se lanzaba de
+  pronto a un canto invisible al cruzarlo. Ahora aplica las mismas dos
+  reglas que los enganches: lo que la sección corta no se pulsa ni se
+  encaja, y lo que hay delante esconde; en Rayos X y alambre todo sigue
+  siendo referencia.
 - **Renombrar un elemento en la lista de Elementos del compositor ya no
   puede cerrar el programa**: la lista se reconstruía dentro del propio
   cambio de la fila y borraba la fila que Qt seguía editando.
