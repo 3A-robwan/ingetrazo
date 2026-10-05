@@ -898,9 +898,12 @@ class MainWindow(QMainWindow):
         self._redo_action = QAction(tr("Redo"), self)
         self._redo_action.setStatusTip(tr(
             "Bring back the change that was just undone."))
-        # Cover both classic Windows (Ctrl+Y) and Linux/macOS (Ctrl+Shift+Z).
+        # Both keys, spelled out: Ctrl+Y (Windows' habit) and Ctrl+Shift+Z
+        # (Linux and macOS). The platform's «Redo» key is Ctrl+Shift+Z on
+        # KDE and GNOME, so it came out twice and Ctrl+Y not at all — and a
+        # key listed twice on one action did not fire (#313, @RaphaelNunes10).
         self._redo_action.setShortcuts(
-            [QKeySequence.Redo, QKeySequence("Ctrl+Shift+Z")]
+            [QKeySequence("Ctrl+Y"), QKeySequence("Ctrl+Shift+Z")]
         )
         self._redo_action.triggered.connect(self._on_redo)
         edit_menu.addAction(self._redo_action)
@@ -6335,8 +6338,43 @@ class MainWindow(QMainWindow):
     def _on_export_glb(self) -> None:
         """Single-file 3D export (geometry + materials + textures embedded).
         Best format for 'send it so a colleague can view it' — no texture folder
-        to lose, opens in Blender / web viewers / Windows 3D Viewer."""
-        self._export("GLB", "glb", tr("glTF binary (*.glb)"), gltf_format.save_glb)
+        to lose, opens in Blender / web viewers / Windows 3D Viewer.
+
+        With something selected, it asks first whether the file takes the
+        whole model or just the selection (#353)."""
+        only = self._ask_export_scope()
+        if only is False:
+            return                          # cancelled
+        if only:
+            def writer(scene, path):
+                gltf_format.save_glb(scene, path, only=only)
+        else:
+            writer = gltf_format.save_glb
+        self._export("GLB", "glb", tr("glTF binary (*.glb)"), writer)
+
+    def _ask_export_scope(self):
+        """With a selection: ``set`` of the selected entities to export
+        only them, ``None`` for the whole model, ``False`` if cancelled.
+        Without one: ``None`` at once."""
+        sel = set(self.viewport.scene.selection)
+        if not sel:
+            return None
+        box = QMessageBox(
+            QMessageBox.Question, tr("Export"),
+            tr("Export the whole model, or only what is selected?"),
+            QMessageBox.NoButton, self)
+        box.setOption(QMessageBox.Option.DontUseNativeDialog, True)
+        whole = box.addButton(tr("Whole model"), QMessageBox.AcceptRole)
+        part = box.addButton(tr("Only the selection"), QMessageBox.AcceptRole)
+        box.addButton(QMessageBox.Cancel).setText(tr("Cancel"))
+        box.setDefaultButton(part)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked is part:
+            return sel
+        if clicked is whole:
+            return None
+        return False
 
     def _on_export_dae(self) -> None:
         """COLLADA export — the 'open it back in the original program' bridge. Copies the

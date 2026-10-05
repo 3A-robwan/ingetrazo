@@ -2558,5 +2558,11 @@
  "Drag a point to move it. Double-click: add a point (Shift: the other kind), or turn a point smooth/corner. Right-click a point to remove it.": "Arrastra un punto para moverlo. Doble clic: añadir un punto (Shift: del otro tipo), o cambiar un punto entre suave y esquina. Clic derecho en un punto para borrarlo.",
  "The drawn profile must run from one face to the other.": "El perfil dibujado debe ir de una cara a la otra.",
  "Smooth point": "Punto suave",
- "Corner point": "Punto esquina"
+ "Corner point": "Punto esquina",
+ "Whole model": "Todo el modelo",
+ "Only the selection": "Solo la selección",
+ "Export the whole model, or only what is selected?": "¿Exportar todo el modelo o solo lo seleccionado?",
+ "Figure": "Figura",
+ "{key}: kept for «{kept}», taken from «{dropped}»": "{key}: se queda en «{kept}», se quita de «{dropped}»",
+ "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "El archivo daba la misma tecla a más de un comando; una tecla compartida no funciona para ninguno, así que cada una se queda con el primero:"
 }

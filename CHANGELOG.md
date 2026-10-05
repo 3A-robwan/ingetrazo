@@ -183,6 +183,17 @@ follow [SemVer](https://semver.org).
   teselas ya guardadas en el disco se siguen leyendo al momento, así que
   las láminas y las exportaciones no salen sin mapa (#327, diagnosticado
   por @timwelchnz; arreglo de @PINYOPATTANAWASANPORN).
+- **Rehacer con Ctrl+Shift+Z no funcionaba en Linux (KDE y GNOME)**, y
+  Ctrl+Y no estaba: el atajo de fábrica salía repetido («Ctrl+Shift+Z;
+  Ctrl+Shift+Z»), porque la tecla estándar de Rehacer de esos escritorios
+  ya es Ctrl+Shift+Z, y una tecla repetida no responde. Ahora Rehacer
+  lleva Ctrl+Y y Ctrl+Shift+Z en todos los sistemas (#313, diagnosticado
+  por @RaphaelNunes10).
+- **Importar un archivo de atajos podía dejar teclas muertas**: si el
+  archivo daba la misma tecla a dos comandos (Z para la herramienta Zoom y
+  para Zoom a la selección, al copiar los atajos de otro programa), ninguno
+  respondía. Ahora la tecla se queda con el primero y el aviso de la
+  importación dice cuáles se quitaron (#323, @tomlai-git).
 - **Bajar una arista sobre otra dejaba vértices dobles**: al hacer una
   rampa con Mover, cada esquina caía sobre otra pero quedaban dos vértices
   en el mismo punto, con una cara sin área que hacía fallar Crear grupo y
@@ -202,6 +213,17 @@ follow [SemVer](https://semver.org).
   en la esquina de partida, arrastrar por el eje rojo decía «Desde el
   punto» todo el camino y desplazaba el punto unos centímetros del cursor
   (#368, @pacaeiro).
+- **El GLB conserva la estructura del modelo**: cada grupo y componente
+  sale como un objeto con su nombre y su posición, anidado como en el
+  modelo, y las copias de un componente comparten una sola malla (en la
+  plaza el archivo pasa de 24,4 a 19,5 MB). Antes todo salía fundido en
+  un único objeto «IngeTrazo» (#304, @arthurarquitetoamb). Las figuras
+  de escala ya no se pierden: salen de pie mirando a la vista Frontal y
+  sin espejar, también dentro de un grupo, donde salían cortadas y
+  espejadas. Con algo seleccionado, Exportar ▸ glTF/GLB pregunta si se
+  exporta todo o solo la selección (#353, @SPMech). Y un color guardado
+  con transparencia ya no impide exportar el archivo entero. El COLLADA
+  (.dae) sigue saliendo en una sola pieza.
 - **Exportar a COLLADA, glTF/GLB, OBJ o STL podía incluir triángulos sin
   área**, que otros programas rechazan (una puerta entera por 56 de 3 884);
   ya no se escriben y la superficie exportada no cambia (#314,

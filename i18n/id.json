@@ -2346,5 +2346,11 @@
  "Drag a point to move it. Double-click: add a point (Shift: the other kind), or turn a point smooth/corner. Right-click a point to remove it.": "Seret titik untuk memindahkannya. Klik ganda: tambah titik (Shift: jenis lain), atau ubah titik halus/sudut. Klik kanan titik untuk menghapusnya.",
  "The drawn profile must run from one face to the other.": "Profil gambar harus berjalan dari satu muka ke muka lainnya.",
  "Smooth point": "Titik halus",
- "Corner point": "Titik sudut"
+ "Corner point": "Titik sudut",
+ "Whole model": "Seluruh model",
+ "Only the selection": "Hanya pilihan",
+ "Export the whole model, or only what is selected?": "Ekspor seluruh model, atau hanya yang dipilih?",
+ "Figure": "Figur",
+ "{key}: kept for «{kept}», taken from «{dropped}»": "{key}: tetap untuk «{kept}», dilepas dari «{dropped}»",
+ "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "Berkas memberi tombol yang sama ke lebih dari satu perintah; tombol bersama tidak berfungsi untuk siapa pun, jadi masing-masing tetap pada yang pertama:"
 }

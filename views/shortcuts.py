@@ -165,6 +165,19 @@ def _saved_shortcuts() -> dict:
     return saved
 
 
+def _unique(seqs) -> list:
+    """``seqs`` without repeats, first one kept: a key listed twice on one
+    action does not fire (#313)."""
+    seen: set = set()
+    out = []
+    for q in seqs:
+        t = q.toString(QKeySequence.PortableText)
+        if t and t not in seen:
+            seen.add(t)
+            out.append(q)
+    return out
+
+
 def apply_user_shortcuts(window) -> int:
     """Put the remembered keys on the window's actions. Returns how many."""
     saved = _saved_shortcuts()
@@ -172,8 +185,8 @@ def apply_user_shortcuts(window) -> int:
     for act in collect_actions(window):
         key = action_key(act)
         if key in saved:
-            seqs = [q for q in _from_text(saved[key])
-                    if reserved_reason(q) is None]   # never a reserved key
+            seqs = _unique(q for q in _from_text(saved[key])
+                           if reserved_reason(q) is None)  # never reserved
             act.setShortcuts(seqs)
             n += 1
     return n
@@ -209,8 +222,12 @@ def import_shortcuts(window, data) -> tuple:
     remember them. Actions this machine does not have (a plugin not
     installed) and reserved keys are skipped; a key the file gives to one
     action is taken from any other that held it, as assigning it by hand
-    does. Returns ``(applied, skipped)``; raises ValueError for a file
-    that is not an IngeTrazo shortcuts file."""
+    does. A key the file gives to SEVERAL actions stays with the first and
+    is taken from the rest: two actions sharing a key both go dead, as Z
+    did for Zoom and Zoom Selection in a file written from another
+    program's keys (#323, @tomlai-git). Returns ``(applied, skipped,
+    clashes)`` — ``clashes`` lists ``(key, kept_by, dropped_from)``; raises
+    ValueError for a file that is not an IngeTrazo shortcuts file."""
     if (not isinstance(data, dict) or data.get("format") != EXPORT_FORMAT
             or not isinstance(data.get("shortcuts"), dict)):
         raise ValueError(tr("This is not an IngeTrazo shortcuts file."))
@@ -218,15 +235,23 @@ def import_shortcuts(window, data) -> tuple:
     actions = collect_actions(window)
     by_key = {action_key(a): a for a in actions}
     applied = 0
-    taken: set = set()
+    taken: dict = {}                      # key text -> the action that has it
+    clashes: list = []
     for key, text in wanted.items():
         act = by_key.get(key)
         if act is None:
             continue
-        seqs = [q for q in _from_text(text) if reserved_reason(q) is None]
+        seqs = []
+        for q in _unique(q for q in _from_text(text)
+                         if reserved_reason(q) is None):
+            t = q.toString(QKeySequence.PortableText)
+            if t in taken:
+                clashes.append((t, taken[t], act))
+                continue
+            taken[t] = act
+            seqs.append(q)
         act.setShortcuts(seqs)
         save_shortcut(act, seqs)
-        taken |= {s.toString(QKeySequence.PortableText) for s in seqs}
         applied += 1
     for act in actions:
         if action_key(act) in wanted:
@@ -236,7 +261,7 @@ def import_shortcuts(window, data) -> tuple:
         if len(kept) != len(act.shortcuts()):
             act.setShortcuts(kept)
             save_shortcut(act, kept)
-    return applied, len(wanted) - applied
+    return applied, len(wanted) - applied, clashes
 
 
 class _KeyCapture(QLineEdit):
@@ -453,7 +478,8 @@ class ShortcutsPanel(QWidget):
             return
         try:
             with open(path, encoding="utf-8") as f:
-                applied, skipped = import_shortcuts(self._window, json.load(f))
+                applied, skipped, clashes = import_shortcuts(
+                    self._window, json.load(f))
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, tr("Import shortcuts"), str(exc))
             return
@@ -463,6 +489,17 @@ class ShortcutsPanel(QWidget):
             msg += " " + tr("{n} belong to actions this installation does "
                             "not have (a plugin, say) and were left out.",
                             n=skipped)
+        if clashes:
+            lines = [tr("{key}: kept for «{kept}», taken from «{dropped}»",
+                        key=QKeySequence(k).toString(
+                            QKeySequence.NativeText),
+                        kept=_plain(kept.text()),
+                        dropped=_plain(dropped.text()))
+                     for k, kept, dropped in clashes]
+            msg += "\n\n" + tr(
+                "The file gave the same key to more than one command; "
+                "a shared key works for none, so each stays with the "
+                "first:") + "\n" + "\n".join(lines)
         QMessageBox.information(self, tr("Import shortcuts"), msg)
 
     def _on_reset_all(self) -> None:
