@@ -1189,6 +1189,12 @@ class Viewport(QOpenGLWidget):
         # running app); GL textures are cached per tile, keyed by (source, x,y,z).
         self._tile_fetcher = None
         self._tile_textures: dict = {}
+        # A paint must only draw.  In particular, creating Qt's native HTTPS
+        # backend while an OpenGL context is current crashed in ntdll on an
+        # AMD Windows driver (#327).  Missing tiles schedule one event-loop
+        # callback; that callback starts the network work after paintGL has
+        # returned and the context is no longer inside a driver callback.
+        self._tile_requests_scheduled = False
         self._last_coordinate = ""      # so the label only repaints on change
         self._tile_quad_vao = None
         self._tile_quad_vbo = None
@@ -3549,6 +3555,65 @@ class Viewport(QOpenGLWidget):
             self.tilesChanged.emit()
             self.update()
 
+    def _disk_cached_tile(self, source, x, y, z):
+        """Tile ``(x, y, z)`` of ``source`` from the on-disk cache, or None.
+        The same cache the fetcher fills, read without the fetcher: safe
+        inside paintGL, where the fetcher's network manager must not be
+        created (#327)."""
+        if z < 0 or z > source.max_zoom:
+            return None
+        if self._tile_fetcher is not None:
+            cache = self._tile_fetcher.cache
+        else:
+            cache = getattr(self, "_tile_disk_cache", None)
+            if cache is None:
+                from georef.tiles import TileCache, default_cache_dir
+                cache = self._tile_disk_cache = TileCache(default_cache_dir())
+        data = cache.get(source.id, x, y, z)
+        if data is None:
+            return None
+        from PySide6.QtCore import QByteArray
+        from PySide6.QtGui import QImage
+        img = QImage()
+        return img if img.loadFromData(QByteArray(data)) else None
+
+    def _schedule_tile_requests(self) -> None:
+        """Start missing tile requests after the current GL paint returns."""
+        if self._tile_requests_scheduled:
+            return
+        self._tile_requests_scheduled = True
+        QTimer.singleShot(0, self._request_missing_tiles)
+
+    def _request_missing_tiles(self) -> None:
+        """Fetch the current layer's missing images outside ``paintGL``.
+
+        Cache hits are copied into the layer immediately and repaint once;
+        network misses are delivered later by :meth:`_on_tile_ready`.
+        Reading the current scene here also makes a callback queued just before
+        a source/location change harmless.
+        """
+        self._tile_requests_scheduled = False
+        layer = getattr(self.scene, "tile_layer", None)
+        datum = getattr(self.scene, "georef", None)
+        if layer is None or datum is None or not getattr(layer, "visible", False):
+            return
+        try:
+            tiles = layer.flat_tiles(datum)
+        except Exception:
+            return
+        fetcher = self._ensure_tile_fetcher()
+        cached = False
+        for x, y in tiles:
+            key = (x, y, layer.zoom)
+            if key in layer.images:
+                continue
+            image = fetcher.request(layer.source, x, y, layer.zoom)
+            if image is not None:
+                layer.images[key] = image
+                cached = True
+        if cached:
+            self.update()
+
     #: Per-document caches keyed by ``id()`` of the document's groups,
     #: meshes and placements — the render/pick chunks and what hangs off
     #: them. Nothing but the document boundary makes them all stale at once.
@@ -3695,10 +3760,16 @@ class Viewport(QOpenGLWidget):
             return self._tile_textures[key]
         img = layer.images.get((x, y, z))
         if img is None:
-            # Cache hit returns the image synchronously; a miss returns None and
-            # starts an async download (see _on_tile_ready).
-            img = self._ensure_tile_fetcher().request(layer.source, x, y, z)
+            # A tile already on disk is read now — a file, no network — so a
+            # sheet frame or an export, drawn once, still gets every cached
+            # tile. Only a DOWNLOAD waits: QtNetwork must not start (the
+            # fetcher builds its network manager on first use) inside
+            # paintGL. On Windows/AMD that crashed in ntdll while the GL
+            # driver callback was active (#327). The queued callback runs
+            # when this paint has returned.
+            img = self._disk_cached_tile(layer.source, x, y, z)
             if img is None:
+                self._schedule_tile_requests()
                 return None
             layer.images[(x, y, z)] = img
         if self._tex_budget <= 0:

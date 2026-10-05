@@ -176,6 +176,13 @@ follow [SemVer](https://semver.org).
   la operación de sólidos no lo acepta. Ahora, solo cuando la operación lo
   rechaza, esos triángulos se parten en esas esquinas y se reintenta; lo
   que ya funcionaba se procesa exactamente igual (#227, @fafecm).
+- **En Windows, «Ir a la ubicación» del panel Terreno cerraba la
+  aplicación** sin aviso (en algunos equipos con gráfica AMD): el visor
+  arrancaba la conexión de red para descargar el mapa base desde dentro
+  del dibujado de OpenGL. Ahora las descargas empiezan justo después; las
+  teselas ya guardadas en el disco se siguen leyendo al momento, así que
+  las láminas y las exportaciones no salen sin mapa (#327, diagnosticado
+  por @timwelchnz; arreglo de @PINYOPATTANAWASANPORN).
 - **Bajar una arista sobre otra dejaba vértices dobles**: al hacer una
   rampa con Mover, cada esquina caía sobre otra pero quedaban dos vértices
   en el mismo punto, con una cara sin área que hacía fallar Crear grupo y
