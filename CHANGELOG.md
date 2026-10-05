@@ -217,6 +217,12 @@ follow [SemVer](https://semver.org).
   documento estuviera en milímetros: ahora las casillas muestran y leen
   la unidad del documento (mm, cm, m, pulgadas o pies), con el panel de
   unidades (#287, @ea2ehc).
+- **Copiar con Mover+Ctrl una pieza entera no dividía las caras donde
+  caía**: las aristas de una cara copiada (la tapa de una tabla bajada
+  1 cm, o una matriz de copias con `4/`) no partían la pared sobre la que
+  quedaban, mientras una línea dibujada ahí sí. Ahora se planifican como
+  las de la herramienta Línea, una vez pegadas las caras copiadas, sin
+  duplicarlas (#379, visto en la reseña de @Jrobredo3D).
 - **Bajar una arista sobre otra dejaba vértices dobles**: al hacer una
   rampa con Mover, cada esquina caía sobre otra pero quedaban dos vértices
   en el mismo punto, con una cara sin área que hacía fallar Crear grupo y

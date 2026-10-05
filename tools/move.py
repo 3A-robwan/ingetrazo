@@ -35,7 +35,8 @@ from core.group import Group, copy_group, transformed_attrs
 from core.i18n import tr
 from core.mesh import Edge, Face, Mesh
 from core.dimension import Dimension
-from core.history import (AddEdgeCommand, AddFaceCommand, CompoundCommand,
+from core.history import (AddEdgeCommand, AddFaceCommand, Command,
+                          CompoundCommand,
                           InsertGroupCommand, MoveGroupCommand,
                           MoveDimensionsCommand, MoveTextLabelsCommand,
                           MoveVerticesCommand)
@@ -186,6 +187,29 @@ def rotation_grips(obb, eye: QVector3D) -> list:
                     pos = face_c + axes[a] * (sgn * GRIP_SPREAD * ext[a])
                     out.append((pos, face_c, normal))
     return out
+
+
+class _PlannedWhenRun(Command):
+    """Drawn edges planned when the command RUNS, not when it is built:
+    by then the copied faces before it in the same compound are in the
+    model, so the Line tool's planner splits the faces the edges land on
+    without laying another face over the copied ones (#379). Redo
+    replays the same plan."""
+
+    def __init__(self, segments) -> None:
+        self._segments = list(segments)
+        self._cmd = None
+
+    def do(self, scene) -> None:
+        if self._cmd is None:
+            from core.edits import build_add_edges
+            self._cmd = build_add_edges(scene, self._segments,
+                                        detect_faces=True)
+        self._cmd.do(scene)
+
+    def undo(self, scene) -> None:
+        if self._cmd is not None:
+            self._cmd.undo(scene)
 
 
 class MoveTool(Tool):
@@ -751,6 +775,7 @@ class MoveTool(Tool):
         def build(deltas):
             cmds: list = []
             plain: list = []
+            bound: list = []
             for d in deltas:
                 m = QMatrix4x4()
                 m.translate(d)
@@ -767,9 +792,9 @@ class MoveTool(Tool):
                 for e in edges:
                     curve = getattr(e, "curve", None)
                     soft = getattr(e, "soft", False)
-                    if (scene is not None and curve is None and not soft
-                            and not _bounds_a_face(e)):
-                        plain.append((e.a + d, e.b + d))
+                    if scene is not None and curve is None and not soft:
+                        (bound if _bounds_a_face(e) else plain).append(
+                            (e.a + d, e.b + d))
                         continue
                     # Soft edges and curves keep their flags on the copy.
                     if curve is not None and curve not in id_map:
@@ -781,6 +806,14 @@ class MoveTool(Tool):
             if plain:
                 from core.edits import build_add_edges
                 cmds.append(build_add_edges(scene, plain, detect_faces=True))
+            if bound:
+                # The edges of a copied face go through the same planner,
+                # but planned once the faces are stamped: planned now, it
+                # would lay a second face over their loop, and sent the old
+                # way they never split the face they land on — the edge of
+                # a piece copied 1 cm down left its neighbour's face whole
+                # (#379, after #177).
+                cmds.append(_PlannedWhenRun(bound))
             if not cmds:
                 return None
             return cmds[0] if len(cmds) == 1 else CompoundCommand(cmds)
