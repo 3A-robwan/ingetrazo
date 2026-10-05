@@ -7,6 +7,17 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Añadido
+- **Panel de unidades** (Ventana ▸ Unidades…, **Ctrl+U**, o Preferencias ▸
+  Unidades): perfil métrico, milimétrico, imperial o a medida; longitud
+  con decimales o con la fracción más chica, área y volumen por la
+  longitud o con unidad propia, ángulo y separador decimal, con vista
+  previa. Las medidas se muestran y se leen en un solo sitio, así que la
+  unidad elegida llega a todas las herramientas y cuadros (giros de Rotar,
+  Transportador y Arco, volúmenes de Info de entidad y del modelo). Se
+  guarda en el documento; los archivos de antes abren igual. Y **al
+  empezar un documento nuevo** se pregunta en qué unidades trabajar
+  (metros, milímetros, imperial o a medida), con «No mostrar al inicio»
+  (#6 de Gabriel Rodríguez, @canalsecuario-blip).
 - **Materiales recientes**: el panel Materiales guarda, bajo «Activo», los
   seis últimos materiales con los que pintaste, el más nuevo primero. Un
   clic vuelve a dejarlo activo tal como lo usaste (imagen con su tamaño,
@@ -203,8 +214,9 @@ follow [SemVer](https://semver.org).
   un solo carácter (`⅜`, `½`), que antes ni entraban en la casilla (#189,
   @smcardle, @Loonster83).
 - **El Texto 3D pedía la altura y la extrusión en metros** aunque el
-  documento estuviera en milímetros: ahora las pide en la unidad del
-  documento (mm, cm, m, pulgadas o pies) (#287, @ea2ehc).
+  documento estuviera en milímetros: ahora las casillas muestran y leen
+  la unidad del documento (mm, cm, m, pulgadas o pies), con el panel de
+  unidades (#287, @ea2ehc).
 - **Bajar una arista sobre otra dejaba vértices dobles**: al hacer una
   rampa con Mover, cada esquina caía sobre otra pero quedaban dos vértices
   en el mismo punto, con una cara sin área que hacía fallar Crear grupo y
@@ -252,6 +264,12 @@ follow [SemVer](https://semver.org).
 - **El resaltado de una cara dentro de un componente se dibujaba lejos de
   la pieza** en un componente colocado y luego explotado (#246,
   @felixriestra).
+
+- **Una extensión que construye sus herramientas en `setup(app)` no
+  cargaba**: el cargador intentaba crear cada herramienta por su cuenta,
+  sin argumentos, y si pedía alguno descartaba la extensión entera, panel
+  incluido. Ahora esas herramientas se dejan a la extensión (planArq, de
+  José Castro Basso).
 
 ### Seguridad
 - **Un `.igz` manipulado podía meter un archivo privado en el siguiente
