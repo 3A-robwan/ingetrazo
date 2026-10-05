@@ -177,14 +177,18 @@ def save_dae(scene, path, project_name: str = "IngeTrazo model") -> None:
     out.append("<up_axis>Z_UP</up_axis>")
     out.append("</asset>")
 
-    # library_images / library_effects / library_materials
-    out.append("<library_images>")
-    for i, key in enumerate(keys):
-        info = materials_in[key]
-        if info.get("map"):
-            out.append(f'<image id="img{i}" name="img{i}">'
-                       f"<init_from>{_xml_escape(info['map'])}</init_from></image>")
-    out.append("</library_images>")
+    # library_images / library_effects / library_materials. COLLADA 1.4.1
+    # wants at least one <image> inside <library_images>, and strict
+    # importers refuse the empty element — leave it out when nothing is
+    # textured.
+    images = [f'<image id="img{i}" name="img{i}">'
+              f"<init_from>{_xml_escape(materials_in[key]['map'])}</init_from>"
+              "</image>"
+              for i, key in enumerate(keys) if materials_in[key].get("map")]
+    if images:
+        out.append("<library_images>")
+        out.extend(images)
+        out.append("</library_images>")
 
     out.append("<library_effects>")
     for i, key in enumerate(keys):

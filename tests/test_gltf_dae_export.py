@@ -204,3 +204,23 @@ def test_dae_copies_texture_image(tmp_path):
     img = root.find(f"{_NS}library_images/{_NS}image/{_NS}init_from")
     assert img is not None and img.text == "wood.png"
     assert (out.parent / "wood.png").exists(), "image copied next to the .dae"
+    # One textured face: exactly one <library_images>, with one <image>.
+    libs = root.findall(f"{_NS}library_images")
+    assert len(libs) == 1 and len(libs[0]) == 1
+
+
+def test_dae_without_textures_has_no_empty_library_images(tmp_path):
+    # COLLADA 1.4.1 needs at least one <image> in <library_images>; strict
+    # importers refuse the empty element, so it is left out (#314).
+    scene = Scene()
+    hist = History(scene)
+    _cube(scene, hist)
+    path = tmp_path / "plain.dae"
+    dae_format.save_dae(scene, path)
+    root = ET.parse(path).getroot()
+    assert root.find(f"{_NS}library_images") is None
+    # The materials still reach the file and re-import.
+    assert root.findall(f"{_NS}library_materials/{_NS}material")
+    scene2 = Scene()
+    dae_format.load_dae(scene2, path)
+    assert scene2.mesh.faces or scene2.groups
