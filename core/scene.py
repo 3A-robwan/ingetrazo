@@ -272,8 +272,20 @@ class Scene:
             return False
         if self._face_hidden(entity) and not self.show_hidden_geometry:
             return False
+        if self.entity_locked(entity):
+            return False
         visible, locked = self._layer_state(entity)
         return visible and not locked
+
+    @staticmethod
+    def entity_locked(entity) -> bool:
+        """Locked as an object: the group itself, or — for a placement the
+        viewport picks as part of its parent — the object that owns it."""
+        for g in (entity, getattr(entity, "owner", None)):
+            if g is not None and getattr(g, "locked", False) \
+                    and hasattr(g, "children"):
+                return True
+        return False
 
     def groups_by_uid(self) -> dict:
         """``uid → group`` over the whole tree (nested placements too)."""

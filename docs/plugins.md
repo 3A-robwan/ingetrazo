@@ -139,7 +139,10 @@ def setup(app):
     # user may hide it there); `name` tells apart several panels of one
     # extension, `panel=` puts several extensions in ONE tab.
     dock = app.add_panel("Levels", my_widget)
-    app.add_panel("Levels — help", help_widget, name="help")
+    # A panel few users need open all the time: closed the first time,
+    # opened from Window ▸ Panels (and remembered from then on).
+    app.add_panel("Levels — help", help_widget, name="help",
+                  start_hidden=True)
     app.add_panel("AI", chat, panel="ai", stretch=1)
     app.show_panel(dock)                  # to the front, shown again if hidden
 
@@ -150,6 +153,13 @@ def setup(app):
     # Entries in the viewport's right-click menu, after the selection's own
     # (open dialogs from them with QTimer.singleShot(0, …)):
     app.add_context_menu(lambda menu, selection: ...)
+
+    # What YOUR container groups are, in the Browser: the type in
+    # the Type column (the filter finds it), the properties in its tooltip.
+    # Asked for every row: keep it cheap; None for groups that are not yours.
+    app.add_outliner_kind(lambda group: {
+        "type": "Window", "props": [("Panes", "3 × 2"), ("Width", "1.20 m")]}
+        if app.key in (group.ext or {}) else None)
 
     # Parameters of YOUR container groups (a parametric window, a stair):
     # group.ext[app.key] — kept with copies, saved in the .igz, and apart

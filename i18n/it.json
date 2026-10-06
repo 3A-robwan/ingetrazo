@@ -2616,5 +2616,6 @@
  "Export the whole model, or only what is selected?": "Esportare tutto il modello o solo ciò che è selezionato?",
  "Figure": "Figura",
  "{key}: kept for «{kept}», taken from «{dropped}»": "{key}: resta a «{kept}», tolto da «{dropped}»",
- "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "Il file assegnava lo stesso tasto a più comandi; un tasto condiviso non funziona per nessuno, quindi ognuno resta al primo:"
+ "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "Il file assegnava lo stesso tasto a più comandi; un tasto condiviso non funziona per nessuno, quindi ognuno resta al primo:",
+ "Browser": "Browser"
 }

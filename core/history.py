@@ -1468,6 +1468,174 @@ class SetActiveSectionCommand(Command):
         scene.version += 1
 
 
+class SetSectionModeCommand(Command):
+    """One section plane's mode, from the Browser: whether it CUTS
+    (it becomes the active cut — or none is) and whether its FRAME shows.
+    Cut and frame, cut only, frame only, or off — one undo step."""
+
+    def __init__(self, plane, cut: bool, frame: bool) -> None:
+        self.plane = plane
+        self.cut = bool(cut)
+        self.frame = bool(frame)
+        self._prev = None
+
+    def do(self, scene) -> None:
+        self._prev = (scene.active_section(),
+                      bool(getattr(self.plane, "hidden", False)))
+        if self.cut:
+            scene.set_active_section(self.plane)
+        elif self.plane.active:
+            scene.set_active_section(None)
+        self.plane.hidden = not self.frame
+        if self.plane.hidden:
+            scene.selection.discard(self.plane)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        active, hidden = self._prev
+        scene.set_active_section(
+            active if active in scene.section_planes else None)
+        self.plane.hidden = hidden
+        scene.version += 1
+
+
+class SetSectionFillCommand(Command):
+    """One section plane's own fill — pattern, colour, hatch spacing —
+    over the style's. ``fill=None`` goes back to the style's fill."""
+
+    def __init__(self, plane, fill) -> None:
+        self.plane = plane
+        self.fill = dict(fill) if fill else None
+        self._prev = None
+
+    def do(self, scene) -> None:
+        prev = getattr(self.plane, "fill", None)
+        self._prev = dict(prev) if prev else None
+        self.plane.fill = dict(self.fill) if self.fill else None
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        self.plane.fill = dict(self._prev) if self._prev else None
+        scene.version += 1
+
+
+class RenameSectionPlaneCommand(Command):
+    """A section plane's name and symbol (the symbol reads on its frame and
+    in the sheets' section marks)."""
+
+    def __init__(self, plane, name: str, symbol: str) -> None:
+        self.plane = plane
+        self.name = name
+        self.symbol = symbol
+        self._prev = None
+
+    def do(self, scene) -> None:
+        self._prev = (self.plane.name, self.plane.symbol)
+        self.plane.name, self.plane.symbol = self.name, self.symbol
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        self.plane.name, self.plane.symbol = self._prev
+        scene.version += 1
+
+
+class AddSheetCommand(Command):
+    """A new sheet at the end of the set."""
+
+    def __init__(self, sheet) -> None:
+        self.sheet = sheet
+
+    def do(self, scene) -> None:
+        scene.compositions.append(self.sheet)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        if self.sheet in scene.compositions:
+            scene.compositions.remove(self.sheet)
+        scene.version += 1
+
+
+class PlaceViewCommand(Command):
+    """A view frame placed on a sheet — a scene dropped on it in the
+    Browser. One undo step."""
+
+    def __init__(self, sheet, frame) -> None:
+        self.sheet = sheet
+        self.frame = frame
+
+    def do(self, scene) -> None:
+        self.sheet.frames.append(self.frame)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        if self.frame in self.sheet.frames:
+            self.sheet.frames.remove(self.frame)
+        scene.version += 1
+
+
+class MoveSheetCommand(Command):
+    """A sheet to another place in the set: the order the strip shows,
+    the atlas prints and {hoja} counts."""
+
+    def __init__(self, sheet, index: int) -> None:
+        self.sheet = sheet
+        self.index = index
+        self._old = None
+
+    def do(self, scene) -> None:
+        comps = scene.compositions
+        self._old = comps.index(self.sheet)
+        comps.remove(self.sheet)
+        comps.insert(max(0, min(self.index, len(comps))), self.sheet)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        comps = scene.compositions
+        comps.remove(self.sheet)
+        comps.insert(self._old, self.sheet)
+        scene.version += 1
+
+
+class CreatePlanCommand(Command):
+    """A floor plan from a group, in one undo step: a horizontal section
+    plane at the cut height (made the active cut), a scene looking down on
+    it in parallel projection, and — optionally — a sheet with that scene in
+    a view frame."""
+
+    def __init__(self, plane, view, sheet=None,
+                 add_plane: bool = True) -> None:
+        self.plane = plane
+        self.view = view
+        self.sheet = sheet
+        #: False: the plane is already in the model (a view of an existing
+        #: cut) — it is made the active cut, not added.
+        self.add_plane = add_plane
+        self._prev_active = None
+
+    def do(self, scene) -> None:
+        self._prev_active = scene.active_section()
+        if self.add_plane:
+            scene.section_planes.append(self.plane)
+        scene.set_active_section(self.plane)
+        scene.saved_views.append(self.view)
+        if self.sheet is not None:
+            scene.compositions.append(self.sheet)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        if self.sheet is not None and self.sheet in scene.compositions:
+            scene.compositions.remove(self.sheet)
+        if self.view in scene.saved_views:
+            scene.saved_views.remove(self.view)
+        if self.add_plane and self.plane in scene.section_planes:
+            scene.section_planes.remove(self.plane)
+        prev = self._prev_active
+        scene.set_active_section(
+            prev if prev in scene.section_planes else None)
+        scene.selection.discard(self.plane)
+        scene.version += 1
+
+
 class MoveSectionPlanesCommand(Command):
     """Translate section planes (the Move tool)."""
 
@@ -3453,6 +3621,104 @@ class MakeNestedGroupCommand(Command):
         elif self.container in scene.groups:
             scene.groups.remove(self.container)
         scene.selection.clear()
+        scene.version += 1
+
+
+class ReparentGroupsCommand(Command):
+    """Move groups into another group — or out to the model with
+    ``target=None`` — without moving them in the world: the Browser's
+    drag and drop (#219).
+
+    A group's placement is relative to its parent, so changing parent
+    changes the frame it is read in. The old parent's frame and the new
+    one are both known, and the difference goes into the group: composed
+    into its matrix when it has one, baked into its mesh when it is a
+    classic group (and only when the two frames differ at all). Its own
+    children ride along untouched, being relative to it.
+
+    The target gets a matrix if it had none — a group that holds groups is
+    always an instance (``Group.adopt``) — and stays a GROUP, not a
+    component. Callers check :func:`core.outliner.reparent_problem` first:
+    components keep their definition, so nothing goes in or out of one.
+    """
+
+    def __init__(self, groups, target=None) -> None:
+        self.groups = list(groups)
+        self.target = target
+        self._moves: list = []
+        self._target_state = None
+
+    def do(self, scene) -> None:
+        from PySide6.QtGui import QMatrix4x4
+        from core import outliner
+        from core.group import transformed_mesh
+        up = outliner.parents(scene.groups)
+        moving = outliner.topmost(scene.groups, self.groups)
+        target = self.target
+        self._target_state = None
+        if target is not None:
+            self._target_state = (target.xform, target.component)
+            if target.xform is None:
+                target.xform = QMatrix4x4()     # same place: identity
+                target.component = False
+        to_new = outliner.world_matrix(scene.groups, target)
+        inv_new = to_new.inverted()[0] if to_new is not None else None
+        self._moves = []
+        for g in moving:
+            old = up.get(id(g))
+            siblings = old.children if old is not None else scene.groups
+            index = siblings.index(g)
+            from_old = outliner.world_matrix(scene.groups, old)
+            self._moves.append((g, old, index, g.xform, g.mesh))
+            delta = outliner.compose(inv_new, from_old)
+            if delta is not None and not delta.isIdentity():
+                if g.xform is not None:
+                    g.xform = delta * g.xform
+                else:
+                    g.mesh = transformed_mesh(g.mesh, delta)
+            siblings.remove(g)
+            (target.children if target is not None
+             else scene.groups).append(g)
+            scene.selection.discard(g)
+        _dirty_group_chunks(scene)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        target = self.target
+        for g, old, index, xform, mesh in reversed(self._moves):
+            (target.children if target is not None
+             else scene.groups).remove(g)
+            g.xform, g.mesh = xform, mesh
+            (old.children if old is not None
+             else scene.groups).insert(index, g)
+        if target is not None and self._target_state is not None:
+            target.xform, target.component = self._target_state
+        scene.selection.clear()
+        _dirty_group_chunks(scene)
+        scene.version += 1
+
+
+class LockCommand(Command):
+    """Lock (or unlock) groups and components: a locked object stays drawn
+    but cannot be picked, selected or opened. Previous flags are kept, so a
+    mixed set undoes exactly."""
+
+    def __init__(self, groups, locked: bool = True) -> None:
+        self._groups = list(groups)
+        self._locked = bool(locked)
+        self._prev: list = []
+
+    def do(self, scene) -> None:
+        self._prev = [bool(getattr(g, "locked", False)) for g in self._groups]
+        for g in self._groups:
+            g.locked = self._locked
+            if self._locked:
+                scene.selection.discard(g)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        for g, prev in zip(self._groups, self._prev):
+            g.locked = prev
         scene.version += 1
 
 

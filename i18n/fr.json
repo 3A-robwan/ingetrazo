@@ -2619,5 +2619,6 @@
  "Export the whole model, or only what is selected?": "Exporter tout le modèle, ou seulement ce qui est sélectionné ?",
  "Figure": "Personnage",
  "{key}: kept for «{kept}», taken from «{dropped}»": "{key} : gardé pour « {kept} », retiré de « {dropped} »",
- "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "Le fichier donnait la même touche à plusieurs commandes ; une touche partagée ne marche pour aucune, chacune reste donc à la première :"
+ "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "Le fichier donnait la même touche à plusieurs commandes ; une touche partagée ne marche pour aucune, chacune reste donc à la première :",
+ "Browser": "Navigateur"
 }

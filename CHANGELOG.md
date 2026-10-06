@@ -7,6 +7,89 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Añadido
+- **Navegador (el Outliner)**: una pestaña nueva de la barra
+  lateral con todos los grupos y componentes del modelo en árbol, a
+  cualquier profundidad, bajo el nombre del documento. Cada fila lleva un
+  icono por tipo (grupo, componente, imagen, texto 3D, elemento con clase
+  IFC), un ojo, un candado, su tipo (con el número de copias de un
+  componente) y su capa; clic derecho en la cabecera muestra además
+  Material, Copias y Clase IFC, y la columna de nombres se ensancha
+  arrastrando su borde (todo se recuerda). Un clic selecciona en la vista
+  y abre los grupos que lo contienen; doble clic o Intro abre el grupo;
+  Espacio oculta; F2 renombra; Esc sale un nivel; lo seleccionado en la
+  vista se encuentra en el árbol y los grupos abiertos se leen en negrita.
+  El filtro busca por nombre, tipo, clase IFC o capa y conserva la ruta
+  hasta cada resultado; el pie cuenta grupos, componentes y ocultos.
+  - **Reorganizar**: arrastrar filas sobre un grupo las mete en él,
+    soltarlas entre filas las deja junto a ellas, Tab / Mayús+Tab meten en
+    el grupo de arriba o sacan un nivel. Nada se mueve en el mundo, aunque
+    el grupo de destino esté movido o girado; los componentes conservan su
+    definición (no se mete ni se saca nada de uno).
+  - **Bloquear** (el candado): un grupo bloqueado se sigue viendo, pero no
+    se puede elegir, seleccionar ni abrir; el bloqueo se guarda en el
+    `.igz`.
+  - **Aislar** oculta todo menos lo seleccionado y lo que lo contiene;
+    **Mostrar todos los grupos** lo devuelve.
+  - **Varias filas a la vez**: llevarlas a una capa (o a una nueva),
+    pintarlas con el material activo o quitarles la pintura.
+  - **Planos de sección**: una carpeta del árbol con cada plano en uno de
+    cuatro modos — corte y cuadro, solo corte (el cuadro oculto, el modelo
+    sigue cortado), solo cuadro o apagado —, F2 para su nombre y su
+    símbolo, y el relleno del corte: el general del estilo (se enciende y
+    cambia de color desde ahí) o uno propio por plano — sólido, achurado a
+    45°, achurado cruzado o ninguno, con su color y la separación del
+    achurado escrita como cualquier medida. La fila de la carpeta lleva
+    los interruptores de Ver ▸ Planos de sección y Cortes de sección.
+  - **Planta de un grupo** (clic derecho ▸ Crear planta de este grupo…):
+    corta a la altura indicada sobre su base (1,20 m por defecto), guarda
+    una escena mirando desde arriba en paralela y, si se quiere, la pone
+    en una lámina nueva que se abre en el compositor. **Vista de un
+    corte** (clic derecho en un plano ▸ Crear vista de este corte…): lo
+    mismo mirando el corte de frente — un corte si el plano es vertical.
+  Cada cambio es un paso de deshacer. Parte del plugin Project Structure
+  de @fafecm (#87) y del alcance que escribió @roymendezcastro (#219)
+  (@canalsecuario-blip).
+- **La barra lateral del modelo, como la del compositor**: las pestañas
+  (Propiedades, BIM, Terreno, Navegador, las de las
+  extensiones) van arriba y con su nombre completo, con flechas cuando no
+  caben; se reordenan arrastrándolas, y al arrastrar una fuera de su barra
+  aparecen dos zonas en los bordes de la vista («Lado izquierdo», «Lado
+  derecho»): soltada en una, se acopla a ese lado junto a las que haya
+  (también sobre las pestañas de ese lado, o con clic derecho ▸ Mover al
+  otro lado). Arrastrando desde la parte vacía de la barra se lleva la
+  barra lateral entera, con todas sus pestañas. Cada lado se pliega con su asa: Ctrl+F5 el derecho, Ctrl+F6
+  el izquierdo; dónde queda cada pestaña se guarda con la ventana.
+  **Paneles por defecto**: un primer arranque abre Propiedades y, en la
+  pestaña siguiente, el Navegador, lo que casi todo el trabajo
+  necesita, con IA y Renderizar detrás; BIM y Terreno esperan en Ventana ▸
+  Paneles, y lo que se abre o cierra ahí se recuerda, como siempre.
+  Ventana ▸ Paneles ▸ Restablecer paneles vuelve a esa disposición de
+  fábrica. Los paneles de una extensión se abren en pestaña junto a
+  Propiedades — también uno que la extensión crea más tarde, que antes
+  quedaba oculto —, y una extensión puede pedir que el suyo empiece
+  cerrado: `app.add_panel(…, start_hidden=True)`.
+- **Pestañas a ambos lados del compositor**: Diseño, la nueva Vistas y
+  láminas, Elementos y Propiedades empiezan juntas a la derecha; se
+  reordenan arrastrándolas y pasan al lado izquierdo arrastradas allí (se
+  abre mientras se arrastra) o con clic derecho ▸ Mover al otro lado.
+  Cada lado se pliega con su asa (Ctrl+F5 y Ctrl+F6), uno que se queda
+  sin pestañas se pliega solo, la disposición se recuerda y clic derecho
+  ▸ Restablecer pestañas la devuelve a la de fábrica.
+- **Vistas y láminas, en el compositor**: una pestaña con
+  las escenas del modelo (con su miniatura) y las láminas con sus vistas.
+  Una escena arrastrada a la página queda colocada donde se suelta, a la
+  escala estándar que la hace caber en el marco (doble clic: en un hueco
+  libre), deshaciéndose con el propio compositor. Cada escena dice en qué
+  láminas está y las que no están en ninguna se ven en cursiva; una vista
+  cuya escena se borró se marca. Las láminas se abren, renombran,
+  duplican, borran y reordenan (Alt+↑/↓) desde ahí, y las seleccionadas se
+  exportan juntas a un PDF. El compositor se entera, abierto, de las
+  láminas y escenas que se crean o se deshacen desde el modelo.
+- **Extensiones**: `app.add_outliner_kind(fn)` deja que una extensión diga
+  qué son sus grupos en el navegador (tipo en la columna Tipo,
+  propiedades en su tooltip, y el filtro lo encuentra); el ejemplo
+  Windowizer muestra sus ventanas como «Window» con paños, ancho, alto y
+  marco (docs/plugins.md).
 - **Panel de unidades** (Ventana ▸ Unidades…, **Ctrl+U**, o Preferencias ▸
   Unidades): perfil métrico, milimétrico, imperial o a medida; longitud
   con decimales o con la fracción más chica, área y volumen por la
@@ -141,6 +224,28 @@ follow [SemVer](https://semver.org).
   guardar 2,3 → 1,6 s solo por esto (#158, @pacaeiro).
 
 ### Corregido
+- **Renombrar un elemento en la lista de Elementos del compositor ya no
+  puede cerrar el programa**: la lista se reconstruía dentro del propio
+  cambio de la fila y borraba la fila que Qt seguía editando.
+- **Una vista de lámina cuya escena ya no existe lo dice**: antes dibujaba
+  la cámara del modelo (una axonométrica sin corte, donde iba una planta
+  o un corte), sin explicar por qué; ahora muestra un aviso con el nombre
+  de la escena que falta, en pantalla y al exportar.
+- **El relleno de sección cubre solo la geometría cortada**: antes era un
+  truco por píxel (el plano se pintaba donde se veía la cara trasera de
+  algo) y rellenaba también caras sueltas vistas por detrás, caras
+  invertidas o la figura 2D, aunque el plano no las cortara. Ahora se
+  construye con el propio corte, como el relleno vectorial de las láminas:
+  los segmentos que el plano saca de cada sólido se unen en contornos
+  cerrados, los huecos quedan huecos (un muro hueco, el interior de una
+  habitación) y una superficie abierta no se rellena. Mientras se arrastra
+  un plano, las líneas de corte se mueven en vivo y el relleno aparece al
+  soltarlo.
+- **Renombrar una escena ya no deja huérfanas sus vistas en las láminas**:
+  el marco de una lámina guarda el nombre de la escena que muestra, y al
+  renombrarla (en el panel Escenas o en el Navegador) ahora
+  sus vistas la siguen; antes se quedaban apuntando a un nombre que ya no
+  existía.
 - **Alejar mucho con la rueda dejaba el modelo sin poder guardarse**:
   pasado el límite de 10 km, el punto al que mira la cámara seguía
   alejándose un 11 % por paso; la vista se volvía lenta y blanca y al

@@ -2407,5 +2407,6 @@
  "Export the whole model, or only what is selected?": "Ekspor seluruh model, atau hanya yang dipilih?",
  "Figure": "Figur",
  "{key}: kept for «{kept}», taken from «{dropped}»": "{key}: tetap untuk «{kept}», dilepas dari «{dropped}»",
- "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "Berkas memberi tombol yang sama ke lebih dari satu perintah; tombol bersama tidak berfungsi untuk siapa pun, jadi masing-masing tetap pada yang pertama:"
+ "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "Berkas memberi tombol yang sama ke lebih dari satu perintah; tombol bersama tidak berfungsi untuk siapa pun, jadi masing-masing tetap pada yang pertama:",
+ "Browser": "Penjelajah"
 }

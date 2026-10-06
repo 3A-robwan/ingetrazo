@@ -6610,6 +6610,8 @@ class Viewport(QOpenGLWidget):
             return
         selection = self.scene.selection
         for sp in planes:
+            if getattr(sp, "hidden", False):
+                continue                    # its frame is off; a cut stays
             corners = self.section_plane_frame(sp)
             px = []
             ok = True
@@ -6693,6 +6695,8 @@ class Viewport(QOpenGLWidget):
             return None
         best, best_d = None, self.pick_threshold_px
         for sp in planes:
+            if getattr(sp, "hidden", False):
+                continue
             corners = self.section_plane_frame(sp)
             for i in range(4):
                 seg = self._clip_segment_front(corners[i],
@@ -6716,7 +6720,6 @@ class Viewport(QOpenGLWidget):
         sp = self.scene.active_section()
         if sp is None:
             return None
-        import numpy as np
         n, o = sp.normal, sp.point
         key = (self.scene.version, round(n.x(), 9), round(n.y(), 9),
                round(n.z(), 9), round(o.x(), 6), round(o.y(), 6),
@@ -6725,102 +6728,126 @@ class Viewport(QOpenGLWidget):
         if cached is not None and cached[0] == key:
             return cached[1]
         idx = self._pick_flat(self._pick_index(near="all"))
+        from core.section import cut_chords
         segs = None
         if idx.tri_v0 is not None and len(idx.tri_v0):
-            nv = np.array([n.x(), n.y(), n.z()], dtype=np.float64)
-            c = float(np.dot(nv, [o.x(), o.y(), o.z()]))
-            p0 = idx.tri_v0
-            p1 = idx.tri_v0 + idx.tri_e1
-            p2 = idx.tri_v0 + idx.tri_e2
-            vis = idx.ent_vis[idx.tri_ent]
-            d0 = p0 @ nv - c
-            d1 = p1 @ nv - c
-            d2 = p2 @ nv - c
-            pts = []
-            for (a, b, da, db) in ((p0, p1, d0, d1), (p1, p2, d1, d2),
-                                   (p2, p0, d2, d0)):
-                cross = (da * db) < 0
-                t = np.zeros(len(da))
-                np.divide(da, da - db, out=t, where=cross)
-                pts.append((cross, a + (b - a) * t[:, None]))
-            two = (pts[0][0].astype(np.int8) + pts[1][0] + pts[2][0]) == 2
-            two &= vis
-            if two.any():
-                acc = np.zeros((int(two.sum()), 2, 3))
-                slot = np.zeros(int(two.sum()), dtype=np.int64)
-                for cross, p in pts:
-                    m = cross[two]
-                    where = np.where(m)[0]
-                    acc[where, np.minimum(slot[where], 1)] = p[two][m]
-                    slot[where] += 1
-                segs = acc.astype(np.float32)
+            segs = cut_chords(idx.tri_v0, idx.tri_e1, idx.tri_e2, n, o,
+                              idx.ent_vis[idx.tri_ent])
         self._section_cut_cache = (key, segs)
         return segs
 
+    def _section_fill_tris(self):
+        """The fill's triangles for the active cut, cached with the cut
+        segments they come from (same scene version, same plane pose)."""
+        import numpy as np
+        segs = self._section_cut_segments()
+        cached = getattr(self, "_section_fill_cache", None)
+        if cached is not None and (cached[0] is segs or (
+                segs is not None and cached[0] is not None
+                and cached[0].shape == segs.shape
+                and np.array_equal(cached[0], segs))):
+            # A selection click moves the scene version, not the cut.
+            self._section_fill_cache = (segs, cached[1])
+            return cached[1]
+        # Chaining the rings costs a fraction of a second on a model with
+        # thousands of cut solids — nothing once, too much per frame while
+        # a plane is dragged. A cut that keeps changing shows its lines
+        # live and its fill once it rests for a moment.
+        import time as _t
+        now = _t.monotonic()
+        last = getattr(self, "_section_fill_changed", 0.0)
+        self._section_fill_changed = now
+        if cached is not None and now - last < 0.15:
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(200, self.update)
+            return None
+        from core.section import fill_triangles
+        tris = fill_triangles(segs, self.scene.active_section().normal)
+        self._section_fill_cache = (segs, tris)
+        self._section_hatch_cache = {}
+        return tris
+
+    def _section_hatch(self, spacing: float, cross: bool):
+        """The hatch lines of the cut whose fill is cached, per (spacing,
+        cross) — computed once, while the cut stays the same."""
+        cached = getattr(self, "_section_fill_cache", None)
+        if cached is None:
+            return None
+        memo = getattr(self, "_section_hatch_cache", None)
+        if memo is None:
+            memo = self._section_hatch_cache = {}
+        key = (round(spacing, 9), bool(cross))
+        if key not in memo:
+            from core.section import hatch_segments
+            memo[key] = hatch_segments(
+                cached[0], self.scene.active_section().normal, spacing,
+                cross)
+        return memo[key]
+
     def _draw_section_fill(self, mode, style) -> None:
-        """Section Fill: paint the areas where the active cut
-        slices THROUGH a solid. Per-pixel GL capping — wherever the visible
-        surface is a BACK face, the eye is looking at the inside of a solid
-        opened by the clip, so the plane fills it. Open (non-watertight)
-        surfaces can leak the fill, the classic troubleshoot
-        case. Lives in the style (style.section_fill)."""
+        """Section Fill: paint what the active cut slices out of solids —
+        and only that. The outlines come from the cut itself: the chords the
+        plane takes out of the visible triangles, chained into closed rings
+        with their holes (core.section.fill_triangles), the same rule the
+        sheet composer's poché follows. An open surface gives no closed
+        ring and stays unfilled.
+
+        It used to be a per-pixel trick — fill the plane wherever a BACK
+        face was the visible surface — which also painted faces seen from
+        behind that the plane does not cut at all (a lone face, a flipped
+        one, a 2D cutout): the fill showed where there was no section.
+        Lives in the style (style.section_fill)."""
         if getattr(self, "_clip_vec", None) is None:
-            return
-        if not getattr(style, "section_fill", True):
             return
         if mode in ("wireframe", "xray"):
             return
         sp = self.scene.active_section()
         if sp is None:
             return
-        # Pass 1 — stencil the pixels whose visible surface is a back face.
-        self._gl.glStencilMask(0xFF)
-        self._gl.glClear(GL_STENCIL_BUFFER_BIT)
-        self._gl.glEnable(GL_STENCIL_TEST)
-        self._gl.glStencilFunc(GL_ALWAYS, 1, 0xFF)
-        self._gl.glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE)
-        self._gl.glColorMask(False, False, False, False)
-        self._gl.glDepthMask(GL_FALSE)
-        self._gl.glEnable(GL_CULL_FACE)
-        self._gl.glCullFace(GL_FRONT)          # rasterize BACK faces only
-        if self._faces_count > 0:
-            self._faces_vao.bind()
-            self._gl.glDrawArrays(GL_TRIANGLES, 0, self._faces_count)
-            self._faces_vao.release()
-        if self._tex_faces_count > 0:
-            self._tex_faces_vao.bind()
-            self._gl.glDrawArrays(GL_TRIANGLES, 0, self._tex_faces_count)
-            self._tex_faces_vao.release()
-        self._draw_instanced_raw()   # instanced components join the stencil
-        self._gl.glDisable(GL_CULL_FACE)
-        self._gl.glColorMask(True, True, True, True)
-        self._gl.glDepthMask(GL_TRUE)
-        # Pass 2 — the plane quad, only through the stencil, nudged a hair
-        # behind so the thick cut lines drawn later win the depth test.
-        self._gl.glStencilFunc(GL_EQUAL, 1, 0xFF)
-        self._gl.glStencilMask(0x00)
+        # The plane's own fill over the style's (the style's switch is the
+        # master): solid, hatched, cross-hatched or none, in its colour.
+        from core.section import effective_fill
+        pattern, fc, spacing = effective_fill(sp, style)
+        if pattern == "none":
+            return
+        tris = self._section_fill_tris()
+        if tris is None or not len(tris):
+            return
+        # The fill lies IN the plane, which clips: unclipped while it
+        # draws, nudged a hair behind so the thick cut lines drawn later
+        # win the depth test.
         self._set_section_clip(False)
-        import numpy as np
-        corners = self.section_plane_frame(sp)
-        c = [np.array([q.x(), q.y(), q.z()], dtype=np.float32)
-             for q in corners]
-        tris = np.concatenate([c[0], c[1], c[2], c[0], c[2], c[3]])
-        raw = tris.astype(np.float32).tobytes()
+        raw = tris.reshape(-1).astype("float32").tobytes()
         self._section_vbo.bind()
         self._section_vbo.allocate(raw, len(raw))
         self._section_vbo.release()
-        fc = getattr(style, "section_fill_color", (0.35, 0.37, 0.41))
+        # A hatched cut sits on a pale ground of its own colour, so the
+        # inside of the solid never shows between the lines.
+        base = (fc if pattern == "solid"
+                else tuple(c + (1.0 - c) * 0.78 for c in fc[:3]))
         self._gl.glEnable(GL_POLYGON_OFFSET_FILL)
         self._gl.glPolygonOffset(2.0, 2.0)
-        self._set_color(fc[0], fc[1], fc[2], 1.0)
+        self._set_color(base[0], base[1], base[2], 1.0)
         self._program.setUniformValue(
-            self._loc_back_color, QVector4D(fc[0], fc[1], fc[2], 1.0))
+            self._loc_back_color, QVector4D(base[0], base[1], base[2], 1.0))
         self._section_vao.bind()
-        self._gl.glDrawArrays(GL_TRIANGLES, 0, 6)
+        self._gl.glDrawArrays(GL_TRIANGLES, 0, len(tris) * 3)
         self._section_vao.release()
         self._gl.glDisable(GL_POLYGON_OFFSET_FILL)
-        self._gl.glStencilMask(0xFF)
-        self._gl.glDisable(GL_STENCIL_TEST)
+        if pattern in ("hatch", "cross"):
+            lines = self._section_hatch(spacing, pattern == "cross")
+            if lines is not None and len(lines):
+                raw = lines.reshape(-1).astype("float32").tobytes()
+                self._section_vbo.bind()
+                self._section_vbo.allocate(raw, len(raw))
+                self._section_vbo.release()
+                self._set_color(fc[0], fc[1], fc[2], 1.0)
+                self._program.setUniformValue(
+                    self._loc_back_color,
+                    QVector4D(fc[0], fc[1], fc[2], 1.0))
+                self._section_vao.bind()
+                self._gl.glDrawArrays(GL_LINES, 0, len(lines) * 2)
+                self._section_vao.release()
         self._set_section_clip(True)
 
     def _draw_section_cut_edges(self) -> None:
@@ -11941,6 +11968,30 @@ class Viewport(QOpenGLWidget):
             self.scene.select([picked])
             self.update()
         return picked
+
+    # ---- A side-tray tab dropped here: the window moves it to that side ----
+    def _dock_drag(self, ev) -> bool:
+        win = self.window()
+        mime = getattr(win, "DOCK_MIME", None)
+        return bool(mime) and ev.mimeData().hasFormat(mime)
+
+    def dragEnterEvent(self, ev) -> None:
+        if self._dock_drag(ev):
+            ev.acceptProposedAction()
+            return
+        super().dragEnterEvent(ev)
+
+    def dragMoveEvent(self, ev) -> None:
+        if self._dock_drag(ev):
+            ev.acceptProposedAction()
+            return
+        super().dragMoveEvent(ev)
+
+    def dropEvent(self, ev) -> None:
+        if self._dock_drag(ev):
+            self.window().drop_dock_on_viewport(ev)
+            return
+        super().dropEvent(ev)
 
     def contextMenuEvent(self, ev) -> None:
         """Right-click: select what's under the cursor and open

@@ -3805,7 +3805,10 @@ class ScenesPanel(QWidget):
         view = item.data(Qt.UserRole)
         new_name = item.text().strip()
         if view is not None and new_name:
-            view.name = new_name
+            # Through the browser's rule: the sheet views that show this
+            # scene follow the new name instead of losing their scene.
+            from core.outliner import rename_scene
+            rename_scene(self._scene(), view, new_name)
         self.refresh()
         self._touch()
 

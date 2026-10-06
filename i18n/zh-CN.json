@@ -2615,5 +2615,6 @@
  "Export the whole model, or only what is selected?": "导出整个模型，还是只导出所选内容？",
  "Figure": "人物",
  "{key}: kept for «{kept}», taken from «{dropped}»": "{key}：保留给「{kept}」，从「{dropped}」移除",
- "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "文件把同一个按键分配给了多个命令；共用的按键对谁都不起作用，因此每个按键只保留给第一个命令："
+ "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "文件把同一个按键分配给了多个命令；共用的按键对谁都不起作用，因此每个按键只保留给第一个命令：",
+ "Browser": "浏览器"
 }

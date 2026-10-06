@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QStatusBar,
+    QTabBar,
     QToolBar,
     QWidget,
 )
@@ -149,6 +150,77 @@ def _obj_parts(temp):
     for kid in group.children:
         soften_smooth_edges(kid.mesh, cos_threshold=0.55)
     return group
+
+class _DockTitleTab(QTabBar):
+    """The title bar of a side tray: one tab with its name, as the tabs Qt
+    draws when trays share a side — so a tray alone on its side still has
+    a tab to drag to the other side, to right-click and to drop on. Qt
+    hides it while the tray is tabbed with others (their tab bar shows)."""
+
+    def __init__(self, window, dock) -> None:
+        super().__init__(dock)
+        self.addTab(dock.windowTitle())
+        self.setDrawBase(False)
+        self.setExpanding(False)
+        self.setElideMode(Qt.ElideNone)
+        dock.windowTitleChanged.connect(lambda t: self.setTabText(0, t))
+        self.setProperty("ingetrazo_watched", True)
+        self.setAcceptDrops(True)
+        self.installEventFilter(window)
+
+
+class _DockDropZone(QWidget):
+    """Where a dragged tray tab can go, shown while it is dragged: a
+    translucent panel at one edge of the viewport, lit while the pointer is
+    over it; dropping there docks the tray (or the whole side) there."""
+
+    def __init__(self, window, area, label: str) -> None:
+        super().__init__(window)
+        self.window_ = window
+        self.area = area
+        self.label = label
+        self._hot = False
+        self.setAcceptDrops(True)
+        self.hide()
+
+    def set_hot(self, on: bool) -> None:
+        self._hot = on
+        self.update()
+
+    def dragEnterEvent(self, event) -> None:
+        if event.mimeData().hasFormat(self.window_.DOCK_MIME):
+            event.acceptProposedAction()
+            self.set_hot(True)
+
+    def dragMoveEvent(self, event) -> None:
+        if event.mimeData().hasFormat(self.window_.DOCK_MIME):
+            event.acceptProposedAction()
+
+    def dragLeaveEvent(self, event) -> None:
+        self.set_hot(False)
+
+    def dropEvent(self, event) -> None:
+        if event.mimeData().hasFormat(self.window_.DOCK_MIME):
+            self.window_.drop_on_side(event.mimeData(), self.area)
+            event.acceptProposedAction()
+        self.set_hot(False)
+
+    def paintEvent(self, event) -> None:
+        from PySide6.QtGui import QColor, QPainter, QPen
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        accent = QColor(243, 115, 41)
+        fill = QColor(accent)
+        fill.setAlpha(110 if self._hot else 45)
+        p.setBrush(fill)
+        pen = QPen(accent, 2 if self._hot else 1)
+        pen.setStyle(Qt.SolidLine if self._hot else Qt.DashLine)
+        p.setPen(pen)
+        p.drawRoundedRect(self.rect().adjusted(4, 4, -4, -4), 8, 8)
+        p.setPen(QColor(255, 255, 255) if self._hot else accent)
+        p.drawText(self.rect(), Qt.AlignCenter | Qt.TextWordWrap, self.label)
+        p.end()
+
 
 class MainWindow(QMainWindow):
     """Top-level IngeTrazo window."""
@@ -497,25 +569,27 @@ class MainWindow(QMainWindow):
         self.tray = Tray(self)
         self.bim_tray = BimTray(self)
         self.georef_tray = GeorefTray(self)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.tray)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.bim_tray)
-        self.addDockWidget(Qt.RightDockWidgetArea, self.georef_tray)
-        self.tabifyDockWidget(self.tray, self.bim_tray)
-        self.tabifyDockWidget(self.bim_tray, self.georef_tray)
+        from views.outliner import ProjectBrowser
+        self.project_browser = ProjectBrowser(self)
+        self._lay_out_trays()
         # The trays are tabbed: the tab bar already names the active panel,
         # so each dock's own title bar would say the same thing right above
         # it. An empty title-bar widget removes the duplicate (a clean tray
         # look); panels are toggled from the View menu, not dragged around.
-        for dock in (self.tray, self.bim_tray, self.georef_tray):
+        for dock in (self.tray, self.bim_tray, self.georef_tray,
+                     self.project_browser):
             dock.setTitleBarWidget(QWidget(dock))
         self.tray.raise_()
         self._build_sidebar_handle()
+        self._setup_side_docks()
         self.viewport.sceneVersionChanged.connect(
             lambda _v: self.tray.on_scene_changed())
         self.viewport.sceneVersionChanged.connect(
             lambda _v: self.bim_tray.on_scene_changed())
         self.viewport.sceneVersionChanged.connect(
             lambda _v: self.georef_tray.on_scene_changed())
+        self.viewport.sceneVersionChanged.connect(
+            lambda _v: self.project_browser.on_scene_changed())
 
         # Styles, Shadows and Dimension style hang OFF THE TOOLBAR as
         # dropdown panels (user: the lateral bar was drowning, and floating
@@ -1477,12 +1551,20 @@ class MainWindow(QMainWindow):
             lang_menu.addAction(action)
 
     # ---- Sidebar strip (LibreOffice-style) ---------------------------------
+    #: Trays that start closed until the user opens them (Window ▸
+    #: Panels): the specialised workspaces. Properties, the Browser and
+    #: the bundled AI and Render tabs open. An extension may
+    #: ask the same for a panel of its own (``add_panel(start_hidden=True)``).
+    DEFAULT_HIDDEN_TRAYS = frozenset({"tray_bim", "tray_georef"})
+
     def _show_default_trays(self, st) -> None:
-        """Properties, BIM and Terrain always open at start-up — a tray
-        stays closed only when it was closed from the Window menu (Marco,
+        """The trays open at start-up as the user left them in Window ▸
+        Panels — a tray stays closed only when it was closed there (Marco,
         24-09: «que siempre se muestren por defecto con opción de ocultarlas
         desde el menú Ventana»). A saved layout alone (a folded sidebar, a
-        tray lost by the old fold) does not keep one away."""
+        tray lost by the old fold) does not keep one away. Before any
+        choice, the ones most work needs open and the rest wait there
+        (``DEFAULT_HIDDEN_TRAYS``)."""
         hidden = self._hidden_tray_names(st)
         docks = self._sidebar_docks()
         for d in docks:
@@ -1491,6 +1573,11 @@ class MainWindow(QMainWindow):
             # Qt's own dock list (right-click on a toolbar) hides one too.
             d.toggleViewAction().triggered.connect(
                 lambda on, dock=d: self._remember_tray_choice(dock, on))
+        if st.contains("ui/hidden_trays"):
+            # Seen now: a panel that asked to start hidden has had its
+            # first start; from here on the user's choice rules it.
+            st.setValue("ui/hidden_trays", sorted(hidden))
+        self._mark_trays_known(st, [d.objectName() for d in docks])
         if not self.tray.isHidden():
             self.tray.raise_()
         # Filled now too, not only when it opens: F3 finds each tab there.
@@ -1513,12 +1600,22 @@ class MainWindow(QMainWindow):
             if dock is not self.tray:
                 self.tabifyDockWidget(self.tray, dock)
 
-    @staticmethod
-    def _hidden_tray_names(st) -> set:
+    def _hidden_tray_names(self, st) -> set:
+        """The trays kept closed. A first run (nothing chosen yet) opens
+        the ones most work needs and leaves the rest in Window ▸ Panels;
+        once any is opened or closed there, the whole choice is saved and
+        kept. An extension panel that asks to start hidden starts hidden
+        the first time it is seen, whenever it is installed."""
+        asked = set(getattr(self, "_start_hidden", ()))
+        if not st.contains("ui/hidden_trays"):
+            return set(self.DEFAULT_HIDDEN_TRAYS) | asked
         raw = st.value("ui/hidden_trays", []) or []
         if isinstance(raw, str):
             raw = [raw]
-        return {str(x) for x in raw}
+        known = st.value("ui/known_trays", []) or []
+        if isinstance(known, str):
+            known = [known]
+        return {str(x) for x in raw} | (asked - {str(k) for k in known})
 
     def _remember_tray_choice(self, dock, shown: bool) -> None:
         st = QSettings()
@@ -1528,6 +1625,58 @@ class MainWindow(QMainWindow):
         else:
             hidden.add(dock.objectName())
         st.setValue("ui/hidden_trays", sorted(hidden))
+        self._mark_trays_known(st, [dock.objectName()])
+
+    @staticmethod
+    def _mark_trays_known(st, names) -> None:
+        """Seen: a panel that asked to start hidden has had its first
+        start, and the user's choice (``ui/hidden_trays``) rules it now."""
+        known = st.value("ui/known_trays", []) or []
+        if isinstance(known, str):
+            known = [known]
+        st.setValue("ui/known_trays",
+                    sorted({str(k) for k in known} | set(names)))
+
+    #: The factory order of the side tray's tabs, all on the right:
+    #: Properties first, the model's tree next, then the workspaces.
+    def _default_tray_order(self) -> list:
+        return [self.tray, self.project_browser, self.bim_tray,
+                self.georef_tray]
+
+    def _lay_out_trays(self) -> None:
+        """The trays in their factory place: every one on the right, tabbed
+        in the default order, extension panels after them."""
+        order = self._default_tray_order()
+        order += [d for d in getattr(self, "_extension_docks", ())
+                  if d not in order]
+        for d in order:
+            self.addDockWidget(Qt.RightDockWidgetArea, d)
+        for first, nxt in zip(order, order[1:]):
+            self.tabifyDockWidget(first, nxt)
+
+    def restore_default_trays(self) -> None:
+        """Window ▸ Panels ▸ Restore default panels: the factory layout of
+        the side tray back — Properties and the Browser open, the
+        rest closed and listed here — and the choice forgotten, so it
+        stands as a first run's would."""
+        from PySide6.QtCore import QTimer
+        st = QSettings()
+        st.remove("ui/hidden_trays")
+        st.remove("ui/known_trays")
+        self._lay_out_trays()
+        hidden = self._hidden_tray_names(st)
+        for d in self._sidebar_docks():
+            d.setVisible(d.objectName() not in hidden)
+        for act in (getattr(self, "_act_sidebar", None),
+                    getattr(self, "_act_left_sidebar", None)):
+            if act is not None and not act.isChecked():
+                act.blockSignals(True)
+                act.setChecked(True)
+                act.blockSignals(False)
+        self._left_was = []
+        self.tray.raise_()
+        QTimer.singleShot(0, self._style_dock_tabs)
+        QTimer.singleShot(0, self._place_sidebar_handle)
 
     def _fill_panels_menu(self, menu) -> None:
         """One checkable entry per side-tray tab (Marco, 29-09: «cuando
@@ -1546,6 +1695,11 @@ class MainWindow(QMainWindow):
         every = menu.addAction(tr("Show all panels"))
         every.setStatusTip(tr("Bring back every tab of the side tray."))
         every.triggered.connect(self._show_all_trays)
+        reset = menu.addAction(tr("Restore default panels"))
+        reset.setStatusTip(tr(
+            "Properties and the Browser open, the other panels closed, "
+            "all on the right in the factory order."))
+        reset.triggered.connect(self.restore_default_trays)
 
     def set_tray_shown(self, dock, shown: bool) -> None:
         """Show (in front) or hide one side-tray tab and remember it. A
@@ -1582,6 +1736,16 @@ class MainWindow(QMainWindow):
         of Qt's toolbar-and-dock menu."""
         if self._tray_tab_bar_at(event.pos()):
             menu = QMenu(self)
+            dock = self._dock_tab_at(event.pos())
+            if dock is not None:
+                left = self.dockWidgetArea(dock) == Qt.LeftDockWidgetArea
+                menu.addAction(
+                    tr("Move to the right side") if left
+                    else tr("Move to the left side"),
+                    lambda: self.move_dock(
+                        dock, Qt.RightDockWidgetArea if left
+                        else Qt.LeftDockWidgetArea))
+                menu.addSeparator()
             self._fill_panels_menu(menu)
             menu.exec(event.globalPos())
             event.accept()
@@ -1592,6 +1756,7 @@ class MainWindow(QMainWindow):
         return [d for d in (getattr(self, "tray", None),
                             getattr(self, "bim_tray", None),
                             getattr(self, "georef_tray", None),
+                            getattr(self, "project_browser", None),
                             *getattr(self, "_extension_docks", ()))
                 if d is not None]
 
@@ -1661,14 +1826,27 @@ class MainWindow(QMainWindow):
         btn.raise_()
         btn.setVisible(not self._act_clean_screen.isChecked()
                        if hasattr(self, "_act_clean_screen") else True)
+        left = getattr(self, "_left_handle", None)
+        if left is not None:
+            start = self.viewport.mapTo(self, QPoint(0, 0))
+            left.move(max(0, start.x() - left.width() // 2), max(0, y))
+            left.raise_()
+            clean = (self._act_clean_screen.isChecked()
+                     if hasattr(self, "_act_clean_screen") else False)
+            # Only while something is (or was) on the left.
+            left.setVisible(not clean and (
+                bool(self._side_docks(Qt.LeftDockWidgetArea))
+                or bool(getattr(self, "_left_was", None))))
 
     def _sidebar_visible(self) -> bool:
         return any(d.isVisible() for d in self._sidebar_docks())
 
     def _set_sidebar_visible(self, on: bool) -> None:
         """Fold the trays away (remembering which were open) or bring
-        them back; the chevron turns to point the way."""
-        docks = self._sidebar_docks()
+        them back; the chevron turns to point the way. The RIGHT side's
+        trays — the left side folds on its own (Ctrl+F6)."""
+        docks = [d for d in self._sidebar_docks()
+                 if self.dockWidgetArea(d) != Qt.LeftDockWidgetArea]
         if on:
             shown = getattr(self, "_sidebar_was", None) or docks[:1]
             for d in docks:
@@ -1711,6 +1889,8 @@ class MainWindow(QMainWindow):
             self._place_clean_screen_exit()
             if getattr(self, "_sidebar_handle", None) is not None:
                 self._sidebar_handle.hide()
+            if getattr(self, "_left_handle", None) is not None:
+                self._left_handle.hide()
         else:
             btn = getattr(self, "_clean_exit_btn", None)
             if btn is not None:
@@ -1762,7 +1942,297 @@ class MainWindow(QMainWindow):
                 QEvent.Resize, QEvent.Move, QEvent.Show):
             self._place_clean_screen_exit()
             self._place_sidebar_handle()
+        if self._side_dock_event(obj, event):
+            return True
         return super().eventFilter(obj, event)
+
+    # ---- Side trays on either side, as in the sheet composer ----------------
+    #: A tray tab dragged out of its bar: the dock's object name.
+    DOCK_MIME = "application/x-ingetrazo-dock"
+    _OUT_PX = 24
+
+    def _setup_side_docks(self) -> None:
+        """The trays as the composer's side panels: tabs on top with their
+        whole names (scroll arrows when they do not fit), reordered by
+        dragging along the bar (Qt's own), moved to the other side by
+        dragging a tab out of it — onto the viewport's left or right half,
+        or onto the other side's tabs — or from its right-click menu; each
+        side folds with its handle (Ctrl+F5 right, Ctrl+F6 left). Where
+        each tray is is part of the window layout, saved with it."""
+        from PySide6.QtCore import QSize
+        from PySide6.QtWidgets import QTabWidget, QToolButton
+        self.setTabPosition(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea,
+                            QTabWidget.North)
+        self.viewport.setAcceptDrops(True)
+        self.installEventFilter(self)           # new tab bars, as Qt makes them
+        act = QAction(tr("Left sidebar"), self)
+        act.setCheckable(True)
+        act.setChecked(True)
+        act.setShortcut(QKeySequence("Ctrl+F6"))
+        from views.shortcuts import set_tooltip
+        set_tooltip(act, tr("Show or hide the left sidebar"))
+        act.toggled.connect(self._set_left_sidebar_visible)
+        self.addAction(act)
+        self._act_left_sidebar = act
+        btn = QToolButton(self)
+        btn.setObjectName("left_sidebar_handle")
+        btn.setFixedSize(14, 56)
+        btn.setIconSize(QSize(12, 12))
+        btn.setIcon(tool_icon("side_expand"))       # mirrored: folds left
+        btn.setToolTip(act.toolTip())
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setAutoRaise(True)
+        btn.setStyleSheet(self._sidebar_handle.styleSheet())
+        btn.clicked.connect(lambda: act.setChecked(not act.isChecked()))
+        self._left_handle = btn
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(0, self._style_dock_tabs)
+        QTimer.singleShot(0, self._place_sidebar_handle)
+
+    def _side_docks(self, area) -> list:
+        return [d for d in self._sidebar_docks()
+                if not d.isHidden() and self.dockWidgetArea(d) == area]
+
+    def _dock_tab_bars(self) -> list:
+        from PySide6.QtWidgets import QTabBar
+        return [tb for tb in self.findChildren(QTabBar)
+                if tb.parent() is self]
+
+    def _style_dock_tabs(self) -> None:
+        """Whole names, scroll arrows: the composer's tabs. Qt makes a tab
+        bar per tabbed group as they form, so this runs again as children
+        come; each bar is watched once (drags out of it, drops on it)."""
+        from shiboken6 import isValid
+        for tb in self._dock_tab_bars():
+            if not isValid(tb):
+                continue
+            tb.setElideMode(Qt.ElideNone)
+            tb.setUsesScrollButtons(True)
+            if not tb.property("ingetrazo_watched"):
+                tb.setProperty("ingetrazo_watched", True)
+                tb.setAcceptDrops(True)
+                tb.installEventFilter(self)
+        # A tray alone on its side has no tab bar from Qt — only its title
+        # bar, an empty strip: it gets a tab of its own there, so it can
+        # still be dragged across, right-clicked and dropped on.
+        from PySide6.QtCore import QTimer
+        for d in self._sidebar_docks():
+            if d.property("ingetrazo_titles") is None:
+                d.setProperty("ingetrazo_titles", True)
+                bump = lambda *_a: QTimer.singleShot(0, self._style_dock_tabs)
+                d.visibilityChanged.connect(bump)
+                d.dockLocationChanged.connect(bump)
+            # Tabbed with others, Qt's tab bar already names it: an empty
+            # title bar, as the trays always had (its own tab would read
+            # twice). Alone on its side: its own tab.
+            tabbed = any(not o.isHidden() for o in self.tabifiedDockWidgets(d))
+            current = d.titleBarWidget()
+            if tabbed and isinstance(current, _DockTitleTab):
+                d.setTitleBarWidget(QWidget(d))
+                current.deleteLater()
+            elif not tabbed and not isinstance(current, _DockTitleTab):
+                d.setTitleBarWidget(_DockTitleTab(self, d))
+                if current is not None:
+                    current.deleteLater()
+
+    def _dock_of_tab(self, bar, index):
+        if index < 0:
+            return None
+        text = bar.tabText(index)
+        return next((d for d in self._sidebar_docks()
+                     if d.windowTitle() == text), None)
+
+    def _dock_tab_at(self, pos):
+        """The tray whose tab is under ``pos`` (window coordinates)."""
+        from PySide6.QtWidgets import QTabBar
+        child = self.childAt(pos)
+        while child is not None and not isinstance(child, QTabBar):
+            child = child.parentWidget()
+        if child is None:
+            return None
+        return self._dock_of_tab(child, child.tabAt(child.mapFrom(self, pos)))
+
+    def move_dock(self, dock, area) -> None:
+        """Put a tray on the ``area`` side (Qt.LeftDockWidgetArea /
+        RightDockWidgetArea), tabbed with what is there, in front, and that
+        side unfolded."""
+        from PySide6.QtCore import QTimer
+        if self.dockWidgetArea(dock) == area and not dock.isHidden():
+            dock.raise_()
+            return
+        others = [d for d in self._side_docks(area) if d is not dock]
+        self.addDockWidget(area, dock)
+        if others:
+            self.tabifyDockWidget(others[0], dock)
+        dock.show()
+        dock.raise_()
+        act = (self._act_left_sidebar if area == Qt.LeftDockWidgetArea
+               else self._act_sidebar)
+        if not act.isChecked():
+            act.blockSignals(True)
+            act.setChecked(True)
+            act.blockSignals(False)
+        QTimer.singleShot(0, self._style_dock_tabs)
+        QTimer.singleShot(0, self._place_sidebar_handle)
+
+    def _set_left_sidebar_visible(self, on: bool) -> None:
+        """Ctrl+F6 / the left handle: the trays on the left fold away and
+        come back, as Ctrl+F5 does on the right."""
+        from PySide6.QtCore import QTimer
+        if on:
+            shown = getattr(self, "_left_was", None) or []
+            for d in shown:
+                d.show()
+            if shown:
+                shown[0].raise_()
+            self._left_was = []
+        else:
+            self._left_was = self._side_docks(Qt.LeftDockWidgetArea)
+            for d in self._left_was:
+                d.hide()
+        btn = getattr(self, "_left_handle", None)
+        if btn is not None:
+            btn.setIcon(tool_icon("side_expand" if on else "side_collapse"))
+        QTimer.singleShot(0, self._place_sidebar_handle)
+
+    def _side_dock_event(self, obj, event) -> bool:
+        """The drag-a-tab-to-the-other-side part of the event filter: True
+        when the event was taken."""
+        from PySide6.QtCore import QEvent, QTimer
+        t = event.type()
+        if obj is self:
+            if t == QEvent.ChildAdded:
+                QTimer.singleShot(0, self._style_dock_tabs)
+            return False
+        is_bar = bool(obj.property("ingetrazo_watched")) \
+            if hasattr(obj, "property") else False
+        if is_bar:
+            if t == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+                i = obj.tabAt(event.position().toPoint())
+                # Off the tabs, on the bar: the whole side goes (-2).
+                obj.setProperty("ingetrazo_press", i if i >= 0 else -2)
+            elif t == QEvent.MouseButtonRelease:
+                obj.setProperty("ingetrazo_press", -1)
+            elif t == QEvent.MouseMove and event.buttons() & Qt.LeftButton:
+                i = obj.property("ingetrazo_press")
+                if i is not None and (i >= 0 or i == -2):
+                    r = obj.rect().adjusted(-self._OUT_PX, -self._OUT_PX,
+                                            self._OUT_PX, self._OUT_PX)
+                    if not r.contains(event.position().toPoint()):
+                        obj.setProperty("ingetrazo_press", -1)
+                        self._drag_dock_tab(obj, i, event)
+                        return True
+            elif t in (QEvent.DragEnter, QEvent.DragMove) and \
+                    event.mimeData().hasFormat(self.DOCK_MIME):
+                event.acceptProposedAction()
+                return True
+            elif t == QEvent.Drop and \
+                    event.mimeData().hasFormat(self.DOCK_MIME):
+                here = self._dock_of_tab(obj, 0)
+                if here is not None:
+                    self.drop_on_side(event.mimeData(),
+                                      self.dockWidgetArea(here))
+                event.acceptProposedAction()
+                return True
+            return False
+        return False
+
+    def drop_dock_on_viewport(self, event) -> None:
+        """A tray tab dropped on the viewport (its own drop handler calls
+        this): to the left side on the left half, to the right on the
+        right half."""
+        x = event.position().x()
+        self.drop_on_side(event.mimeData(), Qt.LeftDockWidgetArea
+                          if x < self.viewport.width() / 2
+                          else Qt.RightDockWidgetArea)
+        event.acceptProposedAction()
+
+    def _dock_named(self, mime):
+        name = bytes(mime.data(self.DOCK_MIME)).decode("utf-8")
+        return next((d for d in self._sidebar_docks()
+                     if d.objectName() == name), None)
+
+    def drop_on_side(self, mime, area) -> None:
+        """What a dragged tab carries goes to the ``area`` side: one tray
+        (its object name), or a whole side (``group:<area>``)."""
+        text = bytes(mime.data(self.DOCK_MIME)).decode("utf-8")
+        if text.startswith("group:"):
+            self.move_side(Qt.DockWidgetArea(int(text[6:])), area)
+            return
+        dock = self._dock_named(mime)
+        if dock is not None:
+            self.move_dock(dock, area)
+
+    def move_side(self, from_area, to_area) -> None:
+        """Every tray of one side to the other, in their order, the one in
+        front staying in front: the whole sidebar dragged across."""
+        if from_area == to_area:
+            return
+        docks = self._side_docks(from_area)
+        if not docks:
+            return
+        front = next((d for d in docks
+                      if not d.visibleRegion().isEmpty()), docks[0])
+        for d in docks:
+            self.move_dock(d, to_area)
+        front.raise_()
+
+    # ---- Drop zones: where a dragged tab can go -------------------------------
+    def _drop_zones(self) -> list:
+        zones = getattr(self, "_zones", None)
+        if zones is None:
+            zones = self._zones = [
+                _DockDropZone(self, Qt.LeftDockWidgetArea,
+                              tr("Left side")),
+                _DockDropZone(self, Qt.RightDockWidgetArea,
+                              tr("Right side"))]
+        return zones
+
+    def show_drop_zones(self, on: bool) -> None:
+        """While a tab is dragged, a panel at each edge of the viewport
+        says where it can be docked; the one under the pointer lights up,
+        and dropping there docks it on that side."""
+        from PySide6.QtCore import QRect
+        vp = self.viewport
+        top_left = vp.mapTo(self, vp.rect().topLeft())
+        w = max(120, min(220, vp.width() // 4))
+        h = vp.height()
+        for zone in self._drop_zones():
+            if not on:
+                zone.hide()
+                continue
+            x = top_left.x() + (0 if zone.area == Qt.LeftDockWidgetArea
+                                else vp.width() - w)
+            zone.setGeometry(QRect(x, top_left.y(), w, h))
+            zone.set_hot(False)
+            zone.show()
+            zone.raise_()
+
+    def _drag_dock_tab(self, bar, index, event) -> None:
+        from PySide6.QtCore import QEvent, QMimeData
+        from PySide6.QtGui import QDrag, QMouseEvent
+        group = index == -2
+        dock = self._dock_of_tab(bar, 0 if group else index)
+        # End Qt's own move of the tab first, where it stands.
+        from PySide6.QtWidgets import QApplication
+        QApplication.sendEvent(bar, QMouseEvent(
+            QEvent.MouseButtonRelease, event.position(),
+            event.globalPosition(), Qt.LeftButton, Qt.NoButton,
+            event.modifiers()))
+        if dock is None:
+            return
+        data = QMimeData()
+        payload = (f"group:{int(self.dockWidgetArea(dock).value)}" if group
+                   else dock.objectName())
+        data.setData(self.DOCK_MIME, payload.encode("utf-8"))
+        drag = QDrag(bar)
+        drag.setMimeData(data)
+        drag.setPixmap(bar.grab() if group else bar.grab(bar.tabRect(index)))
+        self.show_drop_zones(True)
+        try:
+            drag.exec(Qt.MoveAction)
+        finally:
+            self.show_drop_zones(False)
 
     def _on_preferences(self) -> None:
         """Window ▸ Preferences: the scattered QSettings in one dialog."""
@@ -2005,13 +2475,30 @@ class MainWindow(QMainWindow):
         - **a first place** when there is none: tabbed with the trays;
         - **a way back** when closed: Window ▸ Panels lists every tab."""
         if not self.restoreDockWidget(dock):
-            self.addDockWidget(Qt.RightDockWidgetArea, dock)
-            anchor = next((d for d in reversed(self._sidebar_docks())
-                           if d is not dock and d.objectName() != dock.objectName()), None)
-            if anchor is not None:
-                self.tabifyDockWidget(anchor, dock)
+            # Tabbed with Properties, on whichever side it is: the last
+            # tray of the list may have been moved to the other side, and
+            # tabbing with it put the extensions in a group of their own.
+            area = self.dockWidgetArea(self.tray)
+            if area == Qt.NoDockWidgetArea:
+                area = Qt.RightDockWidgetArea
+            self.addDockWidget(area, dock)
+            self.tabifyDockWidget(self.tray, dock)
         self._extension_docks.append(dock)
         self._keep_docked(dock)
+        # A panel added after start-up (the first time its tool runs) gets
+        # the same rule as the others: closed if the user closed it, or if
+        # it asks to start hidden and has not been seen yet.
+        st = QSettings()
+        hidden = self._hidden_tray_names(st)
+        if dock.objectName() in hidden:
+            dock.hide()
+        elif self.isVisible():
+            # Made after the window showed, a widget starts hidden until
+            # shown: the tab the extension asked for would not appear.
+            dock.show()
+        if st.contains("ui/hidden_trays"):
+            st.setValue("ui/hidden_trays", sorted(hidden))
+        self._mark_trays_known(st, [dock.objectName()])
         menu = getattr(self, "_panels_menu", None)
         if menu is not None:
             self._fill_panels_menu(menu)
@@ -3021,6 +3508,9 @@ class MainWindow(QMainWindow):
     def _set_section_visibility(self, attr: str, on: bool) -> None:
         setattr(self.viewport.scene, attr, bool(on))
         self.viewport.update()
+        browser = getattr(self, "project_browser", None)
+        if browser is not None:
+            browser.outliner.on_scene_changed()
 
     def _sync_section_menu(self) -> None:
         scene = self.viewport.scene
@@ -3191,6 +3681,9 @@ class MainWindow(QMainWindow):
             return
         setattr(style, name, bool(value))
         self.viewport.update()
+        browser = getattr(self, "project_browser", None)
+        if browser is not None and name == "section_fill":
+            browser.outliner.on_scene_changed()
 
     def _sync_style_menu(self) -> None:
         """Reflect the scene's active style in the menu (loads, scene recall)."""
@@ -4062,6 +4555,9 @@ class MainWindow(QMainWindow):
         (Marco, 23-09: «en el modelo solo alternar entre el modelo y la
         lámina… cuando regrese a lámina, que regrese a la lámina 2»). A
         document without sheets offers «+» instead."""
+        composer = getattr(self, "_composer", None)
+        if composer is not None and hasattr(composer, "views_panel"):
+            composer.views_panel.on_scene_changed()
         tabs = getattr(self, "_sheet_tabs", None)
         if tabs is None:
             return
