@@ -148,6 +148,23 @@ follow [SemVer](https://semver.org).
   es la cota que se va a colocar (líneas de referencia, extremos y valor),
   también recta cuando Mayús la fuerza horizontal o vertical (#351,
   @tonfdd).
+- **El Inspector de sólidos repara**, y ahora es una pestaña de la
+  bandeja lateral (Extensiones ▸ Inspector de sólidos la trae al
+  frente), así el modelo queda a la vista: además de bordes abiertos,
+  aristas sueltas y sobreconectadas, ahora encuentra **caras internas**
+  (una cara repetida o un tabique sin marcar) y **caras invertidas** en
+  un objeto cerrado. **Reparar** y **Reparar todo** hacen, en un solo
+  paso que se deshace, lo que tiene una única respuesta: borran aristas
+  sueltas y caras repetidas, cierran los huecos de borde plano, marcan
+  los tabiques como interiores y giran hacia fuera las caras invertidas,
+  también en un grupo sin entrar en él. Un hueco que no es plano queda
+  en la lista y dice por qué. Un clic en un objeto de la lista muestra
+  su primer problema, listo para repararlo; **Resaltar problemas** los
+  pinta todos a la vez, con una leyenda de colores; **Siguiente /
+  Anterior problema** recorren sus problemas uno por uno, encuadrados y
+  pintados en pantalla con un color por tipo (también dentro de un
+  grupo), y **Reparar este problema** arregla solo ese y pasa al
+  siguiente. Con caras invertidas ya no muestra un volumen equivocado.
 
 ### Cambiado
 - **Atajos nuevos**: **Ctrl+1…7** para las vistas estándar (Superior,
