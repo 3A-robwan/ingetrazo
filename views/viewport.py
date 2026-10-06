@@ -11338,10 +11338,18 @@ class Viewport(QOpenGLWidget):
                 if sel is not None:
                     ok = ok & sel
                 d = np.where(ok, d, np.inf)
-                i = int(np.argmin(d))
-                if d[i] < best_d:
-                    best_d = float(d[i])
-                    best_g = idx.gedge_groups[int(idx.gedge_gi[i])]
+                # Only an edge the user can SEE takes the click: the far
+                # edge of a slab, hidden behind a loose box standing on it,
+                # lies a few pixels from a click on that box and handed the
+                # slab the selection. The nearest visible one decides.
+                near = np.where(d < best_d)[0]
+                for i in near[np.argsort(d[near])]:
+                    a = QVector3D(*idx.gedge_a[i])
+                    p = a + (QVector3D(*idx.gedge_b[i]) - a) * float(t[i])
+                    if not self._is_occluded(p):
+                        best_d = float(d[i])
+                        best_g = idx.gedge_groups[int(idx.gedge_gi[i])]
+                        break
         # Billboard outlines: clicking a figure exactly on its snapped feet
         # point lands ON the quad's boundary, which the ray-triangle test
         # rejects — the outline proximity test catches it.
