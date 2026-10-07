@@ -169,6 +169,10 @@ def test_the_kill_switch_keeps_the_rays_one_by_one(monkeypatch):
     monkeypatch.setattr(cs, "compute_snap", spy)
     if getattr(vv, "compute_snap", None) is real:
         monkeypatch.setattr(vv, "compute_snap", spy)
+    # The snap search lives in the inference engine since the refactor.
+    import core.inference as ci
+    if getattr(ci, "compute_snap", None) is real:
+        monkeypatch.setattr(ci, "compute_snap", spy)
     from views.main_window import MainWindow
     win = MainWindow()
     try:
