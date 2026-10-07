@@ -229,6 +229,12 @@ follow [SemVer](https://semver.org).
   a compilar entero en cada arranque. Ahora se compila una vez al construir
   el paquete (en un portátil antiguo, importar el programa pasa de 1,2 a
   0,26 s).
+- **La ventana aparece antes aunque tengas muchas extensiones** (#440):
+  las extensiones se cargan justo después de que la ventana está en
+  pantalla, no antes (con 26 extensiones instaladas, el arranque esperaba
+  2,5 s por ellas). Sus paneles y barras vuelven a su sitio guardado, y un
+  archivo abierto con doble clic se abre después de cargarlas, por si una
+  extensión es la que sabe abrirlo.
 - **Información de entidad muestra el área en las unidades del documento**
   (#432, #406, @dns-0): el área de una cara salía siempre en m², aunque el
   modelo estuviera en pies y pulgadas; ahora sale en ft² (y en las demás

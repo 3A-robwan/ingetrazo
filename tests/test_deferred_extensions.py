@@ -1,0 +1,75 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
+"""Issue #440 (@cdblue999): with many extensions installed, their setup()
+held the first frame for seconds. The app now builds the window, shows it,
+and only then runs the plugins (main.py: ``MainWindow(defer_extensions=True)``
++ ``load_extensions()``). Everything else keeps loading them at once."""
+from __future__ import annotations
+
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+import pytest  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
+
+_app = QApplication.instance() or QApplication([])
+
+
+def _close(w):
+    w._saved_version = w.viewport.scene.version   # no "save?" modal
+    w.close()
+
+
+def _plugin_tools(w):
+    return [k for k in w._tools if k.startswith("plugin_")]
+
+
+def _menu_texts(w):
+    return [a.text() for a in w._ext_menu.actions()]
+
+
+@pytest.fixture
+def deferred():
+    from views.main_window import MainWindow
+    w = MainWindow(defer_extensions=True)
+    yield w
+    _close(w)
+
+
+def test_a_deferred_window_has_no_plugin_until_asked(deferred):
+    assert not getattr(deferred, "_extensions_loaded", False)
+    assert _plugin_tools(deferred) == []
+    deferred.load_extensions()
+    assert deferred._extensions_loaded
+
+
+def test_loading_twice_adds_nothing_the_second_time(deferred):
+    deferred.load_extensions()
+    first = (_plugin_tools(deferred), _menu_texts(deferred))
+    deferred.load_extensions()
+    assert (_plugin_tools(deferred), _menu_texts(deferred)) == first
+
+
+def test_deferred_and_immediate_windows_end_up_the_same():
+    from views.main_window import MainWindow
+    now = MainWindow()
+    later = MainWindow(defer_extensions=True)
+    try:
+        later.load_extensions()
+        assert sorted(_plugin_tools(later)) == sorted(_plugin_tools(now))
+        assert _menu_texts(later) == _menu_texts(now)
+    finally:
+        _close(now)
+        _close(later)
+
+
+def test_plugin_entries_sit_above_the_fixed_entries(deferred):
+    deferred.load_extensions()
+    from core.i18n import tr
+    acts = deferred._ext_menu.actions()
+    anchor = acts.index(deferred._ext_anchor)
+    folder = next(i for i, a in enumerate(acts)
+                  if a.text() == tr("Open plugins folder"))
+    assert anchor >= 1                  # something was put above the mark
+    assert folder > anchor              # the fixed entries stay below it

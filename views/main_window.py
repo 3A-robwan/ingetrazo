@@ -225,8 +225,11 @@ class _DockDropZone(QWidget):
 class MainWindow(QMainWindow):
     """Top-level IngeTrazo window."""
 
-    def __init__(self) -> None:
+    def __init__(self, defer_extensions: bool = False) -> None:
         super().__init__()
+        # main.py passes True: the plugins' setup runs once the window is up
+        # (see load_extensions). Set first — the menu bar is built below.
+        self._defer_extensions = bool(defer_extensions)
         self.resize(1280, 800)
 
         self._tools = {
@@ -2287,8 +2290,52 @@ class MainWindow(QMainWindow):
         import logging
         from core.extensions import discover_plugins
 
-        log = logging.getLogger("ingetrazo.plugins")
         ext_menu = menubar.addMenu(tr("Extensions"))
+        self._ext_menu = ext_menu           # ExtensionApp.add_menu_action
+        # Plugin entries go above this mark; the static entries (examples,
+        # plugins folder, guide) sit below it from the start.
+        self._ext_anchor = ext_menu.addSeparator()
+        self._add_example_extensions_menu(ext_menu)
+
+        # The on-ramp for plugin authors: their folder and the dev guide.
+        ext_menu.addSeparator()
+        act = ext_menu.addAction(tr("Open plugins folder"))
+        act.setStatusTip(tr(
+            "Open the folder for your plugins; one put there loads at the "
+            "next start."))
+        act.triggered.connect(self._on_open_plugins_folder)
+        act = ext_menu.addAction(tr("Develop a plugin…"))
+        act.setStatusTip(tr(
+            "Open the guide to writing plugins for IngeTrazo."))
+        act.triggered.connect(self._on_develop_plugin)
+
+        # The app itself (main.py) defers the plugins' setup until the window
+        # is on screen (#440, @cdblue999: 26 third-party extensions held the
+        # first frame for 2.5 s). Anything else — tests, scripts — gets them
+        # loaded right here, as before.
+        if not self._defer_extensions:
+            self.load_extensions()
+
+    def load_extensions(self) -> None:
+        """Run every discovered plugin's ``setup(app)`` and add its entries
+        to the Extensions menu. Once; later calls do nothing.
+
+        Deferred (the app's own start-up), it runs after ``restoreState``:
+        a plugin panel finds its saved place by itself
+        (:meth:`_register_extension_dock`), but a plugin TOOLBAR is only
+        placed by ``restoreState`` — so if one appears, the saved layout is
+        applied again, followed by the same steps that follow it at
+        start-up."""
+        if getattr(self, "_extensions_loaded", False):
+            return
+        self._extensions_loaded = True
+        import logging
+        from core.extensions import discover_plugins
+
+        log = logging.getLogger("ingetrazo.plugins")
+        ext_menu = self._ext_menu
+        anchor = self._ext_anchor
+        bars_before = set(self.findChildren(QToolBar))
         plugins, errors = discover_plugins()
 
         # Shortcuts the app already claimed (toolbar tools, menus — all built
@@ -2297,7 +2344,6 @@ class MainWindow(QMainWindow):
         # ambiguity that silently disables the built-in key for both.
         taken = {a.shortcut().toString() for a in self.findChildren(QAction)
                  if not a.shortcut().isEmpty()}
-        self._ext_menu = ext_menu           # ExtensionApp.add_menu_action
         self._ext_taken_keys = taken
 
         count = 0
@@ -2336,31 +2382,28 @@ class MainWindow(QMainWindow):
                                     plug.stem, tool.shortcut)
                 action.triggered.connect(
                     lambda _c, k=key: self._activate_plugin_tool(k))
-                ext_menu.addAction(action)
+                ext_menu.insertAction(anchor, action)
                 count += 1
 
         for err in errors:
-            action = ext_menu.addAction(
-                tr("\u26a0 {name} (load error)", name=err.stem))
+            action = QAction(tr("\u26a0 {name} (load error)", name=err.stem), self)
             action.setEnabled(False)
             action.setToolTip(err.error)
+            ext_menu.insertAction(anchor, action)
 
         if count == 0 and not errors:
-            ext_menu.addAction(tr("(no plugins found)")).setEnabled(False)
+            action = QAction(tr("(no plugins found)"), self)
+            action.setEnabled(False)
+            ext_menu.insertAction(anchor, action)
 
-        self._add_example_extensions_menu(ext_menu)
-
-        # The on-ramp for plugin authors: their folder and the dev guide.
-        ext_menu.addSeparator()
-        act = ext_menu.addAction(tr("Open plugins folder"))
-        act.setStatusTip(tr(
-            "Open the folder for your plugins; one put there loads at the "
-            "next start."))
-        act.triggered.connect(self._on_open_plugins_folder)
-        act = ext_menu.addAction(tr("Develop a plugin…"))
-        act.setStatusTip(tr(
-            "Open the guide to writing plugins for IngeTrazo."))
-        act.triggered.connect(self._on_develop_plugin)
+        if self._defer_extensions and set(self.findChildren(QToolBar)) - bars_before:
+            st = QSettings()
+            state = st.value("ui/window_state")
+            if state:
+                self.restoreState(state)
+                self._show_default_trays(st)
+                self._place_new_toolbars(st)
+                self._pack_toolbars()
 
     @staticmethod
     def example_extensions() -> list:
