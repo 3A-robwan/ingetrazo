@@ -224,6 +224,11 @@ follow [SemVer](https://semver.org).
   guardar 2,3 → 1,6 s solo por esto (#158, @pacaeiro).
 
 ### Corregido
+- **Información de entidad muestra el área en las unidades del documento**
+  (#432, #406, @dns-0): el área de una cara salía siempre en m², aunque el
+  modelo estuviera en pies y pulgadas; ahora sale en ft² (y en las demás
+  unidades, la que corresponda). El área en planta de un polígono de
+  terreno también, sin perder las hectáreas.
 - **Empujar ya no salta a referencias que no se ven** (#270, #384,
   @FG-RVT): la distancia que Empujar/Tirar deduce a mitad de arrastre leía
   cualquier vértice o arista bajo el cursor, aunque estuviera tapado por

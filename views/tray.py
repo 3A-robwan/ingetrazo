@@ -3327,7 +3327,7 @@ class EntityInfoPanel(QWidget):
             e = sel[0]
             if isinstance(e, Face):
                 mat = self._material_of(e)
-                return (f"<b>{tr('Face')}</b><br>{tr('Area')}: {e.area():.3f} m²<br>"
+                return (f"<b>{tr('Face')}</b><br>{tr('Area')}: {fmt_area(e.area())}<br>"
                         f"{tr('Vertices')}: {len(e.vertices)}<br>"
                         f"{tr('Material')}: {mat}")
             if isinstance(e, Edge):
@@ -3392,7 +3392,7 @@ class EntityInfoPanel(QWidget):
                 f"{tr('Perimeter')}: {fmt_len(path.perimeter())}"]
         if path.closed:
             area = path.area()
-            rows.append(f"{tr('Area (plan)')}: {area:.2f} m² "
+            rows.append(f"{tr('Area (plan)')}: {fmt_area(area)} "
                         f"({area / 10000:.4f} ha)")
             sa = path.surface_area()
             if sa is not None:
