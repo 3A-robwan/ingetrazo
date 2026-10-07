@@ -224,6 +224,11 @@ follow [SemVer](https://semver.org).
   guardar 2,3 → 1,6 s solo por esto (#158, @pacaeiro).
 
 ### Corregido
+- **El Flatpak arranca más rápido** (#440, @cdblue999): el programa corre
+  desde su código en una carpeta de solo lectura, así que Python lo volvía
+  a compilar entero en cada arranque. Ahora se compila una vez al construir
+  el paquete (en un portátil antiguo, importar el programa pasa de 1,2 a
+  0,26 s).
 - **Información de entidad muestra el área en las unidades del documento**
   (#432, #406, @dns-0): el área de una cara salía siempre en m², aunque el
   modelo estuviera en pies y pulgadas; ahora sale en ft² (y en las demás
