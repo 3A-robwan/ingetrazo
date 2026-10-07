@@ -6,6 +6,12 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+### Corregido
+- **Exportar a GLB, DAE u OBJ fallaba con cualquier modelo hecho por la
+  IA** («too many values to unpack»): el recetario y el puente MCP pintan
+  con `(r, g, b, 1.0)` y los exportadores leían tres canales. Ahora toman
+  el RGB (la transparencia sigue viniendo de la opacidad).
+
 ### Rendimiento
 - **Orbitar un modelo con miles de componentes es 11× más fluido**: con la
   planta industrial de la #158 (21 406 copias) cada cuadro pasaba de 1,3 s

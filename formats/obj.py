@@ -98,7 +98,8 @@ def save_obj(scene, path) -> None:
                 groups.setdefault(key, []).append(
                     [(vidx(tri[k]), uvidx(uv[k])) for k in range(3)])
         else:
-            col = tuple(face.attrs.get("color") or _DEFAULT_COLOR)
+            # RGB only: an AI recipe's (r, g, b, 1.0) broke the .mtl writer.
+            col = tuple(face.attrs.get("color") or _DEFAULT_COLOR)[:3]
             key = ("color", col)
             materials.setdefault(key, {"color": col, "map": None})
             if face.attrs.get("mat") and "mat" not in materials[key]:
