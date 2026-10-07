@@ -224,6 +224,10 @@ follow [SemVer](https://semver.org).
   guardar 2,3 → 1,6 s solo por esto (#158, @pacaeiro).
 
 ### Corregido
+- **Una textura grande ya tiene su miniatura en Materiales** (#460,
+  @tomlai-git): una imagen de más de 256 MB descomprimida se pintaba bien
+  pero no aparecía en el panel, porque la miniatura la leía con el límite
+  de memoria de Qt, que el visor sí quita.
 - **El Flatpak arranca más rápido** (#440, @cdblue999): el programa corre
   desde su código en una carpeta de solo lectura, así que Python lo volvía
   a compilar entero en cada arranque. Ahora se compila una vez al construir

@@ -205,7 +205,19 @@ def _default_pixmap(size=_SWATCH) -> QPixmap:
 
 
 def _texture_pixmap(path, size=_SWATCH) -> QPixmap | None:
-    img = QImage(str(path))
+    """A swatch of the image at *path*. Read with the allocation limit off:
+    ``QImage(path)`` refuses anything over Qt's 256 MB default, so a big
+    texture (a packaging artwork, #460) painted fine — the viewport lifts
+    the limit — but had no swatch at all."""
+    from PySide6.QtGui import QImageReader
+    limit = QImageReader.allocationLimit()
+    QImageReader.setAllocationLimit(0)
+    try:
+        reader = QImageReader(str(path))
+        reader.setAutoTransform(True)
+        img = reader.read()
+    finally:
+        QImageReader.setAllocationLimit(limit)
     if img.isNull():
         return None
     return QPixmap.fromImage(img.scaled(size, size, Qt.IgnoreAspectRatio,
