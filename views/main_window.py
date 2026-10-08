@@ -367,14 +367,14 @@ class MainWindow(QMainWindow):
         from core import autosave
         if autosave.pending(None):
             from PySide6.QtCore import QTimer
-            QTimer.singleShot(0, self._offer_untitled_recovery)
+            QTimer.singleShot(0, self, self._offer_untitled_recovery)
 
     def showEvent(self, event) -> None:  # noqa: N802 — Qt override
         super().showEvent(event)
         if not getattr(self, "_toolbars_packed", True):
             from PySide6.QtCore import QTimer
             self._toolbars_packed = True
-            QTimer.singleShot(0, self._pack_toolbars)
+            QTimer.singleShot(0, self, self._pack_toolbars)
         if not getattr(self, "_ndof_connected", False):
             self._connect_ndof()
 
@@ -1678,8 +1678,8 @@ class MainWindow(QMainWindow):
                 act.blockSignals(False)
         self._left_was = []
         self.tray.raise_()
-        QTimer.singleShot(0, self._style_dock_tabs)
-        QTimer.singleShot(0, self._place_sidebar_handle)
+        QTimer.singleShot(0, self, self._style_dock_tabs)
+        QTimer.singleShot(0, self, self._place_sidebar_handle)
 
     def _fill_panels_menu(self, menu) -> None:
         """One checkable entry per side-tray tab (Marco, 29-09: «cuando
@@ -1808,7 +1808,7 @@ class MainWindow(QMainWindow):
         children above the handle, which then vanishes behind the dock
         (Marco, 2026-09-14) — every dock change re-places (and re-raises) it."""
         from PySide6.QtCore import QTimer
-        bump = lambda *_: QTimer.singleShot(0, self._place_sidebar_handle)
+        bump = lambda *_: QTimer.singleShot(0, self, self._place_sidebar_handle)
         for d in self._sidebar_docks():
             d.visibilityChanged.connect(bump)
             d.dockLocationChanged.connect(bump)
@@ -1873,7 +1873,7 @@ class MainWindow(QMainWindow):
             self._icon_actions = [(a, (key if a is btn else k))
                                   for a, k in self._icon_actions]
             from PySide6.QtCore import QTimer
-            QTimer.singleShot(0, self._place_sidebar_handle)   # after the relayout
+            QTimer.singleShot(0, self, self._place_sidebar_handle)   # after the relayout
 
     def _toggle_clean_screen(self, on: bool) -> None:
         """AutoCAD's Ctrl+0: fold away every toolbar, dock and bar so only
@@ -1904,7 +1904,7 @@ class MainWindow(QMainWindow):
             self.menuBar().show()
             self.statusBar().show()
             from PySide6.QtCore import QTimer
-            QTimer.singleShot(0, self._place_sidebar_handle)
+            QTimer.singleShot(0, self, self._place_sidebar_handle)
 
     def _clean_screen_exit_button(self):
         """A small «Exit clean screen» button floating at the viewport's
@@ -1989,8 +1989,8 @@ class MainWindow(QMainWindow):
         btn.clicked.connect(lambda: act.setChecked(not act.isChecked()))
         self._left_handle = btn
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(0, self._style_dock_tabs)
-        QTimer.singleShot(0, self._place_sidebar_handle)
+        QTimer.singleShot(0, self, self._style_dock_tabs)
+        QTimer.singleShot(0, self, self._place_sidebar_handle)
 
     def _side_docks(self, area) -> list:
         return [d for d in self._sidebar_docks()
@@ -2022,7 +2022,7 @@ class MainWindow(QMainWindow):
         for d in self._sidebar_docks():
             if d.property("ingetrazo_titles") is None:
                 d.setProperty("ingetrazo_titles", True)
-                bump = lambda *_a: QTimer.singleShot(0, self._style_dock_tabs)
+                bump = lambda *_a: QTimer.singleShot(0, self, self._style_dock_tabs)
                 d.visibilityChanged.connect(bump)
                 d.dockLocationChanged.connect(bump)
             # Tabbed with others, Qt's tab bar already names it: an empty
@@ -2075,8 +2075,8 @@ class MainWindow(QMainWindow):
             act.blockSignals(True)
             act.setChecked(True)
             act.blockSignals(False)
-        QTimer.singleShot(0, self._style_dock_tabs)
-        QTimer.singleShot(0, self._place_sidebar_handle)
+        QTimer.singleShot(0, self, self._style_dock_tabs)
+        QTimer.singleShot(0, self, self._place_sidebar_handle)
 
     def _set_left_sidebar_visible(self, on: bool) -> None:
         """Ctrl+F6 / the left handle: the trays on the left fold away and
@@ -2096,7 +2096,7 @@ class MainWindow(QMainWindow):
         btn = getattr(self, "_left_handle", None)
         if btn is not None:
             btn.setIcon(tool_icon("side_expand" if on else "side_collapse"))
-        QTimer.singleShot(0, self._place_sidebar_handle)
+        QTimer.singleShot(0, self, self._place_sidebar_handle)
 
     def _side_dock_event(self, obj, event) -> bool:
         """The drag-a-tab-to-the-other-side part of the event filter: True
@@ -2105,7 +2105,7 @@ class MainWindow(QMainWindow):
         t = event.type()
         if obj is self:
             if t == QEvent.ChildAdded:
-                QTimer.singleShot(0, self._style_dock_tabs)
+                QTimer.singleShot(0, self, self._style_dock_tabs)
             return False
         is_bar = bool(obj.property("ingetrazo_watched")) \
             if hasattr(obj, "property") else False
