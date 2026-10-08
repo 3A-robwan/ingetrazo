@@ -202,6 +202,43 @@ is logged once and removed, never breaking the frame or the cursor; the
 painter state is saved and restored around every overlay; document data
 that is not JSON-safe is dropped on save rather than failing it.
 
+### Managing community extensions
+
+**Extensions ▸ Manage extensions…** reads the community catalog from
+[`ingetrazo-extensions`](https://github.com/ingelibre/ingetrazo-extensions),
+downloads individual Python files or ZIP packages, and installs them in the
+per-user plugins directory. The manager separates browsing from the list of
+installed catalog extensions; both views support text and tag filtering.
+Catalog data is cached locally: the manager shows the last cached catalog
+immediately and refreshes it in the background. If GitHub is unavailable, the
+last valid cache remains usable and its refresh time is shown. Catalog sorting
+includes name, reviewed status, installed state, and available updates; sorting
+by update date is available only when the catalog supplies per-extension
+dates. The manager shows installed and available versions for updates, and
+warns when an extension's tested IngeTrazo version is substantially older.
+Each entry shows its license and links to the author's repository before
+installation. Entries not in the maintainer-reviewed hash list are labelled
+as Community; assume that exact catalog version has not been reviewed by an
+IngeTrazo maintainer.
+Extensions requiring a newer IngeTrazo version cannot be installed or enabled.
+
+Each download is checked against the catalog's SHA-256 before it is installed.
+The manager marks an extension as reviewed only when its hash matches the
+maintainer's entry in `reviewed.toml`.
+
+Installed catalog extensions can be updated, enabled, disabled, or uninstalled
+from the manager. Update availability is shown as soon as the catalog is
+loaded; extension package files are downloaded only after choosing Download or
+Update. These changes take effect after restarting IngeTrazo because
+extensions register tools and UI during startup. Extensions are Python code:
+install only extensions whose source and publisher you trust. The checksum
+detects content that differs from the catalog; it is not a sandbox or a
+guarantee that code is safe.
+
+If an installed extension fails to load at startup, its manager entry shows
+the load error and offers actions to disable it, open its folder, and open
+IngeTrazo's log folder for the full traceback.
+
 ### Where your interface goes
 
 The side tray is one place, not the only one. Pick by how the user works
@@ -308,6 +345,6 @@ Wilson's Windowizer 3 by Bane Andreev, an architect, written with AI help.
 - Side-panel registration, document data, viewport overlays and snap
   providers — **done** (`setup(app)`, above).
 - Plugin manifest (`plugin.toml`) for metadata and dependencies.
-- Plugin manager UI (install, enable, disable, update) — after the API
-  stabilises; a package format would freeze the API too early (see the
-  discussion in PR #1).
+- Plugin manager UI (install, enable, disable, update) — **done**; it uses
+  the community catalog without imposing a package format on the extension
+  API.

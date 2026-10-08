@@ -7,6 +7,14 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Añadido
+- **Gestor de extensiones** (Extensiones → Gestionar extensiones…, #452,
+  @kagehak): explora el catálogo de ingetrazo.com con búsqueda, etiquetas
+  y filtro de revisadas; instala, actualiza, desactiva y desinstala con un
+  clic. Cada descarga se comprueba con el SHA-256 del catálogo antes de
+  instalar nada; se ven la licencia, el repositorio y si esa versión exacta
+  fue revisada por quien mantiene IngeTrazo («Comunidad» si no). Avisa
+  cuando hace falta reiniciar y, si una extensión falla al cargar, ofrece
+  desactivarla o abrir su carpeta.
 - **Navegador (el Outliner)**: una pestaña nueva de la barra
   lateral con todos los grupos y componentes del modelo en árbol, a
   cualquier profundidad, bajo el nombre del documento. Cada fila lleva un

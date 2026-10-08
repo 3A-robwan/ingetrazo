@@ -2297,6 +2297,12 @@ class MainWindow(QMainWindow):
         self._ext_anchor = ext_menu.addSeparator()
         self._add_example_extensions_menu(ext_menu)
 
+        ext_menu.addSeparator()
+        manage_action = ext_menu.addAction(tr("Manage extensions…"))
+        manage_action.setStatusTip(tr(
+            "Browse, install and update community extensions."))
+        manage_action.triggered.connect(self._on_manage_extensions)
+
         # The on-ramp for plugin authors: their folder and the dev guide.
         ext_menu.addSeparator()
         act = ext_menu.addAction(tr("Open plugins folder"))
@@ -2337,6 +2343,8 @@ class MainWindow(QMainWindow):
         anchor = self._ext_anchor
         bars_before = set(self.findChildren(QToolBar))
         plugins, errors = discover_plugins()
+        from core.extension_manager import extension_startup_state
+        self._extension_startup_state = extension_startup_state()
 
         # Shortcuts the app already claimed (toolbar tools, menus — all built
         # before this menu): first come, first served. A plugin asking for a
@@ -2362,6 +2370,10 @@ class MainWindow(QMainWindow):
                 continue
             if not plug.tools:
                 count += 1                  # a panel-only extension counts
+        self._extension_load_errors = {
+            err.stem: {"error": err.error, "path": str(err.path)}
+            for err in errors
+        }
         for plug in plugins:
             for tool in plug.tools:
                 key = f"plugin_{plug.stem}_{type(tool).__name__}"
@@ -2404,6 +2416,12 @@ class MainWindow(QMainWindow):
                 self._show_default_trays(st)
                 self._place_new_toolbars(st)
                 self._pack_toolbars()
+
+    def _on_manage_extensions(self) -> None:
+        from views.extension_manager_dialog import ExtensionManagerDialog
+        dialog = ExtensionManagerDialog(self)
+        dialog.exec()
+        dialog.deleteLater()
 
     @staticmethod
     def example_extensions() -> list:
