@@ -128,8 +128,17 @@ jobs:
         shell: bash
         env:
           TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          POLICY: ${{ vars.SIGNPATH_POLICY }}
         run: |
-          if [ -n "$TOKEN" ]; then echo "on=true" >> "$GITHUB_OUTPUT"; else echo "Sin SIGNPATH_API_TOKEN: sale sin firmar"; fi
+          if [ -z "$TOKEN" ]; then
+            echo "Sin SIGNPATH_API_TOKEN: sale sin firmar"
+          elif [[ "$GITHUB_REF" == refs/tags/* && "$POLICY" != release-signing ]]; then
+            # Una release con el certificado de prueba no sirve: Windows no
+            # confía en él. Mejor sin firmar, como antes.
+            echo "::warning::Release sin SIGNPATH_POLICY=release-signing: sale sin firmar"
+          else
+            echo "on=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Subir los .exe para firmar
         id: exe-sin-firmar
