@@ -2620,5 +2620,8 @@
  "Figure": "Personnage",
  "{key}: kept for «{kept}», taken from «{dropped}»": "{key} : gardé pour « {kept} », retiré de « {dropped} »",
  "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "Le fichier donnait la même touche à plusieurs commandes ; une touche partagée ne marche pour aucune, chacune reste donc à la première :",
- "Browser": "Navigateur"
+ "Browser": "Navigateur",
+ "{n} attempts in a row failed — stopping here. Rephrase the request or type \"continue\" to let it try again.": "{n} tentatives d’affilée ont échoué — je m’arrête ici. Reformulez la demande ou tapez « continue » pour réessayer.",
+ "The local server is loading the model — the first answer takes longer.": "Le serveur local charge le modèle — la première réponse prend plus de temps.",
+ "{model} is a small model and often fails at writing code. A code model works much better, e.g. {suggested} (ollama pull {suggested}).": "{model} est un petit modèle qui échoue souvent à écrire du code. Un modèle de code fonctionne bien mieux, par ex. {suggested} (ollama pull {suggested})."
 }

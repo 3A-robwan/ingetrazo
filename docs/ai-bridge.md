@@ -102,7 +102,7 @@ proveedor se detecta solo por el prefijo, la convención de IngePresupuestos:
 | `sk-or-` | OpenRouter | anthropic/claude-sonnet-5 |
 | `AIza` | Gemini | gemini-2.5-flash |
 | `sk-` | OpenAI | gpt-4o |
-| *(vacía)* | Ollama local | llama3.2 |
+| *(vacía)* | Ollama local | qwen2.5-coder:7b |
 
 Escribe qué quieres ("dibuja una casa de 6×4 con techo a dos aguas") y el
 asistente actúa por recetas de Python transaccionales — cada acción es un

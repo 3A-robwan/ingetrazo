@@ -2458,5 +2458,8 @@
  "Switch to X-ray, or back to the style you were in.": "Przełącz na prześwietlenie lub wróć do poprzedniego stylu.",
  "Back edges": "Tylne krawędzie",
  "Draw the edges hidden behind faces as dashed lines.": "Narysuj krawędzie ukryte za ścianami jako linie przerywane.",
- "The Polygon properties example extension: area, centroid and second moments of a face.": "Przykładowe rozszerzenie Właściwości wielokąta: pole powierzchni, środek ciężkości i momenty bezwładności ściany."
+ "The Polygon properties example extension: area, centroid and second moments of a face.": "Przykładowe rozszerzenie Właściwości wielokąta: pole powierzchni, środek ciężkości i momenty bezwładności ściany.",
+ "{n} attempts in a row failed — stopping here. Rephrase the request or type \"continue\" to let it try again.": "{n} prób z rzędu nie powiodło się — zatrzymuję się. Przeformułuj prośbę lub wpisz \"kontynuuj\", aby spróbować ponownie.",
+ "The local server is loading the model — the first answer takes longer.": "Serwer lokalny wczytuje model — pierwsza odpowiedź trwa dłużej.",
+ "{model} is a small model and often fails at writing code. A code model works much better, e.g. {suggested} (ollama pull {suggested}).": "{model} to mały model i często myli się przy pisaniu kodu. Model do kodu działa znacznie lepiej, np. {suggested} (ollama pull {suggested})."
 }

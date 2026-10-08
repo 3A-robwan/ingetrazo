@@ -2610,5 +2610,8 @@
  "Pick edges, faces and objects. Shift+click adds or takes away, Ctrl+click adds, Shift+Ctrl+click takes away; the same with a box.": "Pilih tepi, bidang, dan objek. Shift+klik menambah atau mengurangi, Ctrl+klik menambah, Shift+Ctrl+klik mengurangi; sama halnya dengan kotak pilihan.",
  "Render the model in Blender, from the Render tab of the side tray.": "Render model di Blender, dari tab Render pada baki samping.",
  "Show or hide this tab of the side tray.": "Tampilkan atau sembunyikan tab ini pada baki samping.",
- "Start the local bridge through which an AI agent (MCP) drives the open document.": "Mulai jembatan lokal tempat agen AI (MCP) menjalankan dokumen yang terbuka."
+ "Start the local bridge through which an AI agent (MCP) drives the open document.": "Mulai jembatan lokal tempat agen AI (MCP) menjalankan dokumen yang terbuka.",
+ "{n} attempts in a row failed — stopping here. Rephrase the request or type \"continue\" to let it try again.": "{n} percobaan berturut-turut gagal — berhenti di sini. Ubah permintaan atau ketik \"lanjut\" untuk mencoba lagi.",
+ "The local server is loading the model — the first answer takes longer.": "Server lokal sedang memuat model — jawaban pertama butuh waktu lebih lama.",
+ "{model} is a small model and often fails at writing code. A code model works much better, e.g. {suggested} (ollama pull {suggested}).": "{model} adalah model kecil dan sering gagal menulis kode. Model kode jauh lebih baik, misalnya {suggested} (ollama pull {suggested})."
 }

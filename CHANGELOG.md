@@ -158,6 +158,14 @@ follow [SemVer](https://semver.org).
 - **Empujar/Tirar: el toque de Ctrl se arma al soltar la tecla**, y la
   barra de estado dice si deja la cara de partida, así Ctrl+Z u otro atajo
   ya no lo cambian por el camino (#322, #345, @pacaeiro).
+- **Asistente IA con modelos locales** (#461, vídeo de revisión de
+  Rafael): el modelo de Ollama por defecto es ahora `qwen2.5-coder:7b`, un
+  modelo de código, en vez de `llama3.2`; la primera petición avisa de que
+  el servidor local está cargando el modelo y, si el elegido es pequeño,
+  sugiere uno de código. Tras **3 intentos fallidos seguidos** el
+  asistente se detiene y devuelve el control (antes reintentaba hasta 12
+  veces); «continúa» lo retoma. Nueva receta **`box()`** para cajas y
+  cubos, y el recetario pide usar `box` y `house` antes que armar a mano.
 
 ### Rendimiento
 - **Los modelos enormes abren 3× más rápido, guardan 3,6× más rápido y
@@ -224,6 +232,10 @@ follow [SemVer](https://semver.org).
   guardar 2,3 → 1,6 s solo por esto (#158, @pacaeiro).
 
 ### Corregido
+- **El asistente IA ya no rompe la vista al añadir dos veces un grupo**:
+  si el modelo hacía `groups.append(...)` con lo que `house()` o `box()`
+  ya habían agregado, el grupo quedaba repetido o, con `house()`, entraba
+  una lista y el visor dejaba de dibujar.
 - **Una textura grande ya tiene su miniatura en Materiales** (#460,
   @tomlai-git): una imagen de más de 256 MB descomprimida se pintaba bien
   pero no aparecía en el panel, porque la miniatura la leía con el límite

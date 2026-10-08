@@ -2616,5 +2616,8 @@
  "Figure": "人物",
  "{key}: kept for «{kept}», taken from «{dropped}»": "{key}：保留给「{kept}」，从「{dropped}」移除",
  "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "文件把同一个按键分配给了多个命令；共用的按键对谁都不起作用，因此每个按键只保留给第一个命令：",
- "Browser": "浏览器"
+ "Browser": "浏览器",
+ "{n} attempts in a row failed — stopping here. Rephrase the request or type \"continue\" to let it try again.": "连续 {n} 次尝试失败 — 在此停止。请换个说法，或输入“继续”让它再试一次。",
+ "The local server is loading the model — the first answer takes longer.": "本地服务器正在加载模型 — 第一次回答会慢一些。",
+ "{model} is a small model and often fails at writing code. A code model works much better, e.g. {suggested} (ollama pull {suggested}).": "{model} 是小模型，写代码时经常出错。代码模型效果好得多，例如 {suggested}（ollama pull {suggested}）。"
 }

@@ -2643,5 +2643,8 @@
  "Figure": "Figur",
  "{key}: kept for «{kept}», taken from «{dropped}»": "{key}: bleibt bei «{kept}», entfernt von «{dropped}»",
  "The file gave the same key to more than one command; a shared key works for none, so each stays with the first:": "Die Datei gab dieselbe Taste mehreren Befehlen; eine geteilte Taste funktioniert für keinen, daher bleibt jede beim ersten:",
- "Browser": "Browser"
+ "Browser": "Browser",
+ "{n} attempts in a row failed — stopping here. Rephrase the request or type \"continue\" to let it try again.": "{n} Versuche nacheinander sind fehlgeschlagen — ich halte hier an. Formuliere die Anfrage neu oder schreibe \"weiter\", um es erneut zu versuchen.",
+ "The local server is loading the model — the first answer takes longer.": "Der lokale Server lädt das Modell — die erste Antwort dauert länger.",
+ "{model} is a small model and often fails at writing code. A code model works much better, e.g. {suggested} (ollama pull {suggested}).": "{model} ist ein kleines Modell und scheitert oft beim Schreiben von Code. Ein Code-Modell funktioniert viel besser, z. B. {suggested} (ollama pull {suggested})."
 }

@@ -2724,5 +2724,8 @@
  "Restore default tabs": "Restaurar abas padrão",
  "The tabs on the left of the page: drag any tab there, or back to the right.": "As abas à esquerda da página: arraste qualquer aba para lá, ou de volta para a direita.",
  "Browser": "Navegador",
- "Properties and the Browser open, the other panels closed, all on the right in the factory order.": "Propriedades e o Navegador abertos, os outros painéis fechados, todos à direita na ordem de fábrica."
+ "Properties and the Browser open, the other panels closed, all on the right in the factory order.": "Propriedades e o Navegador abertos, os outros painéis fechados, todos à direita na ordem de fábrica.",
+ "{n} attempts in a row failed — stopping here. Rephrase the request or type \"continue\" to let it try again.": "{n} tentativas seguidas falharam — paro aqui. Reformule o pedido ou digite \"continue\" para tentar de novo.",
+ "The local server is loading the model — the first answer takes longer.": "O servidor local está carregando o modelo — a primeira resposta demora mais.",
+ "{model} is a small model and often fails at writing code. A code model works much better, e.g. {suggested} (ollama pull {suggested}).": "{model} é um modelo pequeno e costuma errar ao escrever código. Um modelo de código funciona muito melhor, p. ex. {suggested} (ollama pull {suggested})."
 }
