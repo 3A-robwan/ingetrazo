@@ -7430,21 +7430,38 @@ class Viewport(QOpenGLWidget):
         if result is None:
             return
         world, kind = result
-        pixel = self._world_to_pixel(world)
-        if pixel is None:
-            return
-        px, py = pixel
         # The same colours and words as the snap markers: a corner is the
         # endpoint green, an edge the on-edge red, a face the on-face blue
         # — the classic cue says "On edge" while you push level with one.
         from core.snap import COLOR_ENDPOINT, COLOR_ON_EDGE, COLOR_ON_FACE
-        rgb, label = {
+        palette = {
             "edge": (COLOR_ON_EDGE, "on_edge"),
             "face": (COLOR_ON_FACE, "on_face"),
             "guide_line": (COLOR_ON_EDGE, "on_line"),
             "guide_point": (COLOR_ENDPOINT, "guide_point"),
-        }.get(kind, (COLOR_ENDPOINT, "endpoint"))
+        }
+        rgb, label = palette.get(kind, (COLOR_ENDPOINT, "endpoint"))
         color = QColor.fromRgbF(*rgb, 1.0)
+        # The dotted «level with» reference line from the geometry the
+        # inference locked onto to the moving cap, dashed in that snap-kind
+        # colour. Drawn before the marker's own point is projected: a point
+        # behind the eye is dropped whole, a segment crossing it is merely
+        # clipped, and the reference must survive (Fix 3).
+        guide_provider = getattr(tool, "inference_guide_lines", None)
+        if callable(guide_provider):
+            pen = QPen(color, 1.5, Qt.DashLine)
+            pen.setDashPattern([10.0, 7.0])
+            for a, b, g_kind in guide_provider():
+                g_rgb = palette.get(g_kind, (COLOR_ENDPOINT, "endpoint"))[0]
+                pen.setColor(QColor.fromRgbF(*g_rgb, 1.0))
+                painter.setPen(pen)
+                seg = self._segment_to_pixels(a, b)
+                if seg is not None:
+                    painter.drawLine(QPointF(*seg[0]), QPointF(*seg[1]))
+        pixel = self._world_to_pixel(world)
+        if pixel is None:
+            return
+        px, py = pixel
         painter.setPen(QPen(QColor(255, 255, 255, 230), 4.0))
         painter.setBrush(Qt.NoBrush)
         painter.drawRect(QRectF(px - 6, py - 6, 12, 12))

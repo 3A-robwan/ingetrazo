@@ -193,6 +193,25 @@ follow [SemVer](https://semver.org).
   asistente se detiene y devuelve el control (antes reintentaba hasta 12
   veces); «continúa» lo retoma. Nueva receta **`box()`** para cajas y
   cubos, y el recetario pide usar `box` y `house` antes que armar a mano.
+- **Empujar responde al gesto completo**: soltar el botón después de
+  arrastrar confirma la extrusión, como en las herramientas clásicas, y el
+  ritmo clic-clic de siempre sigue intacto; Ctrl (empujar una copia) se lee
+  en el instante exacto de soltar. Cuando la distancia es demasiado pequeña,
+  el intento de confirmar —clic o soltada— avisa una vez por arrastre
+  («Empuje demasiado pequeño — arrastra más o escribe una distancia») en vez
+  de no hacer nada en silencio.
+- **La distancia sigue caliente tras confirmar**: teclear un número y Enter
+  justo después de un empuje lo sustituye — positivo mantiene el sentido,
+  negativo lo invierte — y la operación sigue ocupando un solo paso de
+  deshacer por muchos retipados, el mismo contrato que Rotar y Escalar.
+- **La línea de referencia, a la vista**: durante el arrastre, una línea
+  discontinua del color de su inferencia (verde = vértice, rojo = arista,
+  azul = cara) une el punto de referencia con la tapa que se mueve: se ve
+  por qué la distancia se detiene donde se detiene.
+- **Empujar arranca sobre la cara seleccionada**: con una sola cara
+  seleccionada, activar Push/Pull (P) la deja lista — sombreada, sin que
+  pasar el cursor por otra se la robe — y el primer clic, caiga donde
+  caiga, arranca el empuje sobre ella: el flujo clásico de preselección.
 
 ### Rendimiento
 - **Los modelos enormes abren 3× más rápido, guardan 3,6× más rápido y
@@ -259,6 +278,12 @@ follow [SemVer](https://semver.org).
   guardar 2,3 → 1,6 s solo por esto (#158, @pacaeiro).
 
 ### Corregido
+- **Empujar/Tirar muestra el resultado real mientras arrastras** (#434,
+  #458, PR #487 de @FG-RVT): al empujar o tirar parte de una cara partida,
+  las caras viejas ya no tapan el hueco ni quedan aristas cruzando las
+  paredes nuevas; la vista previa es la operación misma, aplicada una vez al
+  empezar y estirada en cada cuadro, y al soltar se confirma sin repetir el
+  cálculo.
 - **Exportar a GLB, DAE u OBJ fallaba con cualquier modelo hecho por la
   IA** («too many values to unpack», #462, @blackflash73): el recetario y
   el puente MCP pintan con `(r, g, b, 1.0)` y los exportadores leían tres

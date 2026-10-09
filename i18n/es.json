@@ -876,6 +876,7 @@
  "Office": "Oficina",
  "Offset": "Equidistancia",
  "Push limited to {value} — deeper would leave the solid": "Empuje limitado a {value}: más adentro se saldría del sólido",
+ "Too small a push — drag further or type a distance": "Empuje demasiado pequeño — arrastra más o escribe una distancia",
  "Old bricks": "Suelo de ladrillos desgastados",
  "Old brown wooden floor": "Parquet inglés marrón envejecido",
  "Old gray bricks": "Ladrillos viejos grises",

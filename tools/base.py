@@ -558,6 +558,14 @@ class Tool(ABC):
         drawn dashed like a real guide while the cursor moves (#89,
         @pacaeiro). Long segments are fine: the viewport clips them."""
         return []
+
+    def inference_guide_lines(self):
+        """``[(a, b, kind), ...]`` — reference segments drawn dashed in the
+        snap-kind colour while the tool is inferring (Push/Pull's «level with
+        that point» line from the geometry it locked onto to the moving cap).
+        Tools that infer nothing default to an empty list."""
+        return []
+
     def preview_faces(self):
         """Return ``Face`` objects to render shaded as a live solid preview.
 
