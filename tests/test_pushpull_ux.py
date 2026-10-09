@@ -1578,6 +1578,31 @@ def test_release_after_real_drag_commits():
     assert len(vp.history.undo_stack) == depth + 1
 
 
+def test_release_honours_a_tapped_keep_mode(monkeypatch):
+    # The Ctrl TAP arms "keep the base" with no key held (#322). A release
+    # commit must read Ctrl the way the commit click does — held OR tapped —
+    # or the tapped mode is silently dropped and the base moves after all.
+    from PySide6.QtWidgets import QApplication
+    monkeypatch.setattr(QApplication, "queryKeyboardModifiers",
+                        staticmethod(lambda: Qt.NoModifier))
+    scene = Scene()
+    hist = History(scene)
+    _cube(scene, hist, height=3.0)
+    vp = _DragViewport(scene)
+    PushPullTool.last_distance = None
+    tool = _pressed_tool(scene, vp)
+    tool._keep_mode = True                        # Ctrl tapped mid-drag
+    tool.on_hover(_px(vp, 150.0, 100.0))
+    assert abs(tool.extrusion - 0.5) < 1e-9
+
+    tool.on_release(vp)
+
+    assert tool.dragging is False
+    assert _top(scene, 3.5) is not None           # the new cap
+    assert _top(scene, 3.0) is not None           # the base face was kept
+    assert tool._keep_mode is False               # spent by the push it armed
+
+
 def test_release_without_motion_keeps_dragging():
     # Rule 2: the release lands on the press pixel — no motion, no commit,
     # and the click-click rhythm still works afterwards.
