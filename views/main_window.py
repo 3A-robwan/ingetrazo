@@ -2296,7 +2296,8 @@ class MainWindow(QMainWindow):
         # Plugin entries go above this mark; the static entries (examples,
         # plugins folder, guide) sit below it from the start.
         self._ext_anchor = ext_menu.addSeparator()
-        self._add_example_extensions_menu(ext_menu)
+        # The example extensions (Levels, Polygon properties, Windowizer)
+        # install from Manage extensions…, not from a submenu of their own.
 
         ext_menu.addSeparator()
         manage_action = ext_menu.addAction(tr("Manage extensions…"))
@@ -2426,86 +2427,10 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def example_extensions() -> list:
-        """``(path, title, blurb)`` of each example extension shipped with
-        the app (``examples/extensions``) — installed by the user, never
-        loaded on their own: what only some need stays out of the core."""
-        import ast
-        from core.paths import app_root
-        folder = app_root() / "examples" / "extensions"
-        out = []
-        # A single ``x.py`` or a package ``x/__init__.py`` — a bigger
-        # extension (CAM, PR #132) is a folder, and the loader takes both.
-        entries = sorted(folder.iterdir()) if folder.is_dir() else []
-        for path in entries:
-            if path.suffix == ".py" and path.is_file():
-                src = path
-            elif path.is_dir() and (path / "__init__.py").is_file():
-                src = path / "__init__.py"
-            else:
-                continue
-            try:
-                doc = ast.get_docstring(ast.parse(src.read_text("utf-8"))) or ""
-            except (OSError, SyntaxError, ValueError):
-                doc = ""
-            first, _, rest = doc.partition("\n")
-            title = first.split(" — ")[0].strip() or path.stem
-            blurb = rest.strip().split("\n\n")[0].replace("\n", " ")
-            out.append((path, title, blurb))
-        return out
-
-    def _add_example_extensions_menu(self, ext_menu) -> None:
-        """Extensions ▸ Example extensions: each one ticked when installed;
-        a click installs it into the user's plugins folder, or removes it.
-        Takes effect at the next start, like any plugin."""
-        examples = self.example_extensions()
-        if not examples:
-            return
-        from PySide6.QtWidgets import QMenu
-        from core.extensions import user_plugins_dir
-        ext_menu.addSeparator()
-        sub = QMenu(tr("Example extensions"), ext_menu)
-        ext_menu.addMenu(sub)
-        for path, title, blurb in examples:
-            act = sub.addAction(title)
-            act.setCheckable(True)
-            act.setChecked((user_plugins_dir() / path.name).exists())
-            act.setToolTip(blurb)
-            act.setStatusTip(blurb)
-            act.toggled.connect(
-                lambda on, p=path, t=title: self._toggle_example_extension(
-                    p, t, on))
-        sub.setToolTipsVisible(True)
-
-    def _toggle_example_extension(self, path, title: str, on: bool) -> None:
-        import shutil
-        from core.extensions import user_plugins_dir
-        target = user_plugins_dir() / path.name
-        try:
-            if on:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                if path.is_dir():
-                    shutil.rmtree(target, ignore_errors=True)
-                    shutil.copytree(path, target, ignore=shutil.ignore_patterns(
-                        "__pycache__", "*.pyc"))
-                else:
-                    shutil.copyfile(path, target)
-                msg = tr("«{name}» installed. Restart IngeTrazo to use it.",
-                         name=title)
-            elif target.is_dir():
-                shutil.rmtree(target)
-                msg = tr("«{name}» removed. Restart IngeTrazo to unload it.",
-                         name=title)
-            else:
-                target.unlink(missing_ok=True)
-                msg = tr("«{name}» removed. Restart IngeTrazo to unload it.",
-                         name=title)
-        except OSError as exc:
-            QMessageBox.warning(self, tr("Example extensions"), str(exc))
-            return
-        QMessageBox.information(self, tr("Example extensions"), msg)
-
-    PLUGIN_GUIDE_URL = ("https://github.com/ingelibre/ingetrazo"
-                        "/blob/main/docs/plugins.md")
+        """``(path, title, blurb)`` of each extension shipped with the app
+        (``examples/extensions``); the extension manager installs them."""
+        from core.extension_manager import example_extension_files
+        return example_extension_files()
 
     def _on_open_plugins_folder(self) -> None:
         """Open (creating if needed) the per-user plugins directory — drop

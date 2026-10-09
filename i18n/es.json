@@ -2844,5 +2844,9 @@
  "Installed by hand · not in the catalog": "Instalada a mano · no está en el catálogo",
  "«{name}» was installed by hand. Uninstalling sets it aside instead of deleting it: it is renamed with a dot in front, in the same folder, and IngeTrazo no longer loads it.": "«{name}» se instaló a mano. Desinstalarla la aparta en vez de borrarla: se renombra con un punto delante, en la misma carpeta, e IngeTrazo deja de cargarla.",
  "«{name}» is set aside as {folder}. Restart IngeTrazo to apply the change.": "«{name}» quedó apartada como {folder}. Reinicia IngeTrazo para aplicar el cambio.",
- "Replace the copy of «{name}» installed by hand with the catalog version? The copy is set aside (renamed with a dot in front), not deleted, and the catalog version can then be updated, disabled and uninstalled from here.": "¿Reemplazar la copia de «{name}» instalada a mano por la versión del catálogo? La copia se aparta (renombrada con un punto delante), no se borra, y la del catálogo podrá actualizarse, desactivarse y desinstalarse desde aquí."
+ "Replace the copy of «{name}» installed by hand with the catalog version? The copy is set aside (renamed with a dot in front), not deleted, and the catalog version can then be updated, disabled and uninstalled from here.": "¿Reemplazar la copia de «{name}» instalada a mano por la versión del catálogo? La copia se aparta (renombrada con un punto delante), no se borra, y la del catálogo podrá actualizarse, desactivarse y desinstalarse desde aquí.",
+ "Included with IngeTrazo": "Incluida con IngeTrazo",
+ "Ships with IngeTrazo {version}": "Viene con IngeTrazo {version}",
+ "INCLUDED": "INCLUIDA",
+ "Install": "Instalar"
 }

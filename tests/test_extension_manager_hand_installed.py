@@ -164,3 +164,46 @@ def test_a_hand_plugin_the_catalog_does_not_know_can_be_uninstalled(
         dialog.close()
         dialog.deleteLater()
         app.processEvents()
+
+
+def test_an_extension_shipped_with_the_app_installs_from_the_manager(
+        tmp_path, monkeypatch):
+    # Windowizer ships inside IngeTrazo and is not in the catalog: its card
+    # says «Included with IngeTrazo», installs from the local copy (nothing
+    # downloaded) and is managed from then on. A bundled one the catalog
+    # also lists (Levels) shows once, as the catalog's.
+    bundled = manager.Extension(**{
+        **_extension(b"x", "windowizer").__dict__,
+        "name": {"en": "Windowizer"}, "license": "", "repository": "",
+        "download": "", "bundled": str(tmp_path / "src.py")})
+    (tmp_path / "src.py").write_text(TOOL_SOURCE)
+    twin = manager.Extension(**{**_extension(b"x", "niveles").__dict__,
+                                "bundled": str(tmp_path / "src.py")})
+    app = QApplication.instance() or QApplication([])
+    from views import extension_manager_dialog as dialog_module
+    catalog = [_extension(b"catalog", "niveles")]
+    _stub_catalog(monkeypatch, dialog_module, catalog)
+    monkeypatch.setattr(dialog_module, "bundled_extensions",
+                        lambda: [bundled, twin])
+    plugins = tmp_path / "plugins"
+    monkeypatch.setattr(manager, "user_plugins_dir", lambda: plugins)
+    monkeypatch.setattr(manager, "_get", lambda *_a: (_ for _ in ()).throw(
+        AssertionError("a bundled extension must not download")))
+    dialog = dialog_module.ExtensionManagerDialog()
+    try:
+        _wait_for_catalog(dialog, app)
+        assert [e.id for e in dialog._extensions] == ["niveles", "windowizer"]
+        grid = dialog._pages["browse"]["grid"]
+        row = grid.itemAt(1).widget()
+        labels = _texts(row, QLabel)
+        assert "Included with IngeTrazo" in labels
+        assert "INCLUDED" in labels
+        assert not any("Community extension" in text for text in labels)
+        assert "Install" in _texts(row, QPushButton)
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        app.processEvents()
+    manager.install_extension(bundled)
+    assert (plugins / "windowizer" / "__init__.py").read_text() == TOOL_SOURCE
+    assert manager.installed_info("windowizer") is not None

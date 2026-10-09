@@ -55,6 +55,10 @@ def _stub_catalog(monkeypatch, module, extensions, reviewed=None):
         extensions, reviewed or {}, "2026-10-07T10:00:00+00:00", False)
     monkeypatch.setattr(module, "load_cached_catalog", lambda: snapshot)
     monkeypatch.setattr(module, "refresh_catalog", lambda: snapshot)
+    if hasattr(module, "bundled_extensions"):
+        # Only the catalog under test: the extensions shipped with the app
+        # have their own test (test_extension_manager_hand_installed.py).
+        monkeypatch.setattr(module, "bundled_extensions", lambda: [])
 
 
 def _wait_for_catalog(dialog, app):
@@ -543,6 +547,7 @@ def test_unexpected_catalog_refresh_error_keeps_cached_catalog_visible(
         raise RuntimeError("unexpected parser failure")
 
     monkeypatch.setattr(dialog_module, "refresh_catalog", fail_refresh)
+    monkeypatch.setattr(dialog_module, "bundled_extensions", lambda: [])
     dialog = dialog_module.ExtensionManagerDialog()
     try:
         _wait_for_catalog(dialog, app)

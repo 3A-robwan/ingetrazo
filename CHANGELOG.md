@@ -22,6 +22,12 @@ follow [SemVer](https://semver.org).
   con un punto delante del nombre, nunca se borran) y, si están en el
   catálogo, **reemplazar por la versión del catálogo**, que desde entonces
   se actualiza, desactiva y desinstala con normalidad.
+  Las **extensiones de ejemplo** (Niveles, Propiedades del polígono,
+  Windowizer) se instalan ahora desde el gestor, no desde un submenú propio:
+  las que están en el catálogo como cualquier otra, y Windowizer como
+  «Incluida con IngeTrazo», desde la copia que trae el programa. Así se
+  activan, desactivan y desinstalan igual que las demás, y el menú
+  Extensiones queda más corto.
 - **Navegador (el Outliner)**: una pestaña nueva de la barra
   lateral con todos los grupos y componentes del modelo en árbol, a
   cualquier profundidad, bajo el nombre del documento. Cada fila lleva un

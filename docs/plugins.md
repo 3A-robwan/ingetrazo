@@ -304,8 +304,8 @@ boundary for the viewport (`reset_document_caches()`), like New or Open.
 parallel elevations and sections, and the cursor snapping to their heights
 («PA» on the tip). Idea and first version by José Castro Basso (FADU–UDELAR)
 for teaching architectural representation. It ships with the app but is not loaded:
-**Extensions ▸ Example extensions ▸ Niveles** copies it into your plugins
-folder (and removes it again); restart to load it. Features only some users need
+**Extensions ▸ Manage extensions…** installs it (and disables or uninstalls
+it again); restart to load it. Features only some users need
 belong in extensions like this one, not in the core.
 
 **A second one:** `examples/extensions/windowizer.py` — parametric windows

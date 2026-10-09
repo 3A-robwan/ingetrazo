@@ -57,6 +57,9 @@ class Extension:
     tags: tuple[str, ...]
     screenshot: str | None = None
     updated_at: str | None = None
+    #: An extension that ships inside IngeTrazo (``examples/extensions``):
+    #: the local file or folder it installs from — nothing is downloaded.
+    bundled: str | None = None
 
 
 @dataclass(frozen=True)
@@ -416,6 +419,72 @@ def _set_aside(path: Path) -> Path:
     return target
 
 
+def example_extension_files() -> list[tuple[Path, str, str]]:
+    """``(path, title, blurb)`` of each extension shipped with the app in
+    ``examples/extensions`` — never loaded on their own: what only some
+    need stays out of the core, and the manager installs it on request."""
+    import ast
+    from core.paths import app_root
+    folder = app_root() / "examples" / "extensions"
+    out = []
+    # A single ``x.py`` or a package ``x/__init__.py`` — a bigger
+    # extension (CAM, PR #132) is a folder, and the loader takes both.
+    entries = sorted(folder.iterdir()) if folder.is_dir() else []
+    for path in entries:
+        if path.suffix == ".py" and path.is_file():
+            src = path
+        elif path.is_dir() and (path / "__init__.py").is_file():
+            src = path / "__init__.py"
+        else:
+            continue
+        try:
+            doc = ast.get_docstring(ast.parse(src.read_text("utf-8"))) or ""
+        except (OSError, SyntaxError, ValueError):
+            doc = ""
+        first, _, rest = doc.partition("\n")
+        title = first.split(" — ")[0].strip() or path.stem
+        blurb = rest.strip().split("\n\n")[0].replace("\n", " ")
+        out.append((path, title, blurb))
+    return out
+
+
+def _bundle_digest(path: Path) -> str:
+    """SHA-256 of a bundled extension: the file, or every file of the
+    package in a fixed order — it changes when an update of IngeTrazo
+    brings a new version, so the manager offers to update the copy."""
+    h = hashlib.sha256()
+    if path.is_file():
+        h.update(path.read_bytes())
+        return h.hexdigest()
+    for file in sorted(p for p in path.rglob("*") if p.is_file()
+                       and "__pycache__" not in p.parts
+                       and p.suffix != ".pyc"):
+        h.update(file.relative_to(path).as_posix().encode())
+        h.update(b"\0")
+        h.update(file.read_bytes())
+    return h.hexdigest()
+
+
+def bundled_extensions() -> list[Extension]:
+    """The extensions shipped with IngeTrazo, as manager entries: installed
+    from the local copy, managed like a catalog one from then on (update,
+    disable, uninstall). A catalog entry with the same id wins over it."""
+    from core.version import __version__
+    out = []
+    for path, title, blurb in example_extension_files():
+        ident = path.stem if path.suffix == ".py" else path.name
+        try:
+            digest = _bundle_digest(path)
+        except OSError:
+            continue
+        out.append(Extension(
+            id=ident, version=__version__, author="IngeTrazo", license="",
+            repository="", download="", sha256=digest,
+            minimum_version=__version__, name={"en": title},
+            summary={"en": blurb}, tags=(), bundled=str(path)))
+    return out
+
+
 def hand_installed_plugins() -> list[Path]:
     """Plugins in the user folder that the manager did not install: a
     package folder without ``extension.json`` or a loose ``x.py``. Until
@@ -497,11 +566,19 @@ def install_extension(extension: Extension,
         raise ExtensionManagerError(
             f"A plugin named {extension.id!r} already exists and is not "
             "managed by the extension manager.")
-    archive_data = _get(extension.download, MAX_DOWNLOAD_BYTES)
-    digest = hashlib.sha256(archive_data).hexdigest()
-    if digest != extension.sha256:
-        raise ExtensionManagerError(
-            f"Checksum mismatch for {extension.id!r}; nothing was installed.")
+    source = Path(extension.bundled) if extension.bundled else None
+    if source is not None:
+        if not source.exists():
+            raise ExtensionManagerError(
+                f"{extension.id!r} is not shipped with this IngeTrazo.")
+        archive_data = source.read_bytes() if source.is_file() else None
+    else:
+        archive_data = _get(extension.download, MAX_DOWNLOAD_BYTES)
+        digest = hashlib.sha256(archive_data).hexdigest()
+        if digest != extension.sha256:
+            raise ExtensionManagerError(
+                f"Checksum mismatch for {extension.id!r}; nothing was "
+                "installed.")
 
     root = user_plugins_dir()
     root.mkdir(parents=True, exist_ok=True)
@@ -510,14 +587,20 @@ def install_extension(extension: Extension,
     stage = Path(tempfile.mkdtemp(prefix=f".{extension.id}-", dir=root))
     backup = root / f".{extension.id}-backup-{uuid.uuid4().hex}"
     try:
-        is_zip = zipfile.is_zipfile(io.BytesIO(archive_data))
+        if archive_data is None:            # a bundled package folder
+            shutil.copytree(source, stage, dirs_exist_ok=True,
+                            ignore=shutil.ignore_patterns(
+                                "__pycache__", "*.pyc"))
+            is_zip = False
+        else:
+            is_zip = zipfile.is_zipfile(io.BytesIO(archive_data))
         if (urllib.parse.urlsplit(extension.download).path.lower().endswith(
                 ".zip") and not is_zip):
             raise ExtensionManagerError(
                 f"{extension.id!r} did not download a valid ZIP package.")
         if is_zip:
             _extract_plugin_zip(archive_data, stage, extension.id)
-        else:
+        elif archive_data is not None:
             if not archive_data or b"\x00" in archive_data:
                 raise ExtensionManagerError(
                     f"{extension.id!r} is not a Python extension file.")

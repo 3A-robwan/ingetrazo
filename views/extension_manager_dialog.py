@@ -34,6 +34,7 @@ from core.i18n import current_language, tr
 from core.extension_manager import (
     Extension,
     ExtensionManagerError,
+    bundled_extensions,
     compatible_with_current,
     display_name,
     display_summary,
@@ -292,7 +293,7 @@ class ExtensionManagerDialog(QDialog):
 
     def _apply_catalog(self, snapshot) -> None:
         self._catalog_snapshot = snapshot
-        self._extensions = snapshot.extensions
+        self._extensions = self._with_bundled(snapshot.extensions)
         self._reviewed = snapshot.reviewed
         for key in self._pages:
             recent_index = self._pages[key]["sort"].findData("recent")
@@ -319,15 +320,27 @@ class ExtensionManagerDialog(QDialog):
         if snapshot is not None:
             self._apply_catalog(snapshot)
         elif self._catalog_snapshot is None:
+            # Offline with no cached catalog: what ships with IngeTrazo
+            # still installs from here.
+            self._extensions = self._with_bundled([])
+            for key in self._pages:
+                self._render_page(key)
             self._catalog_info.setText(
                 tr("Could not load extensions: {error}", error=str(error)))
-            for key in self._pages:
-                self._clear_cards(key)
         else:
             self._catalog_info.setText(tr(
                 "Could not refresh catalog. Showing the last cached catalog "
                 "from {date}. {error}",
                 date=self._catalog_snapshot.fetched_at, error=str(error)))
+
+    @staticmethod
+    def _with_bundled(catalog: list) -> list:
+        """The catalog plus the extensions shipped with IngeTrazo that
+        it does not list (Windowizer); a catalog entry wins over a bundled
+        one with the same id (Levels, Polygon properties)."""
+        known = {e.id for e in catalog}
+        return list(catalog) + [b for b in bundled_extensions()
+                                if b.id not in known]
 
     def _active_page_key(self) -> str:
         return "browse" if self._tabs.currentIndex() == 0 else "installed"
@@ -541,6 +554,7 @@ class ExtensionManagerDialog(QDialog):
         # The catalog's check only admits https:// — enforced here too, so
         # a tampered cache cannot hand the browser a file:// or app link.
         repository.setEnabled(extension.repository.startswith("https://"))
+        repository.setVisible(not extension.bundled)
         repository.clicked.connect(
             lambda _checked=False, url=extension.repository:
             QDesktopServices.openUrl(QUrl(url)))
@@ -556,8 +570,9 @@ class ExtensionManagerDialog(QDialog):
                 "border-radius: 8px; padding: 2px 6px; font-size: 10px")
             tags_row.addWidget(chip)
         image_column.addLayout(tags_row)
-        license_label = QLabel(tr("License: {license}",
-                                  license=extension.license))
+        license_label = QLabel(
+            tr("Included with IngeTrazo") if extension.bundled
+            else tr("License: {license}", license=extension.license))
         license_label.setWordWrap(True)
         license_label.setStyleSheet(
             "color: palette(text); font-weight: bold; font-size: 13px")
@@ -569,13 +584,16 @@ class ExtensionManagerDialog(QDialog):
         version_row = QHBoxLayout()
         version_row.addStretch(1)
         versions = QLabel(
+            tr("Ships with IngeTrazo {version}", version=extension.version)
+            if extension.bundled else
             tr("v{version} · Tested with IngeTrazo {tested}",
                version=extension.version, tested=extension.minimum_version))
         versions.setStyleSheet(
             "color: palette(text); font-size: 10px; font-weight: bold")
         version_row.addWidget(versions, 0, Qt.AlignTop)
-        if reviewed:
-            badge = QLabel(tr("REVIEWED"))
+        if reviewed or extension.bundled:
+            badge = QLabel(tr("INCLUDED") if extension.bundled
+                           else tr("REVIEWED"))
             badge.setStyleSheet(
                 "color: palette(link); border: 1px solid palette(link); "
                 "border-radius: 3px; padding: 2px 5px; font-size: 9px; "
@@ -598,7 +616,7 @@ class ExtensionManagerDialog(QDialog):
         summary.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         summary.setMaximumHeight(100)
         details.addWidget(summary)
-        if not reviewed:
+        if not reviewed and not extension.bundled:
             community = QLabel(tr(
                 "Community extension — not reviewed by an IngeTrazo "
                 "maintainer."))
@@ -672,6 +690,7 @@ class ExtensionManagerDialog(QDialog):
             install = QPushButton(
                 tr("Update") if update_available
                 else tr("Up to date") if managed
+                else tr("Install") if extension.bundled
                 else tr("Download"))
             install.setEnabled(not current and (managed or not conflict))
             install.clicked.connect(
