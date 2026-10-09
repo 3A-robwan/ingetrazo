@@ -2855,5 +2855,8 @@
  "Develop an extension…": "开发扩展…",
  "Open the guide to writing extensions for IngeTrazo.": "打开为 IngeTrazo 编写扩展的指南。",
  "Replace with the version included with IngeTrazo": "替换为 IngeTrazo 附带的版本",
- "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "用 IngeTrazo 附带的版本替换手动安装的「{name}」？手动安装的副本会被放到一边（重命名为以点开头的名称），不会删除，之后附带的版本可以在这里停用和卸载。"
+ "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "用 IngeTrazo 附带的版本替换手动安装的「{name}」？手动安装的副本会被放到一边（重命名为以点开头的名称），不会删除，之后附带的版本可以在这里停用和卸载。",
+ "Parametric windows from selected faces.": "根据所选面生成参数化窗户。",
+ "Building levels as an IngeTrazo EXTENSION.": "建筑楼层，作为 IngeTrazo 的扩展。",
+ "Area, centroid and second moments of the selected faces.": "所选面的面积、形心和惯性矩。"
 }

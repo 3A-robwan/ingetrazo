@@ -207,3 +207,48 @@ def test_an_extension_shipped_with_the_app_installs_from_the_manager(
     manager.install_extension(bundled)
     assert (plugins / "windowizer" / "__init__.py").read_text() == TOOL_SOURCE
     assert manager.installed_info("windowizer") is not None
+
+
+def test_the_cards_take_as_many_columns_as_the_width_fits(
+        tmp_path, monkeypatch):
+    # Marco, 09-10: maximised, two fixed columns left an empty band at the
+    # right. One column when narrow, two at the usual size, three on a
+    # maximised Full HD window — moved, not rebuilt, on resize.
+    extensions = [_extension(f"s{i}".encode(), f"ext_{i}") for i in range(7)]
+    app = QApplication.instance() or QApplication([])
+    from views import extension_manager_dialog as dialog_module
+    _stub_catalog(monkeypatch, dialog_module, extensions)
+    monkeypatch.setattr(manager, "user_plugins_dir", lambda: tmp_path)
+    dialog = dialog_module.ExtensionManagerDialog()
+    try:
+        _wait_for_catalog(dialog, app)
+        dialog.show()
+        grid = dialog._pages["browse"]["grid"]
+        for width, columns in ((700, 1), (1180, 2), (1920, 3)):
+            dialog.resize(width, 800)
+            app.processEvents()
+            used = {grid.getItemPosition(i)[1] for i in range(grid.count())}
+            assert used == set(range(columns)), (width, used)
+            assert grid.count() == len(extensions)
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        app.processEvents()
+
+
+def test_an_included_extension_shows_its_own_preview_and_a_translated_line(
+        tmp_path, monkeypatch):
+    from core import paths
+    from core.i18n import current_language
+    root = tmp_path / "app"
+    examples = root / "examples" / "extensions"
+    examples.mkdir(parents=True)
+    (examples / "demo.py").write_text(
+        '"""Demo — parametric windows from selected faces.\n\nHow to."""\n')
+    (examples / "demo.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    monkeypatch.setattr(paths, "app_root", lambda: root)
+    demo, = manager.bundled_extensions()
+    assert demo.screenshot == str(examples / "demo.png")
+    assert demo.summary["en"] == "Parametric windows from selected faces."
+    lang = current_language().split("-")[0]
+    assert lang in demo.summary            # what the card shows, via tr()

@@ -412,6 +412,10 @@ class Tool(ABC):
     #: which the tooltip and F3 already show beside it (Blender's
     #: descriptions). English; it goes through ``tr`` where it is shown.
     description: str | None = None
+    #: Where a plugin tool's entry goes in the Extensions menu among the
+    #: others: lower first, the same keeps the folder order. The Python
+    #: Console, a tool for developers, goes after the model tools.
+    menu_order: int = 0
     # Drawing tools snap to geometry and show the snap markers/tooltips
     # (Endpoint, On Edge, On Face, ...). Tools that only pick existing
     # geometry (Select, Push/Pull) set this False: no snap engine, no markers.

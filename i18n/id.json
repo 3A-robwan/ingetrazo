@@ -2738,5 +2738,8 @@
  "Develop an extension…": "Kembangkan ekstensi…",
  "Open the guide to writing extensions for IngeTrazo.": "Membuka panduan menulis ekstensi untuk IngeTrazo.",
  "Replace with the version included with IngeTrazo": "Ganti dengan versi yang disertakan IngeTrazo",
- "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "Ganti salinan «{name}» yang dipasang manual dengan versi yang disertakan IngeTrazo? Salinan itu disisihkan (diberi titik di depan namanya), tidak dihapus, dan versi yang disertakan nantinya bisa dinonaktifkan dan dicopot dari sini."
+ "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "Ganti salinan «{name}» yang dipasang manual dengan versi yang disertakan IngeTrazo? Salinan itu disisihkan (diberi titik di depan namanya), tidak dihapus, dan versi yang disertakan nantinya bisa dinonaktifkan dan dicopot dari sini.",
+ "Parametric windows from selected faces.": "Jendela parametrik dari bidang yang dipilih.",
+ "Building levels as an IngeTrazo EXTENSION.": "Level bangunan, sebagai EKSTENSI IngeTrazo.",
+ "Area, centroid and second moments of the selected faces.": "Luas, titik berat, dan momen inersia bidang yang dipilih."
 }

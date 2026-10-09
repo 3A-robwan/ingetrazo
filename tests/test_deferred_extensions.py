@@ -86,3 +86,13 @@ def test_deferred_plugin_entries_sit_above_the_menus_own_entries(deferred):
         if entry in texts:
             assert texts.index(entry) < fixed, texts
     assert texts[-1] == "Develop an extension…", texts
+
+
+def test_the_python_console_comes_after_the_model_tools(deferred):
+    # Marco, 09-10: Model Info, Solid Inspector, then the Python Console —
+    # a tool for developers — not in between by file name.
+    deferred.load_extensions()
+    texts = _menu_texts(deferred)
+    order = [texts.index(t) for t in ("Model Info", "Solid Inspector",
+                                      "Python Console") if t in texts]
+    assert order == sorted(order) and len(order) == 3, texts

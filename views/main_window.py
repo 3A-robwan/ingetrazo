@@ -2376,28 +2376,30 @@ class MainWindow(QMainWindow):
             err.stem: {"error": err.error, "path": str(err.path)}
             for err in errors
         }
-        for plug in plugins:
-            for tool in plug.tools:
-                key = f"plugin_{plug.stem}_{type(tool).__name__}"
-                self._tools[key] = tool
-                action = QAction(tr(tool.name), self)
-                if tool.description:
-                    action.setStatusTip(tr(tool.description))
-                if tool.shortcut:
-                    seq = QKeySequence(tool.shortcut).toString()
-                    if seq and seq not in taken:
-                        action.setShortcut(QKeySequence(tool.shortcut))
-                        from views.shortcuts import set_tooltip
-                        set_tooltip(action, tr(tool.name))
-                        taken.add(seq)
-                    else:
-                        log.warning("plugin %r wants shortcut %r, already "
-                                    "taken; entry added without it",
-                                    plug.stem, tool.shortcut)
-                action.triggered.connect(
-                    lambda _c, k=key: self._activate_plugin_tool(k))
-                ext_menu.insertAction(anchor, action)
-                count += 1
+        entries = sorted(((plug, tool) for plug in plugins
+                          for tool in plug.tools),
+                         key=lambda pt: getattr(pt[1], "menu_order", 0))
+        for plug, tool in entries:
+            key = f"plugin_{plug.stem}_{type(tool).__name__}"
+            self._tools[key] = tool
+            action = QAction(tr(tool.name), self)
+            if tool.description:
+                action.setStatusTip(tr(tool.description))
+            if tool.shortcut:
+                seq = QKeySequence(tool.shortcut).toString()
+                if seq and seq not in taken:
+                    action.setShortcut(QKeySequence(tool.shortcut))
+                    from views.shortcuts import set_tooltip
+                    set_tooltip(action, tr(tool.name))
+                    taken.add(seq)
+                else:
+                    log.warning("plugin %r wants shortcut %r, already "
+                                "taken; entry added without it",
+                                plug.stem, tool.shortcut)
+            action.triggered.connect(
+                lambda _c, k=key: self._activate_plugin_tool(k))
+            ext_menu.insertAction(anchor, action)
+            count += 1
 
         for err in errors:
             action = QAction(tr("\u26a0 {name} (load error)", name=err.stem), self)

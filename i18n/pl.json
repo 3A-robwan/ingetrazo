@@ -2578,5 +2578,8 @@
  "Develop an extension…": "Opracuj rozszerzenie…",
  "Open the guide to writing extensions for IngeTrazo.": "Otwiera przewodnik po pisaniu rozszerzeń dla IngeTrazo.",
  "Replace with the version included with IngeTrazo": "Zastąp wersją dołączoną do IngeTrazo",
- "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "Zastąpić ręcznie zainstalowaną kopię «{name}» wersją dołączoną do IngeTrazo? Kopia zostanie odłożona na bok (z kropką na początku nazwy), nie usunięta, a dołączoną wersję będzie można stąd wyłączać i odinstalowywać."
+ "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "Zastąpić ręcznie zainstalowaną kopię «{name}» wersją dołączoną do IngeTrazo? Kopia zostanie odłożona na bok (z kropką na początku nazwy), nie usunięta, a dołączoną wersję będzie można stąd wyłączać i odinstalowywać.",
+ "Parametric windows from selected faces.": "Okna parametryczne z zaznaczonych ścian.",
+ "Building levels as an IngeTrazo EXTENSION.": "Poziomy budynku jako ROZSZERZENIE IngeTrazo.",
+ "Area, centroid and second moments of the selected faces.": "Pole, środek ciężkości i momenty bezwładności zaznaczonych ścian."
 }

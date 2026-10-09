@@ -2849,5 +2849,8 @@
  "Develop an extension…": "Desenvolver uma extensão…",
  "Open the guide to writing extensions for IngeTrazo.": "Abre o guia para escrever extensões do IngeTrazo.",
  "Replace with the version included with IngeTrazo": "Substituir pela versão incluída no IngeTrazo",
- "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "Substituir a cópia de «{name}» instalada manualmente pela versão incluída no IngeTrazo? A cópia é posta de lado (renomeada com um ponto na frente), não apagada, e a versão incluída poderá então ser desativada e desinstalada daqui."
+ "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "Substituir a cópia de «{name}» instalada manualmente pela versão incluída no IngeTrazo? A cópia é posta de lado (renomeada com um ponto na frente), não apagada, e a versão incluída poderá então ser desativada e desinstalada daqui.",
+ "Parametric windows from selected faces.": "Janelas paramétricas a partir das faces selecionadas.",
+ "Building levels as an IngeTrazo EXTENSION.": "Níveis do edifício, como EXTENSÃO do IngeTrazo.",
+ "Area, centroid and second moments of the selected faces.": "Área, centroide e momentos de inércia das faces selecionadas."
 }

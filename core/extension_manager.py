@@ -423,6 +423,14 @@ def example_extension_files() -> list[tuple[Path, str, str]]:
     """``(path, title, blurb)`` of each extension shipped with the app in
     ``examples/extensions`` — never loaded on their own: what only some
     need stays out of the core, and the manager installs it on request."""
+    return [(path, title, blurb)
+            for path, title, blurb, _tagline in _example_entries()]
+
+
+def _example_entries() -> list[tuple[Path, str, str, str]]:
+    """``(path, title, blurb, tagline)``: the tagline is what the first
+    docstring line says after the title («Windowizer — parametric windows
+    from selected faces.»), the card's one-line summary."""
     import ast
     from core.paths import app_root
     folder = app_root() / "examples" / "extensions"
@@ -442,10 +450,25 @@ def example_extension_files() -> list[tuple[Path, str, str]]:
         except (OSError, SyntaxError, ValueError):
             doc = ""
         first, _, rest = doc.partition("\n")
-        title = first.split(" — ")[0].strip() or path.stem
+        title, _, tagline = first.partition(" — ")
+        title = title.strip() or path.stem
         blurb = rest.strip().split("\n\n")[0].replace("\n", " ")
-        out.append((path, title, blurb))
+        tagline = tagline.strip()
+        tagline = (tagline[:1].upper() + tagline[1:]) if tagline else blurb
+        out.append((path, title, blurb, tagline))
     return out
+
+
+def _example_screenshot(path: Path) -> str | None:
+    """The preview shipped beside an example: ``windowizer.png`` next to
+    ``windowizer.py``, or ``screenshot.png`` inside a package."""
+    folder, stem = ((path, "screenshot") if path.is_dir()
+                    else (path.parent, path.stem))
+    for suffix in (".png", ".jpg", ".jpeg", ".webp"):
+        image = folder / f"{stem}{suffix}"
+        if image.is_file():
+            return str(image)
+    return None
 
 
 def _bundle_digest(path: Path) -> str:
@@ -469,9 +492,11 @@ def bundled_extensions() -> list[Extension]:
     """The extensions shipped with IngeTrazo, as manager entries: installed
     from the local copy, managed like a catalog one from then on (update,
     disable, uninstall). A catalog entry with the same id wins over it."""
+    from core.i18n import current_language, tr
     from core.version import __version__
+    lang = current_language().lower().replace("_", "-").split("-", 1)[0]
     out = []
-    for path, title, blurb in example_extension_files():
+    for path, title, _blurb, tagline in _example_entries():
         ident = path.stem if path.suffix == ".py" else path.name
         try:
             digest = _bundle_digest(path)
@@ -481,7 +506,8 @@ def bundled_extensions() -> list[Extension]:
             id=ident, version=__version__, author="IngeTrazo", license="",
             repository="", download="", sha256=digest,
             minimum_version=__version__, name={"en": title},
-            summary={"en": blurb}, tags=(), bundled=str(path)))
+            summary={"en": tagline, lang: tr(tagline)}, tags=(),
+            screenshot=_example_screenshot(path), bundled=str(path)))
     return out
 
 

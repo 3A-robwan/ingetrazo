@@ -6,7 +6,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import (QObject, QPoint, QRunnable, Qt, QStandardPaths,
+from PySide6.QtCore import (QEvent, QObject, QPoint, QRunnable, Qt,
+                            QStandardPaths,
                             QThreadPool, QTimer, QUrl, Signal)
 from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
@@ -65,6 +66,10 @@ _MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024
 _IMAGE_SIZE = (256, 160)  # 16:10
 _ROW_MAX_HEIGHT = 300
 _ROW_MAX_WIDTH = 660
+#: The width a column of cards asks for: two at the usual size, three on a
+#: maximised Full HD window, more on a wider one — no empty band at the
+#: right (Marco, 09-10).
+_COLUMN_WIDTH = 560
 
 
 
@@ -256,6 +261,7 @@ class ExtensionManagerDialog(QDialog):
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         scroll.setWidget(cards)
+        scroll.viewport().installEventFilter(self)   # columns follow width
         page_layout.addWidget(scroll, 1)
 
         self._pages[key] = {
@@ -467,13 +473,11 @@ class ExtensionManagerDialog(QDialog):
         self._clear_cards(key)
         extensions = self._filtered_extensions(key)
         language = current_language()
-        for index, extension in enumerate(extensions):
-            row = self._make_row(extension, language, page["cards"], key)
-            self._pages[key]["grid"].addWidget(row, index // 2, index % 2)
+        rows = [self._make_row(extension, language, page["cards"], key)
+                for extension in extensions]
         unknown = self._hand_only(key) if key == "installed" else []
-        for offset, path in enumerate(unknown, start=len(extensions)):
-            row = self._make_hand_row(path, page["cards"])
-            self._pages[key]["grid"].addWidget(row, offset // 2, offset % 2)
+        rows += [self._make_hand_row(path, page["cards"]) for path in unknown]
+        self._place_cards(key, rows)
         if key == self._active_page_key():
             total = (sum(installed_info(e.id) is not None
                          or installation_conflict(e.id)
@@ -485,6 +489,36 @@ class ExtensionManagerDialog(QDialog):
                    shown=len(extensions) + len(unknown), total=total)
                 + self._catalog_status_suffix())
             self._load_visible_images()
+
+    def _columns(self, key: str) -> int:
+        """How many columns of cards fit the page's width."""
+        width = self._pages[key]["scroll"].viewport().width()
+        return max(1, width // _COLUMN_WIDTH)
+
+    def _place_cards(self, key: str, rows: list) -> None:
+        """Lay the cards out in as many columns as fit, in order."""
+        grid = self._pages[key]["grid"]
+        columns = self._columns(key)
+        for column in range(max(columns, grid.columnCount())):
+            grid.setColumnStretch(column, 1 if column < columns else 0)
+        for index, row in enumerate(rows):
+            grid.addWidget(row, index // columns, index % columns)
+        self._pages[key]["columns"] = columns
+
+    def eventFilter(self, obj, event) -> bool:
+        # A wider or narrower card area: the same cards, in the columns
+        # that fit now — moved, not rebuilt (their images stay).
+        if event.type() == QEvent.Resize:
+            for key, page in getattr(self, "_pages", {}).items():
+                if (obj is page["scroll"].viewport()
+                        and self._columns(key) != page.get("columns")):
+                    grid = page["grid"]
+                    rows = [grid.itemAt(i).widget()
+                            for i in range(grid.count())]
+                    for row in rows:
+                        grid.removeWidget(row)
+                    self._place_cards(key, rows)
+        return super().eventFilter(obj, event)
 
     def _on_tab_changed(self, _index: int) -> None:
         self._render_page(self._active_page_key())
@@ -770,6 +804,10 @@ class ExtensionManagerDialog(QDialog):
     def _screenshot_cache(self, extension: Extension) -> Path | None:
         if not extension.screenshot:
             return None
+        if extension.bundled:
+            # Shipped beside the extension: read from disk, never fetched.
+            local = Path(extension.screenshot)
+            return local if local.is_file() else None
         base = Path(QStandardPaths.writableLocation(
             QStandardPaths.AppLocalDataLocation))
         return base / "extension-screenshots" / extension.screenshot
