@@ -874,6 +874,7 @@
  "Office": "Escritório",
  "Offset": "deslocar",
  "Push limited to {value} — deeper would leave the solid": "Empurrar limitado a {value} — mais fundo deixaria o sólido",
+ "Too small a push — drag further or type a distance": "Empurrão pequeno demais — arraste mais ou digite uma distância",
  "Old bricks": "Tijolos antigos",
  "Old brown wooden floor": "Piso de madeira marrom antigo",
  "Old gray bricks": "Tijolos cinzas antigos",

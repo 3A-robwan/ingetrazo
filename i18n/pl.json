@@ -875,6 +875,7 @@
  "Office": "Biuro",
  "Offset": "Odsunięcie",
  "Push limited to {value} — deeper would leave the solid": "Wyciąganie ograniczone do {value} — większa głębokość wykraczałaby poza bryłę",
+ "Too small a push — drag further or type a distance": "Za małe wypchnięcie — przeciągnij dalej lub wpisz odległość",
  "Old bricks": "Stare cegły",
  "Old brown wooden floor": "Stara brązowa drewniana podłoga",
  "Old gray bricks": "Stare szare cegły",

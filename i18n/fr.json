@@ -875,6 +875,7 @@
  "Office": "Bureau",
  "Offset": "Décalage",
  "Push limited to {value} — deeper would leave the solid": "Poussée limitée à {value} — plus profond sortirait du solide",
+ "Too small a push — drag further or type a distance": "Poussée trop petite — faites glisser plus loin ou tapez une distance",
  "Old bricks": "Vieilles briques",
  "Old brown wooden floor": "Vieux parquet marron",
  "Old gray bricks": "Vieilles briques grises",
