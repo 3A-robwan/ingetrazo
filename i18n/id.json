@@ -2683,5 +2683,6 @@
  "Rendering": "Render",
  "Fabrication": "Fabrikasi",
  "Productivity": "Produktivitas",
- "Education": "Pendidikan"
+ "Education": "Pendidikan",
+ "«{name}» seems to be installed by hand already, in: {folders}.\n\nIf you continue, that copy is set aside (renamed with a dot in front, not deleted) so the extension does not load twice.": "«{name}» tampaknya sudah dipasang secara manual, di: {folders}.\n\nJika dilanjutkan, salinan itu disisihkan (diganti nama dengan titik di depan, tidak dihapus) agar ekstensi tidak dimuat dua kali."
 }

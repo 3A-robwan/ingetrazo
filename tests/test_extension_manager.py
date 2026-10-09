@@ -774,3 +774,58 @@ def test_catalog_text_is_shown_as_plain_text(tmp_path, monkeypatch):
         dialog.close()
         dialog.deleteLater()
         app.processEvents()
+
+
+def _zip(files: dict) -> bytes:
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as archive:
+        for name, text in files.items():
+            archive.writestr(name, text)
+    return out.getvalue()
+
+
+def test_a_hand_installed_copy_under_another_name_is_set_aside(
+        tmp_path, monkeypatch):
+    # OpenTrace used to be unpacked by hand as «arquitetura_parametrica»;
+    # installed from the catalog as «opentrace_bim» it loaded twice.
+    monkeypatch.setattr(manager, "user_plugins_dir", lambda: tmp_path)
+    old = tmp_path / "arquitetura_parametrica"
+    (old / "nested").mkdir(parents=True)
+    for name in ("beam.py", "column.py", "slab.py", "nested/roof.py"):
+        (old / name).write_text("# old version\n")
+    (old / "__init__.py").write_text("# old entry\n")
+    other = tmp_path / "unrelated"
+    other.mkdir()
+    (other / "__init__.py").write_text(TOOL_SOURCE)
+    (other / "a.py").write_text("x = 1\n")
+    payload = _zip({f"opentrace_bim/{n}": "# new\n" for n in (
+        "__init__.py", "beam.py", "column.py", "slab.py", "nested/roof.py",
+        "walls.py")})
+    monkeypatch.setattr(manager, "_get", lambda *_a: payload)
+    extension = _extension(payload, "opentrace_bim")
+
+    asked = []
+    with pytest.raises(manager.ExtensionManagerError, match="by hand"):
+        manager.install_extension(
+            extension, confirm_manual_copies=lambda p: asked.append(p) or False)
+    assert [p.name for p in asked[0]] == ["arquitetura_parametrica"]
+    assert old.is_dir() and not (tmp_path / "opentrace_bim").exists()
+
+    manager.install_extension(extension, confirm_manual_copies=lambda p: True)
+    assert (tmp_path / "opentrace_bim" / "__init__.py").is_file()
+    assert not old.exists() and other.is_dir()           # only the copy goes
+    aside = [p for p in tmp_path.iterdir()
+             if p.name.startswith(".arquitetura_parametrica.manual-")]
+    assert len(aside) == 1 and (aside[0] / "beam.py").is_file()
+    stems = [plug.stem for plug in discover_plugins([tmp_path])[0]]
+    assert "arquitetura_parametrica" not in stems
+
+
+def test_an_identical_loose_file_counts_as_a_copy(tmp_path, monkeypatch):
+    monkeypatch.setattr(manager, "user_plugins_dir", lambda: tmp_path)
+    (tmp_path / "my_old_name.py").write_text(TOOL_SOURCE)
+    payload = TOOL_SOURCE.encode()
+    monkeypatch.setattr(manager, "_get", lambda *_a: payload)
+    with pytest.raises(manager.ExtensionManagerError, match="my_old_name.py"):
+        manager.install_extension(_extension(payload))
+    assert not (tmp_path / "sample").exists()

@@ -14,7 +14,9 @@ follow [SemVer](https://semver.org).
   instalar nada; se ven la licencia, el repositorio y si esa versión exacta
   fue revisada por quien mantiene IngeTrazo («Comunidad» si no). Avisa
   cuando hace falta reiniciar y, si una extensión falla al cargar, ofrece
-  desactivarla o abrir su carpeta.
+  desactivarla o abrir su carpeta. Si la misma extensión ya estaba
+  instalada a mano con otro nombre de carpeta, lo detecta y ofrece apartar
+  esa copia (se renombra, no se borra) para que no se cargue dos veces.
 - **Navegador (el Outliner)**: una pestaña nueva de la barra
   lateral con todos los grupos y componentes del modelo en árbol, a
   cualquier profundidad, bajo el nombre del documento. Cada fila lleva un

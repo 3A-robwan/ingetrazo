@@ -797,9 +797,23 @@ class ExtensionManagerDialog(QDialog):
                 Qt.SmoothTransformation))
             label.setText("")
 
+    def _confirm_manual_copies(self, extension: Extension, paths) -> bool:
+        answer = QMessageBox.question(
+            self, tr("Extension manager"),
+            tr("«{name}» seems to be installed by hand already, in: "
+               "{folders}.\n\nIf you continue, that copy is set aside "
+               "(renamed with a dot in front, not deleted) so the extension "
+               "does not load twice.",
+               name=display_name(extension, current_language()),
+               folders=", ".join(p.name for p in paths)),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        return answer == QMessageBox.Yes
+
     def _install(self, extension: Extension) -> None:
         try:
-            install_extension(extension)
+            install_extension(
+                extension, confirm_manual_copies=lambda paths:
+                self._confirm_manual_copies(extension, paths))
         except (ExtensionManagerError, OSError) as exc:
             QMessageBox.warning(self, tr("Extension manager"), str(exc))
             return

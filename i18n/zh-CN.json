@@ -2689,5 +2689,6 @@
  "Rendering": "渲染",
  "Fabrication": "制造",
  "Productivity": "效率",
- "Education": "教育"
+ "Education": "教育",
+ "«{name}» seems to be installed by hand already, in: {folders}.\n\nIf you continue, that copy is set aside (renamed with a dot in front, not deleted) so the extension does not load twice.": "«{name}» 似乎已经手动安装在：{folders}。\n\n如果继续，该副本会被移到一旁（在名称前加一个点，不会删除），以免扩展被加载两次。"
 }

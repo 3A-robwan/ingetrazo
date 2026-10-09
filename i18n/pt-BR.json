@@ -2797,5 +2797,6 @@
  "Rendering": "Renderização",
  "Fabrication": "Fabricação",
  "Productivity": "Produtividade",
- "Education": "Educação"
+ "Education": "Educação",
+ "«{name}» seems to be installed by hand already, in: {folders}.\n\nIf you continue, that copy is set aside (renamed with a dot in front, not deleted) so the extension does not load twice.": "Parece que «{name}» já está instalada manualmente, em: {folders}.\n\nSe continuar, essa cópia é deixada de lado (renomeada com um ponto na frente, não apagada) para que a extensão não carregue duas vezes."
 }

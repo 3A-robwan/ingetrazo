@@ -359,8 +359,71 @@ def uninstall_extension(ident: str) -> None:
     shutil.rmtree(target)
 
 
-def install_extension(extension: Extension) -> None:
-    """Download, verify and atomically install an extension or its update."""
+def _python_fingerprint(path: Path) -> tuple[str | None, frozenset[str]]:
+    """``(sha256 of the entry module, the package's module paths)`` of an
+    installed plugin — a loose ``x.py`` or a package folder."""
+    def digest(file: Path) -> str | None:
+        try:
+            return hashlib.sha256(file.read_bytes()).hexdigest()
+        except OSError:
+            return None
+    if path.is_file():
+        return digest(path), frozenset()
+    modules = frozenset(
+        p.relative_to(path).as_posix() for p in path.rglob("*.py")
+        if "__pycache__" not in p.parts and p.name != "__init__.py")
+    return digest(path / "__init__.py"), modules
+
+
+def manual_copies(ident: str, package: Path) -> list[Path]:
+    """Plugins installed by hand that look like ``package`` under another
+    name — OpenTrace used to be unpacked as ``arquitetura_parametrica``,
+    and installing it from the catalog as ``opentrace_bim`` then loaded it
+    twice. The same entry module, or most of the same module files (an
+    older or newer version of it), counts as a copy."""
+    entry, modules = _python_fingerprint(package)
+    found = []
+    try:
+        candidates = sorted(user_plugins_dir().iterdir())
+    except OSError:
+        return []
+    for path in candidates:
+        if (path.name.startswith(("_", ".")) or path.is_symlink()
+                or path.name in (ident, f"{ident}.py")):
+            continue
+        if path.is_dir():
+            if ((path / "extension.json").is_file()
+                    or not (path / "__init__.py").is_file()):
+                continue
+        elif path.suffix != ".py":
+            continue
+        other_entry, other_modules = _python_fingerprint(path)
+        same_entry = entry is not None and entry == other_entry
+        shared = len(modules & other_modules)
+        similar = (len(modules) >= 3 and len(other_modules) >= 3
+                   and shared / len(modules | other_modules) >= 0.6)
+        if same_entry or similar:
+            found.append(path)
+    return found
+
+
+def _set_aside(path: Path) -> Path:
+    """Rename a hand-installed copy so the loader skips it (dot names are
+    never loaded) — kept, not deleted, so it can be put back."""
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    target = path.with_name(f".{path.name}.manual-{stamp}")
+    path.replace(target)
+    return target
+
+
+def install_extension(extension: Extension,
+                      confirm_manual_copies=None) -> None:
+    """Download, verify and atomically install an extension or its update.
+
+    If the same extension is already installed by hand under another name,
+    ``confirm_manual_copies(paths)`` decides: True sets those copies aside
+    (renamed, not deleted) and installs; False — or no callback — installs
+    nothing, so the extension never loads twice."""
     if not compatible_with_current(extension):
         raise ExtensionManagerError(
             f"{extension.id!r} requires IngeTrazo "
@@ -395,6 +458,16 @@ def install_extension(extension: Extension) -> None:
                 raise ExtensionManagerError(
                     f"{extension.id!r} is not a Python extension file.")
             (stage / "__init__.py").write_bytes(archive_data)
+        copies = manual_copies(extension.id, stage)
+        if copies:
+            if (confirm_manual_copies is None
+                    or not confirm_manual_copies(copies)):
+                raise ExtensionManagerError(
+                    f"{extension.id!r} is already installed by hand in "
+                    + ", ".join(p.name for p in copies)
+                    + "; nothing was installed.")
+            for path in copies:
+                _set_aside(path)
         metadata = {
             "id": extension.id,
             "version": extension.version,
