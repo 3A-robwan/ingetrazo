@@ -1,0 +1,166 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
+"""Extensions installed by hand, as every one was before the manager (0.5.8).
+
+A user who copied «planarq» into the plugins folder under 0.5.7 opened the
+0.5.8 manager and was stuck: its catalog card said «A plugin with this ID
+already exists» with no way to uninstall, disable or update it, and a plugin
+the catalog does not know did not show at all. Now both can be uninstalled
+from the manager — set aside, renamed with a dot in front, never deleted —
+and a catalog one can be replaced by the catalog version.
+"""
+from __future__ import annotations
+
+import pytest
+from PySide6.QtWidgets import QApplication, QLabel, QMessageBox, QPushButton
+
+from core import extension_manager as manager
+from core.extensions import discover_plugins
+from tests.test_extension_manager import (
+    TOOL_SOURCE, _extension, _stub_catalog, _wait_for_catalog)
+
+
+def _hand_package(root, name, source=TOOL_SOURCE):
+    folder = root / name
+    folder.mkdir()
+    (folder / "__init__.py").write_text(source)
+    return folder
+
+
+def _loaded(root):
+    return sorted(p.stem for p in discover_plugins([root])[0])
+
+
+def test_hand_installed_plugins_are_the_ones_the_manager_did_not_install(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(manager, "user_plugins_dir", lambda: tmp_path)
+    _hand_package(tmp_path, "aberturas")
+    (tmp_path / "niveles.py").write_text(TOOL_SOURCE)
+    managed = _hand_package(tmp_path, "kitchen")
+    (managed / "extension.json").write_text('{"id": "kitchen"}')
+    (tmp_path / "__pycache__").mkdir()
+    (tmp_path / "notes").mkdir()                       # no __init__.py
+    _hand_package(tmp_path, ".planarq.manual-20261001-120000")
+    names = [manager.hand_installed_ident(p)
+             for p in manager.hand_installed_plugins()]
+    assert names == ["aberturas", "niveles"]
+
+
+def test_uninstalling_a_hand_copy_sets_it_aside_and_keeps_its_files(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(manager, "user_plugins_dir", lambda: tmp_path)
+    folder = _hand_package(tmp_path, "aberturas")
+    assert _loaded(tmp_path) == ["aberturas"]
+
+    aside = manager.remove_hand_installed(folder)
+
+    assert not folder.exists()
+    assert aside.name.startswith(".aberturas.manual-")
+    assert (aside / "__init__.py").read_text() == TOOL_SOURCE   # kept
+    assert _loaded(tmp_path) == []                   # no longer loaded
+    assert manager.hand_installed_plugins() == []
+
+
+def test_a_managed_or_outside_folder_is_never_set_aside_as_hand_installed(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(manager, "user_plugins_dir", lambda: tmp_path)
+    managed = _hand_package(tmp_path, "kitchen")
+    (managed / "extension.json").write_text('{"id": "kitchen"}')
+    outside = tmp_path.parent / "elsewhere.py"
+    outside.write_text("x")
+    for path in (managed, outside):
+        with pytest.raises(manager.ExtensionManagerError):
+            manager.remove_hand_installed(path)
+    assert managed.exists() and outside.exists()
+
+
+def test_a_hand_copy_is_replaced_by_the_catalog_version(tmp_path, monkeypatch):
+    monkeypatch.setattr(manager, "user_plugins_dir", lambda: tmp_path)
+    (tmp_path / "sample.py").write_text("# the 0.5.7 copy\n")
+    source = TOOL_SOURCE.encode()
+    monkeypatch.setattr(manager, "_get", lambda *_args: source)
+
+    moved = manager.replace_hand_installed(_extension(source))
+
+    assert [p.name.startswith(".sample.py.manual-") for p in moved] == [True]
+    assert moved[0].read_text() == "# the 0.5.7 copy\n"
+    assert manager.installed_info("sample")["version"] == "1.0"
+    assert _loaded(tmp_path) == ["sample"]
+    manager.uninstall_extension("sample")            # managed from now on
+    assert not (tmp_path / "sample").exists()
+
+
+def test_a_failed_replacement_puts_the_hand_copy_back(tmp_path, monkeypatch):
+    monkeypatch.setattr(manager, "user_plugins_dir", lambda: tmp_path)
+    folder = _hand_package(tmp_path, "sample", "# mine\n")
+    monkeypatch.setattr(manager, "_get", lambda *_args: b"tampered")
+    with pytest.raises(manager.ExtensionManagerError, match="Checksum"):
+        manager.replace_hand_installed(_extension(b"expected"))
+    assert (folder / "__init__.py").read_text() == "# mine\n"
+    assert [p.name for p in tmp_path.iterdir()] == ["sample"]
+
+
+def _dialog(monkeypatch, tmp_path, extensions):
+    app = QApplication.instance() or QApplication([])
+    from views import extension_manager_dialog as dialog_module
+    _stub_catalog(monkeypatch, dialog_module, extensions)
+    monkeypatch.setattr(manager, "user_plugins_dir", lambda: tmp_path)
+    dialog = dialog_module.ExtensionManagerDialog()
+    _wait_for_catalog(dialog, app)
+    dialog._tabs.setCurrentIndex(1)                  # Installed
+    dialog._render_page("installed")
+    return app, dialog
+
+
+def _rows(dialog):
+    grid = dialog._pages["installed"]["grid"]
+    return [grid.itemAt(i).widget() for i in range(grid.count())]
+
+
+def _texts(row, kind):
+    return [w.text() for w in row.findChildren(kind)]
+
+
+def test_a_catalog_extension_installed_by_hand_offers_replace_and_uninstall(
+        tmp_path, monkeypatch):
+    (tmp_path / "sample.py").write_text("# the 0.5.7 copy\n")
+    app, dialog = _dialog(monkeypatch, tmp_path, [_extension(b"catalog")])
+    try:
+        rows = _rows(dialog)
+        assert len(rows) == 1                        # in the Installed tab
+        buttons = _texts(rows[0], QPushButton)
+        assert "Replace with the catalog version" in buttons
+        assert "Uninstall" in buttons
+        assert "Download" not in buttons
+        assert any("Installed by hand" in text
+                   for text in _texts(rows[0], QLabel))
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        app.processEvents()
+
+
+def test_a_hand_plugin_the_catalog_does_not_know_can_be_uninstalled(
+        tmp_path, monkeypatch):
+    folder = _hand_package(tmp_path, "aberturas")
+    app, dialog = _dialog(monkeypatch, tmp_path, [_extension(b"catalog")])
+    monkeypatch.setattr(QMessageBox, "question",
+                        staticmethod(lambda *a, **k: QMessageBox.Yes))
+    monkeypatch.setattr(QMessageBox, "information",
+                        staticmethod(lambda *a, **k: QMessageBox.Ok))
+    try:
+        rows = _rows(dialog)
+        assert len(rows) == 1
+        assert "aberturas" in _texts(rows[0], QLabel)
+        uninstall = next(b for b in rows[0].findChildren(QPushButton)
+                         if b.text() == "Uninstall")
+        uninstall.click()
+        app.processEvents()
+        assert not folder.exists()
+        assert any(p.name.startswith(".aberturas.manual-")
+                   for p in tmp_path.iterdir())
+        assert _rows(dialog) == []                   # gone from the list
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        app.processEvents()

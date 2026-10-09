@@ -17,6 +17,11 @@ follow [SemVer](https://semver.org).
   desactivarla o abrir su carpeta. Si la misma extensión ya estaba
   instalada a mano con otro nombre de carpeta, lo detecta y ofrece apartar
   esa copia (se renombra, no se borra) para que no se cargue dos veces.
+  Las extensiones **instaladas a mano** con la 0.5.7 o antes también se
+  gestionan: aparecen en «Instaladas», se pueden desinstalar (se apartan
+  con un punto delante del nombre, nunca se borran) y, si están en el
+  catálogo, **reemplazar por la versión del catálogo**, que desde entonces
+  se actualiza, desactiva y desinstala con normalidad.
 - **Navegador (el Outliner)**: una pestaña nueva de la barra
   lateral con todos los grupos y componentes del modelo en árbol, a
   cualquier profundidad, bajo el nombre del documento. Cada fila lleva un

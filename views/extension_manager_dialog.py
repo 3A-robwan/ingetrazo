@@ -38,6 +38,8 @@ from core.extension_manager import (
     display_name,
     display_summary,
     extension_startup_state,
+    hand_installed_ident,
+    hand_installed_plugins,
     install_extension,
     installed_info,
     is_extension_enabled,
@@ -45,6 +47,8 @@ from core.extension_manager import (
     installation_conflict,
     load_cached_catalog,
     refresh_catalog,
+    remove_hand_installed,
+    replace_hand_installed,
     restart_required,
     set_extension_enabled,
     tested_version_is_old,
@@ -401,7 +405,8 @@ class ExtensionManagerDialog(QDialog):
         result = []
         for extension in self._extensions:
             info = installed_info(extension.id)
-            if installed_only and info is None:
+            if (installed_only and info is None
+                    and not installation_conflict(extension.id)):
                 continue
             if page["tag"] and page["tag"] not in extension.tags:
                 continue
@@ -452,13 +457,19 @@ class ExtensionManagerDialog(QDialog):
         for index, extension in enumerate(extensions):
             row = self._make_row(extension, language, page["cards"], key)
             self._pages[key]["grid"].addWidget(row, index // 2, index % 2)
+        unknown = self._hand_only(key) if key == "installed" else []
+        for offset, path in enumerate(unknown, start=len(extensions)):
+            row = self._make_hand_row(path, page["cards"])
+            self._pages[key]["grid"].addWidget(row, offset // 2, offset % 2)
         if key == self._active_page_key():
             total = (sum(installed_info(e.id) is not None
+                         or installation_conflict(e.id)
                          for e in self._extensions)
+                     + len(self._hand_only(key, filtered=False))
                      if key == "installed" else len(self._extensions))
             self._catalog_info.setText(
                 tr("{shown} of {total} extensions",
-                   shown=len(extensions), total=total)
+                   shown=len(extensions) + len(unknown), total=total)
                 + self._catalog_status_suffix())
             self._load_visible_images()
 
@@ -637,11 +648,27 @@ class ExtensionManagerDialog(QDialog):
                 state += " · " + tr("Disabled")
             details.addWidget(QLabel(state))
         elif conflict:
-            details.addWidget(QLabel(
-                tr("A plugin with this ID already exists.")))
+            hand = QLabel(tr("Installed by hand, outside the extension "
+                             "manager."))
+            hand.setWordWrap(True)
+            details.addWidget(hand)
 
         actions = QHBoxLayout()
-        if compatible:
+        if conflict and not managed:
+            # Installed by hand before the manager existed (or copied in):
+            # the catalog version replaces it, or it is set aside.
+            if compatible:
+                replace = QPushButton(tr("Replace with the catalog version"))
+                replace.clicked.connect(
+                    lambda _checked=False, e=extension: self._replace(e))
+                actions.addWidget(replace)
+            remove = QPushButton(tr("Uninstall"))
+            remove.clicked.connect(
+                lambda _checked=False, e=extension:
+                self._uninstall_hand_ident(e.id, display_name(
+                    e, current_language())))
+            actions.addWidget(remove)
+        elif compatible:
             install = QPushButton(
                 tr("Update") if update_available
                 else tr("Up to date") if managed
@@ -841,6 +868,117 @@ class ExtensionManagerDialog(QDialog):
             self, tr("Extension uninstalled"),
             tr("«{name}» is uninstalled. Restart IngeTrazo to apply the "
                "change.", name=display_name(extension, current_language())))
+        for key in self._pages:
+            self._render_page(key)
+
+    # ---- Extensions installed by hand ----------------------------------
+    # Until 0.5.8 an extension was installed by copying its folder into the
+    # plugins folder. The manager never deletes what it did not install: it
+    # sets such a copy aside (renamed with a dot in front, the loader skips
+    # it), so the user can still take it back.
+
+    def _hand_only(self, key: str, filtered: bool = True) -> list:
+        """Hand-installed plugins the catalog does not know, for the
+        Installed tab (the ones it knows show on their catalog card)."""
+        known = {e.id for e in self._extensions}
+        query = (self._pages[key]["search"].text().strip().casefold()
+                 if filtered else "")
+        return [path for path in hand_installed_plugins()
+                if hand_installed_ident(path) not in known
+                and query in hand_installed_ident(path).casefold()]
+
+    def _make_hand_row(self, path, parent: QWidget) -> QWidget:
+        name = hand_installed_ident(path)
+        row = QWidget(parent)
+        row.setObjectName("extensionRow")
+        row.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        row.setMinimumWidth(400)
+        row.setMaximumWidth(_ROW_MAX_WIDTH)
+        row.setStyleSheet(
+            "QWidget#extensionRow { background: palette(base); "
+            "border: 1px solid palette(midlight); }"
+            "QWidget#extensionRow QLabel { background: transparent; "
+            "border: none; color: palette(text); }")
+        layout = QVBoxLayout(row)
+        layout.setContentsMargins(10, 10, 10, 8)
+        layout.setSpacing(6)
+        title = QLabel(name)
+        title.setStyleSheet("font-weight: bold; font-size: 15px")
+        layout.addWidget(title)
+        note = QLabel(tr("Installed by hand · not in the catalog"))
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        where = QLabel(str(path))
+        where.setWordWrap(True)
+        where.setStyleSheet("color: palette(mid); font-size: 11px")
+        layout.addWidget(where)
+        actions = QHBoxLayout()
+        folder = QPushButton(tr("Open extension folder"))
+        folder.clicked.connect(
+            lambda _checked=False, ident=name:
+            self._open_extension_folder(ident))
+        actions.addWidget(folder)
+        remove = QPushButton(tr("Uninstall"))
+        remove.clicked.connect(
+            lambda _checked=False, target=path, label=name:
+            self._uninstall_hand(target, label))
+        actions.addWidget(remove)
+        actions.addStretch(1)
+        layout.addLayout(actions)
+        for label in row.findChildren(QLabel):
+            label.setTextFormat(Qt.PlainText)
+        return row
+
+    def _uninstall_hand_ident(self, ident: str, name: str) -> None:
+        for path in hand_installed_plugins():
+            if hand_installed_ident(path) == ident:
+                self._uninstall_hand(path, name)
+                return
+
+    def _uninstall_hand(self, path, name: str) -> None:
+        answer = QMessageBox.question(
+            self, tr("Uninstall extension"),
+            tr("«{name}» was installed by hand. Uninstalling sets it aside "
+               "instead of deleting it: it is renamed with a dot in front, "
+               "in the same folder, and IngeTrazo no longer loads it.",
+               name=name),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            aside = remove_hand_installed(path)
+        except (ExtensionManagerError, OSError) as exc:
+            QMessageBox.warning(self, tr("Extension manager"), str(exc))
+            return
+        QMessageBox.information(
+            self, tr("Extension uninstalled"),
+            tr("«{name}» is set aside as {folder}. Restart IngeTrazo to "
+               "apply the change.", name=name, folder=aside.name))
+        for key in self._pages:
+            self._render_page(key)
+
+    def _replace(self, extension: Extension) -> None:
+        name = display_name(extension, current_language())
+        answer = QMessageBox.question(
+            self, tr("Extension manager"),
+            tr("Replace the copy of «{name}» installed by hand with the "
+               "catalog version? The copy is set aside (renamed with a dot "
+               "in front), not deleted, and the catalog version can then be "
+               "updated, disabled and uninstalled from here.", name=name),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if answer != QMessageBox.Yes:
+            return
+        try:
+            replace_hand_installed(
+                extension, confirm_manual_copies=lambda paths:
+                self._confirm_manual_copies(extension, paths))
+        except (ExtensionManagerError, OSError) as exc:
+            QMessageBox.warning(self, tr("Extension manager"), str(exc))
+            return
+        QMessageBox.information(
+            self, tr("Extension installed"),
+            tr("«{name}» is installed. Restart IngeTrazo to load it.",
+               name=name))
         for key in self._pages:
             self._render_page(key)
 

@@ -2726,5 +2726,11 @@
  "Paint every problem of the chosen object, each in its colour": "Colora tutti i problemi dell'oggetto scelto, ciascuno nel suo colore",
  "Problem by problem": "Problema per problema",
  "{n} solids": "{n} solidi",
- "{n} with problems": "{n} con problemi"
+ "{n} with problems": "{n} con problemi",
+ "Installed by hand, outside the extension manager.": "Installata a mano, fuori dal gestore delle estensioni.",
+ "Replace with the catalog version": "Sostituisci con la versione del catalogo",
+ "Installed by hand · not in the catalog": "Installata a mano · non presente nel catalogo",
+ "«{name}» was installed by hand. Uninstalling sets it aside instead of deleting it: it is renamed with a dot in front, in the same folder, and IngeTrazo no longer loads it.": "«{name}» è stata installata a mano. Disinstallarla la mette da parte invece di eliminarla: viene rinominata con un punto davanti, nella stessa cartella, e IngeTrazo non la carica più.",
+ "«{name}» is set aside as {folder}. Restart IngeTrazo to apply the change.": "«{name}» è stata messa da parte come {folder}. Riavvia IngeTrazo per applicare la modifica.",
+ "Replace the copy of «{name}» installed by hand with the catalog version? The copy is set aside (renamed with a dot in front), not deleted, and the catalog version can then be updated, disabled and uninstalled from here.": "Sostituire la copia di «{name}» installata a mano con la versione del catalogo? La copia viene messa da parte (rinominata con un punto davanti), non eliminata, e la versione del catalogo potrà poi essere aggiornata, disattivata e disinstallata da qui."
 }

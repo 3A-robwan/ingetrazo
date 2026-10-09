@@ -2562,5 +2562,11 @@
  "Click an object to see its first problem; the arrows walk the others.": "Kliknij obiekt, aby zobaczyć jego pierwszy problem; strzałki przechodzą przez pozostałe.",
  "Press Next problem first": "Najpierw naciśnij Następny problem",
  "Nothing to repair": "Nie ma nic do naprawienia",
- "faces reversed": "odwrócone ściany"
+ "faces reversed": "odwrócone ściany",
+ "Installed by hand, outside the extension manager.": "Zainstalowane ręcznie, poza menedżerem rozszerzeń.",
+ "Replace with the catalog version": "Zastąp wersją z katalogu",
+ "Installed by hand · not in the catalog": "Zainstalowane ręcznie · brak w katalogu",
+ "«{name}» was installed by hand. Uninstalling sets it aside instead of deleting it: it is renamed with a dot in front, in the same folder, and IngeTrazo no longer loads it.": "«{name}» zostało zainstalowane ręcznie. Odinstalowanie odkłada je na bok zamiast usuwać: nazwa dostaje kropkę na początku, w tym samym folderze, a IngeTrazo przestaje je wczytywać.",
+ "«{name}» is set aside as {folder}. Restart IngeTrazo to apply the change.": "«{name}» odłożono na bok jako {folder}. Uruchom IngeTrazo ponownie, aby zastosować zmianę.",
+ "Replace the copy of «{name}» installed by hand with the catalog version? The copy is set aside (renamed with a dot in front), not deleted, and the catalog version can then be updated, disabled and uninstalled from here.": "Zastąpić ręcznie zainstalowaną kopię «{name}» wersją z katalogu? Kopia zostanie odłożona na bok (z kropką na początku nazwy), nie usunięta, a wersję z katalogu będzie można stąd aktualizować, wyłączać i odinstalowywać."
 }

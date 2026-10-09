@@ -416,6 +416,70 @@ def _set_aside(path: Path) -> Path:
     return target
 
 
+def hand_installed_plugins() -> list[Path]:
+    """Plugins in the user folder that the manager did not install: a
+    package folder without ``extension.json`` or a loose ``x.py``. Until
+    0.5.8 copying the folder by hand was the only way to install one, so
+    every extension a user had then shows up here."""
+    try:
+        candidates = sorted(user_plugins_dir().iterdir())
+    except OSError:
+        return []
+    found = []
+    for path in candidates:
+        if path.name.startswith(("_", ".")):
+            continue                      # __pycache__, set-aside copies
+        if path.is_dir():
+            if ((path / "extension.json").is_file()
+                    or not (path / "__init__.py").is_file()):
+                continue
+        elif path.suffix != ".py":
+            continue
+        found.append(path)
+    return found
+
+
+def hand_installed_ident(path: Path) -> str:
+    """The plugin name the loader knows a hand-installed copy by."""
+    return path.stem if path.suffix == ".py" else path.name
+
+
+def remove_hand_installed(path: Path) -> Path:
+    """Uninstall a hand-installed plugin by setting it aside — renamed
+    with a dot in front, in the same folder, never deleted: the manager
+    did not put it there, so it does not destroy it. Returns the new
+    path; the loader skips dot names from the next start."""
+    root = user_plugins_dir()
+    if path.parent != root or path not in hand_installed_plugins():
+        raise ExtensionManagerError(
+            f"{path.name!r} is not a plugin installed by hand.")
+    return _set_aside(path)
+
+
+def replace_hand_installed(extension: Extension,
+                           confirm_manual_copies=None) -> list[Path]:
+    """Install ``extension`` from the catalog over a copy installed by
+    hand under the same name: the copy is set aside first, then the
+    catalog version installs as a managed one. If the install fails, the
+    copy is put back where it was. Returns where the copy went."""
+    root = user_plugins_dir()
+    own = [p for p in hand_installed_plugins()
+           if hand_installed_ident(p) == extension.id and p.parent == root]
+    moved = [(p, _set_aside(p)) for p in own]
+    try:
+        install_extension(extension, confirm_manual_copies)
+    except Exception:
+        for original, aside in reversed(moved):
+            try:
+                aside.replace(original)
+            except OSError:
+                logging.getLogger("ingetrazo.extensions").warning(
+                    "could not put back %s as %s", aside, original,
+                    exc_info=True)
+        raise
+    return [aside for _original, aside in moved]
+
+
 def install_extension(extension: Extension,
                       confirm_manual_copies=None) -> None:
     """Download, verify and atomically install an extension or its update.
