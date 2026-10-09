@@ -259,6 +259,14 @@ follow [SemVer](https://semver.org).
   guardar 2,3 → 1,6 s solo por esto (#158, @pacaeiro).
 
 ### Corregido
+- **Orbitar con mucho zoom ya no pierde la cámara ni impide guardar** (#485,
+  #383): muy de cerca, el punto «bajo el cursor» que lee el búfer de
+  profundidad salía a distancias absurdas por falta de precisión; la órbita
+  giraba alrededor de él, la vista se iba al fondo y, con la cámara en NaN,
+  el guardado se negaba («Where: scene › camera › target[0]»). Ahora ese
+  punto se descarta, la órbita nunca deja una cámara inválida y, si la
+  vista llegara a romperse, el modelo se guarda igual: el archivo abre
+  encuadrado en el modelo.
 - **Exportar a GLB, DAE u OBJ fallaba con cualquier modelo hecho por la
   IA** («too many values to unpack», #462, @blackflash73): el recetario y
   el puente MCP pintan con `(r, g, b, 1.0)` y los exportadores leían tres

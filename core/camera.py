@@ -230,7 +230,11 @@ class OrbitCamera:
         """
         from PySide6.QtGui import QQuaternion
 
+        if not all(math.isfinite(c) for c in (pivot.x(), pivot.y(), pivot.z())):
+            self.orbit(dx_pixels, dy_pixels, viewport_h)  # about the target
+            return
         old_yaw, old_pitch = self.yaw, self.pitch
+        old_target = QVector3D(self.target)
         self.orbit(dx_pixels, dy_pixels, viewport_h)     # the angles, clamped
         d_yaw = self.yaw - old_yaw
         d_pitch = self.pitch - old_pitch
@@ -250,6 +254,10 @@ class OrbitCamera:
             rot = QQuaternion.fromAxisAndAngle(
                 axis.normalized(), math.degrees(d_pitch)) * rot_yaw
         self.target = pivot + rot.rotatedVector(self.target - pivot)
+        if not self.is_finite():
+            # A pivot so far away that the turn overflowed: keep the pose the
+            # gesture had, never a NaN one (#485).
+            self.yaw, self.pitch, self.target = old_yaw, old_pitch, old_target
 
     def pan(self, dx_pixels: float, dy_pixels: float, viewport_h: int,
             depth: float | None = None) -> None:

@@ -12589,7 +12589,19 @@ class Viewport(QOpenGLWidget):
         q = inv.map(QVector4D(nx, ny, d * 2.0 - 1.0, 1.0))
         if abs(q.w()) < 1e-12:
             return None
-        return ("hit", QVector3D(q.x() / q.w(), q.y() / q.w(), q.z() / q.w()))
+        point = QVector3D(q.x() / q.w(), q.y() / q.w(), q.z() / q.w())
+        # Zoomed right in, the near plane is a fraction of a millimetre while
+        # the far one is kilometres away: the depth buffer has no precision
+        # left, and the read-back unprojects to a point far behind the model
+        # — or to infinity. The orbit then turned about that point and threw
+        # the camera off until its target was NaN and the model would not
+        # save (#485, #383). Such a point is no answer: the caller falls
+        # back to the ray.
+        if not all(math.isfinite(c) for c in (point.x(), point.y(), point.z())):
+            return None
+        if (point - self.camera.eye()).length() > 1.01 * self.camera.far_plane():
+            return None
+        return ("hit", point)
 
     def _world_under_cursor(self, x: float, y: float) -> Optional[QVector3D]:
         """The world point the cursor points at: nearest geometry hit, else the
