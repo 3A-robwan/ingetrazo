@@ -1001,6 +1001,9 @@ class Mesh:
             "floop": {f: list(f.loop) for f in self.faces},
             "fholes": {f: [list(h) for h in f.hole_loops] for f in self.faces},
             "fattrs": {f: dict(f.attrs) for f in self.faces},
+            # orient_outward re-marks interior partitions inside a push, so a
+            # restore that skipped the flag could leave it changed after Esc.
+            "finterior": {f: f.interior for f in self.faces},
         }
 
     def restore_state(self, snap: dict) -> None:
@@ -1033,6 +1036,8 @@ class Mesh:
             f.hole_loops = [list(h) for h in holes]
         for f, attrs in snap.get("fattrs", {}).items():
             f.attrs = dict(attrs)
+        for f, interior in snap.get("finterior", {}).items():
+            f.interior = interior
 
     # ---- Reset --------------------------------------------------------------
     def clear(self) -> None:

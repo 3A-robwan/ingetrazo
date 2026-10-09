@@ -2905,6 +2905,17 @@ class SnapshotMutation(Command):
         self.before: Optional[dict] = None
         self.after: Optional[dict] = None
 
+    @classmethod
+    def from_states(cls, before: dict, after: dict,
+                    mesh: Optional[Mesh] = None) -> "SnapshotMutation":
+        """A mutation already applied to the model, given its two snapshots:
+        ``do`` takes the redo branch (restores ``after``) and nothing is
+        re-run. Push/Pull commits its staged preview this way — the model
+        already shows the result."""
+        cmd = cls(None, mesh=mesh)
+        cmd.before, cmd.after = before, after
+        return cmd
+
     def _target(self, scene) -> Mesh:
         return self._mesh if self._mesh is not None else scene.mesh
 

@@ -37,12 +37,15 @@ as the cap of the new box.
 """
 from __future__ import annotations
 
+import math
+import time
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QVector3D
 
 from core.geometry import Face
 from core.i18n import tr
-from core.mesh import PAINT_KEYS
+from core.mesh import _STITCH_TOL, PAINT_KEYS
 from core.history import (
     AddEdgeCommand,
     AddFaceCommand,
@@ -288,14 +291,59 @@ class PushPullTool(Tool):
         self._anchor: QVector3D | None = None  # fixed centroid for measuring extrusion
         self._normal: QVector3D | None = None
         self._cap_positions: list[QVector3D] = []  # original cap vertices
-        # The live preview applies the real commit each frame and reverts it from
-        # this snapshot before the next, so the drag shows the stitched result.
+        # The clean model under a STAGED preview (see _show_staged_preview):
+        # captured before the drag's first stage and kept until the drag ends
+        # — restored whenever a staged model goes back to clean (a restage,
+        # the overlay, Esc, a tool switch, a pipeline commit), and the undo
+        # state of a commit that keeps the stage. The selection rides along:
+        # the stage deletes the base face, which drops it from the selection.
         self._preview_snapshot: dict | None = None
+        self._preview_selection: set = set()
         # How much of ``extrusion`` the prism preview has already applied to
         # the model, so a frame moves only the delta and the revert knows the
         # total to undo, and the very Vertex OBJECTS it moves.
         self._prism_applied: float = 0.0
         self._prism_verts: list = []
+        # ---- Staged preview -------------------------------------------------
+        # The distance the staged result was built at (None = the model is
+        # NOT staged: the one indicator _revert_preview restores on), where
+        # its cap currently sits, the new cap-plane Vertex OBJECTS a frame
+        # slides (with their staged positions and slide rates — see
+        # _slide_rate), and the open interval of
+        # distances the slide stays exact in. Kept apart from the prism fields:
+        # the per-frame _revert_prism_preview would otherwise undo them.
+        self._stage_d: float | None = None
+        self._stage_applied: float = 0.0
+        self._stage_verts: list = []
+        self._stage_pos: list = []
+        self._stage_lo: float = 0.0
+        self._stage_hi: float = 0.0
+        # The faces/edges the stage created: the distance inference skips
+        # them, or the drag would lock onto its own moving cap.
+        self._stage_new: set = set()
+        # Stages left behind when the cursor leaves their interval, at most
+        # one per side of the base plane ({sign: record}, see _park_stage), so
+        # dragging back and forth restores one instead of re-running the
+        # pipeline; and the record the current stage came from (None = not
+        # parked yet).
+        self._stage_cache: dict = {}
+        self._stage_rec: dict | None = None
+        # ``(sign, abs(d))`` of the last refused or failed stage: that
+        # direction shows the overlay and retries only once the distance has
+        # doubled, so a refusal never re-runs the pipeline per frame, and a
+        # tiny first frame refused by float noise does not cost the whole
+        # direction its live result.
+        self._stage_refusal: tuple | None = None
+        # A stage slower than _SLOW_STAGE_S: no more stages this drag.
+        self._stage_slow: bool = False
+        # Levels (along the normal) of the parallel faces over/under the base,
+        # collected at drag start: crossing one changes the topology.
+        self._plane_levels: list = []
+        # ``(id(mesh), mesh._mut_serial)`` after the tool's own last edit while
+        # a snapshot is held: anything else touching the mesh mid-drag (File >
+        # New, a redo that bypassed on_redo) makes the snapshots stale, and
+        # restoring one would resurrect the model it replaced.
+        self._stage_serial: tuple | None = None
         # The model point the distance inference is currently locked onto (a
         # corner or a face hit), drawn as a green marker by the viewport overlay.
         self._inference_point: QVector3D | None = None
@@ -305,13 +353,11 @@ class PushPullTool(Tool):
         self._refused: bool = False
         self._topped_out: bool = False
         # ---- Drag preview -----------------------------------------------
-        # The drag shows the naive sweep as an overlay — cap plus wall quads,
-        # nothing touched in the mesh — and the real pipeline (stitch,
-        # per-plane rebuild, hermeticity guard) runs ONCE, at the commit. This
-        # is the classic drag: the shape you pull against is the same either
-        # way, and the cleanup of coincident geometry is not something you can
-        # read mid-drag anyway. Running it per mouse-move cost ~0.3 s a frame
-        # on an imported barbecue.
+        # A free face and a Ctrl-copy show the naive sweep as an overlay — cap
+        # plus wall quads, nothing touched in the mesh. An attached face is
+        # STAGED instead (_show_staged_preview): the real pipeline runs once
+        # and frames only slide its cap. Running the pipeline per mouse-move
+        # cost ~0.3 s a frame on an imported barbecue.
         self._light_faces: list = []
         # The sweep's rings, ``[(base_ring, moved_ring), …]`` (outer first,
         # then holes) — the wireframe is drawn straight off them.
@@ -371,11 +417,15 @@ class PushPullTool(Tool):
 
         if self.base_face is None or self._anchor is None:
             return
+        if self._drop_stale_stage(viewport):
+            return
         # Ctrl can be pressed/released mid-drag; the live preview follows.
         self._sync_keep_base(ctx.modifiers)
-        # Work on the clean mesh: revert the preview before reading geometry,
-        # so reference inference never sees the forming solid's moving points.
-        self._revert_preview(viewport)
+        # Only the prism translation is undone per frame — arithmetic, so
+        # inference never sees the forming solid's moving points. A staged
+        # result stays put (restoring it every frame is the snapshot cost the
+        # stage exists to avoid); the inference skips its geometry instead.
+        self._revert_prism_preview(viewport)
         inferred = self._infer_reference_distance(ctx)
         if inferred is not None:
             self.extrusion = inferred
@@ -388,10 +438,14 @@ class PushPullTool(Tool):
         self._clamp_extrusion(viewport)
         # A clean prism extend/shrink is previewed by MOVING the cap, so the
         # model itself shows the result and nothing of the old shape is left
-        # standing. Anything else shows the sweep as an overlay; the real
-        # pipeline runs once, at the commit — see _build_light_faces.
+        # standing. Any other attached face is STAGED: the real commit applied
+        # once, then stretched — walls merging and old edges going live, as
+        # the commit will leave them. A free face (nothing to merge with) and
+        # a Ctrl-copy show the sweep as an overlay — see _build_light_faces.
         if self._prism_cap and not self._keep_base:
             self._show_prism_preview(viewport)
+        elif self._attached and not self._keep_base:
+            self._show_staged_preview(viewport)
         else:
             self._show_light_preview(viewport)
 
@@ -428,6 +482,7 @@ class PushPullTool(Tool):
             self._cap_positions = self._cap_loop_positions(face)
             self._prism_verts = self._cap_vertices(target)
             self._compute_inward_limit(target)
+            self._compute_plane_levels(target)
             self._preview_snapshot = None
             # The live preview takes over from the hover shade now.
             viewport.set_hover(None)
@@ -471,6 +526,7 @@ class PushPullTool(Tool):
             self._cap_positions = self._cap_loop_positions(face)
             self._prism_verts = self._cap_vertices(target)
             self._compute_inward_limit(target)
+            self._compute_plane_levels(target)
             self._preview_snapshot = None
         elif abs(self.extrusion) > _MIN_EXTRUDE:
             # Mid-drag with a real distance: treat as the commit click.
@@ -504,10 +560,28 @@ class PushPullTool(Tool):
         self._spend_keep_mode(viewport)
         viewport.update()
 
+    def on_undo(self, viewport) -> bool:
+        """Ctrl+Z mid-drag abandons the push, like Esc. Undoing history
+        underneath a staged preview and then restoring its snapshot would
+        resurrect the undone geometry. Idle, the ordinary undo runs."""
+        if not self.dragging:
+            return False
+        self.on_cancel(viewport)
+        return True
+
+    def on_redo(self, viewport) -> bool:
+        """Redo mid-drag abandons the push first, then lets the redo run (False)
+        — on the clean model. Run under a staged preview, it would land on the
+        staged result and leave that in the model with no undo entry."""
+        if self.dragging:
+            self.on_cancel(viewport)
+        return False
+
     # ---- Visual preview -----------------------------------------------------
-    # The drag shows the naive sweep as overlay faces (``preview_faces``) plus
-    # its own wireframe (``rubber_band_lines``); the commit replaces both with
-    # the real stitched geometry.
+    # A free face and a Ctrl-copy show the naive sweep as overlay faces
+    # (``preview_faces``) plus its own wireframe (``rubber_band_lines``); the
+    # commit replaces both with the real stitched geometry. A prism or staged
+    # preview shows the model itself and leaves both empty.
     def rubber_band_lines(self):
         """The sweep's edges: the base ring, the moved ring, and one riser per
         corner — for the outer loop and every hole.
@@ -603,7 +677,9 @@ class PushPullTool(Tool):
         """Drop any applied preview and show the sweep as an overlay instead.
         The mesh is left untouched, so the scene version does not move and the
         consolidated buffers are not touched either — the frame costs one small
-        preview upload."""
+        preview upload. A held stage is parked first (a no-op once parked):
+        a Ctrl tap mid-drag must find it again, not pay for a new one."""
+        self._park_stage(viewport)
         self._revert_preview(viewport)
         self._light_faces = self._build_light_faces()
         # Hiding the base face is what lets a drag AWAY FROM THE EYE read as
@@ -724,12 +800,329 @@ class PushPullTool(Tool):
         if self._prism_applied:
             self._move_cap(viewport, -self._prism_applied, 0.0)
 
+    #: A stage (one pipeline run, snapshot work included) slower than this, in
+    #: seconds, ends staging for the drag: leaving every parked interval shows
+    #: the overlay, and a release outside them runs the pipeline as before.
+    #: One pause per drag on a big model instead of one per reversal.
+    _SLOW_STAGE_S = 0.25
+
+    def _show_staged_preview(self, viewport) -> None:
+        """Preview an attached push by showing the REAL result: the commit's
+        own ``_mutate`` applied to the model once ("stage"), then only its new
+        cap vertices slid along the normal per frame ("stretch").
+
+        The overlay cannot shorten a wall, merge it with a coplanar riser or
+        take an old edge away, so pushing half of a split top previewed a box
+        standing on the old shape, and the shape changed on release (#434).
+        Running the pipeline every frame did show it, at ~0.3 s a frame.
+
+        The slide is exact while the cap crosses no "event level" (_stage
+        works them out): every face holding a moving vertex is the cap or a
+        wall containing the push direction, which stays planar as its
+        vertices slide — the _swept_by_push argument. Leaving that interval
+        parks the stage and restores the one parked on the cursor's side, or
+        stages anew (_enter_stage). A refused or failed stage, or any new one
+        once staging proved slow, shows the overlay instead."""
+        self._light_faces = []
+        self._light_rings = []
+        d = self.extrusion
+        if abs(d) < _MIN_EXTRUDE:
+            # Nothing to show, as the overlay. Parked, not dropped: the
+            # cursor is on its way to the other side and may come back.
+            self._park_stage(viewport)
+            self._revert_preview(viewport)
+            viewport.set_suppressed_faces(set())
+            viewport.update()
+            return
+        sign = 1.0 if d > 0.0 else -1.0
+        if self._stage_refusal is not None and self._stage_refusal[0] != sign:
+            self._stage_refusal = None
+        if not self._stage_holds(d) and not self._enter_stage(viewport, sign):
+            self._show_light_preview(viewport)
+            return
+        self._slide_stage(viewport, d)
+        # The base face is genuinely gone from the staged model.
+        viewport.set_suppressed_faces(set())
+        viewport.update()
+
+    def _enter_stage(self, viewport, sign: float) -> bool:
+        """The cursor is outside the current stage's interval (or nothing is
+        staged): park the current stage, then restore the one parked on this
+        side if it holds the distance, else stage anew — unless staging
+        proved slow, or this direction was refused at a distance not yet
+        doubled. False = show the overlay (the model is left as it was; the
+        overlay's revert cleans it)."""
+        d = self.extrusion
+        self._park_stage(viewport)
+        rec = self._stage_cache.get(sign)
+        if rec is not None and self._interval_holds(d, rec["d"], rec["lo"],
+                                                    rec["hi"]):
+            self._unpark_stage(viewport, rec)
+            return True
+        refusal = self._stage_refusal
+        if self._stage_slow or (refusal is not None
+                                and abs(d) < 2.0 * refusal[1]):
+            return False
+        if self._stage(viewport):
+            return True
+        self._stage_refusal = (sign, abs(d))
+        return False
+
+    def _slide_stage(self, viewport, d: float) -> None:
+        """Slide the stage's moving vertices to distance ``d``. Placed at
+        staged position + rate × offset, not moved by deltas: float32 deltas
+        drift frame by frame (place_vertex, issue #163)."""
+        if not self._stage_verts or abs(d - self._stage_applied) <= 1e-12:
+            return
+        mesh = self._target_mesh(viewport.scene)
+        off = d - self._stage_d
+        for v, (p, rate) in zip(self._stage_verts, self._stage_pos):
+            mesh.place_vertex(v, p + rate * off)
+        self._stage_applied = d
+        self._stage_serial = (id(mesh), mesh._mut_serial)
+        viewport.scene.version += 1
+
+    @staticmethod
+    def _interval_holds(d: float, stage_d, lo: float, hi: float) -> bool:
+        """Whether a stage built at ``stage_d`` with interval ``(lo, hi)``
+        shows the commit at distance ``d``: its own distance, or strictly
+        inside — kept a weld tolerance clear of the levels, where the commit
+        welds the cap onto them."""
+        if stage_d is None:
+            return False
+        if abs(d - stage_d) <= 1e-9:
+            return True
+        return lo + _STITCH_TOL < d < hi - _STITCH_TOL
+
+    def _stage_holds(self, d: float) -> bool:
+        return self._interval_holds(d, self._stage_d, self._stage_lo,
+                                    self._stage_hi)
+
+    def _stage(self, viewport) -> bool:
+        """Apply the commit's mutation at ``extrusion`` to the clean model
+        (capturing it on the drag's first stage, restoring it when the model
+        is staged) and resolve what a frame may slide. False — with the clean
+        model back — when the push is refused, raises, or would not stretch
+        cleanly. A stage slower than _SLOW_STAGE_S makes the drag slow."""
+        scene = viewport.scene
+        mesh = self._target_mesh(scene)
+        t0 = time.perf_counter()
+        try:
+            if self._preview_snapshot is None:
+                self._preview_snapshot = mesh.capture_state()
+                self._preview_selection = set(scene.selection)
+            elif self._stage_d is not None:
+                self._restore_clean(viewport)
+            self._mutate(scene)
+            ok = not self._refused and self._resolve_stage(mesh)
+        except Exception:
+            # The commit is guarded by History.execute's rollback; the stage
+            # is not, and a pipeline error must not escape a mouse move.
+            ok = False
+        # The whole pause the user sat through, snapshot work included.
+        if time.perf_counter() - t0 > self._SLOW_STAGE_S:
+            self._stage_slow = True
+        self._refused = False          # the commit decides that for itself
+        if not ok:
+            if self._preview_snapshot is not None:
+                self._restore_clean(viewport)
+            return False
+        self._stage_d = self._stage_applied = self.extrusion
+        self._stage_serial = (id(mesh), mesh._mut_serial)
+        scene.version += 1
+        return True
+
+    def _resolve_stage(self, mesh) -> bool:
+        """After a stage: the moving vertices (new, on the cap plane), the
+        open interval ``(lo, hi)`` the slide is exact in, and the new
+        faces/edges. False when a face holding a moving vertex would bend.
+
+        The interval is bounded by the nearest event levels: the base plane
+        (a reversal), the parallel faces over/under the base (a through
+        punch, a flush landing, an overhang), the inward limit, and every
+        non-moving vertex of a face the cap drags (a wall's bottom, a
+        neighbour's top, a ledge). A stage sitting ON a level is exact only
+        at its own distance."""
+        snap = self._preview_snapshot
+        n, anchor, d = self._normal, self._anchor, self.extrusion
+        movers = [v for v in mesh.vertices if v not in snap["vpos"]
+                  and abs(QVector3D.dotProduct(v.position - anchor, n) - d)
+                  < _STITCH_TOL]
+        moving = set(movers)
+        levels = [0.0, *self._plane_levels]
+        if self._limit_in is not None:
+            levels.append(-self._limit_in)
+        # The faces each mover drags that keep a fixed vertex (the cap and
+        # anything else wholly on the cap plane just translate with it).
+        anchored: dict = {v: [] for v in movers}
+        for f in {f for v in movers for f in v.faces()}:
+            rest = [w for lp in (f.loop, *f.hole_loops) for w in lp
+                    if w not in moving]
+            if not rest:
+                continue
+            levels.extend(QVector3D.dotProduct(w.position - anchor, n)
+                          for w in rest)
+            for lp in (f.loop, *f.hole_loops):
+                for w in lp:
+                    if w in moving:
+                        anchored[w].append(f)
+        if any(abs(lv - d) <= _STITCH_TOL for lv in levels):
+            # On a level: valid at exactly this distance, nothing to slide.
+            self._stage_lo = self._stage_hi = d
+        else:
+            rates = [self._slide_rate(anchored[v], n) for v in movers]
+            if any(r is None for r in rates):
+                return False              # a face it drags would bend
+            self._stage_lo = max((lv for lv in levels if lv < d),
+                                 default=-math.inf)
+            self._stage_hi = min((lv for lv in levels if lv > d),
+                                 default=math.inf)
+            self._stage_verts = movers
+            self._stage_pos = [(QVector3D(v.position), r)
+                               for v, r in zip(movers, rates)]
+        self._stage_new = ((set(mesh.faces) - set(snap["faces"]))
+                           | (set(mesh.edges) - set(snap["edges"])))
+        return True
+
+    @staticmethod
+    def _slide_rate(faces, n: QVector3D):
+        """How a moving vertex travels per unit of push, keeping every face
+        in ``faces`` (the ones it drags that keep a fixed vertex) flat: the
+        push normal when they all contain it (a wall), otherwise the line
+        the slanted face shares with the others, scaled to keep pace with
+        the cap — the crossing of a cap rim with a slope runs down the
+        slope's edge (#434 follow-up). None when no such line exists."""
+        normals: list = []
+        for f in faces:
+            m = f.normal().normalized()
+            if all(QVector3D.crossProduct(m, o).length() > 1e-3
+                   for o in normals):
+                normals.append(m)
+        nn = n.normalized()
+        slanted = [m for m in normals
+                   if abs(QVector3D.dotProduct(m, nn)) >= 1e-3]
+        if not slanted:
+            return QVector3D(n)           # walls only: straight along n
+        if len(normals) == 1:
+            m = normals[0]
+            line = nn - m * QVector3D.dotProduct(nn, m)
+        else:
+            line = QVector3D.crossProduct(normals[0], normals[1])
+        along = QVector3D.dotProduct(line, nn)
+        if line.length() < 1e-9 or abs(along) < 1e-3 * line.length():
+            return None                   # the line runs in the cap plane
+        rate = line * (QVector3D.dotProduct(n, nn) / along)
+        if any(abs(QVector3D.dotProduct(m, rate)) > 1e-6 * rate.length()
+               for m in normals):
+            return None                   # 3+ faces with no common line
+        return rate
+
+    def _park_stage(self, viewport) -> None:
+        """Keep the current stage for a return trip: its fields plus a
+        snapshot of the staged model, captured the first time it is parked —
+        its topology never changes, and re-entry re-places the movers
+        absolutely. One per side of the base plane (no interval contains 0,
+        a level); a newer stage replaces the older one."""
+        if self._stage_d is None or self._stage_rec is not None:
+            return
+        self._stage_rec = {
+            "d": self._stage_d, "lo": self._stage_lo, "hi": self._stage_hi,
+            "verts": self._stage_verts, "pos": self._stage_pos,
+            "new": self._stage_new, "applied": self._stage_applied,
+            "state": self._target_mesh(viewport.scene).capture_state(),
+            "sel": set(viewport.scene.selection),
+        }
+        self._stage_cache[1.0 if self._stage_d > 0.0 else -1.0] = self._stage_rec
+
+    def _unpark_stage(self, viewport, rec: dict) -> None:
+        """Show a parked stage again: one restore. restore_state resets every
+        captured object and the lists, so whatever the model holds now —
+        clean, or the other side's stage — needs no clean restore first."""
+        scene = viewport.scene
+        mesh = self._target_mesh(scene)
+        mesh.restore_state(rec["state"])
+        scene.selection.clear()
+        scene.selection.update(rec["sel"])
+        self._stage_d, self._stage_lo, self._stage_hi = (
+            rec["d"], rec["lo"], rec["hi"])
+        self._stage_verts, self._stage_pos, self._stage_new = (
+            rec["verts"], rec["pos"], rec["new"])
+        self._stage_applied = rec["applied"]
+        self._stage_rec = rec
+        self._stage_serial = (id(mesh), mesh._mut_serial)
+        scene.version += 1
+
+    def _restore_clean(self, viewport) -> None:
+        """Back to the clean model the stages are built on, and its
+        selection. The current stage is dropped; a parked copy survives."""
+        scene = viewport.scene
+        mesh = self._target_mesh(scene)
+        mesh.restore_state(self._preview_snapshot)
+        scene.selection.clear()
+        scene.selection.update(self._preview_selection)
+        self._clear_stage()
+        self._stage_serial = (id(mesh), mesh._mut_serial)
+        scene.version += 1
+
+    def _clear_stage(self) -> None:
+        """Forget the current stage (the model's state is the caller's)."""
+        self._stage_d = None
+        self._stage_applied = 0.0
+        self._stage_verts = []
+        self._stage_pos = []
+        self._stage_new = set()
+        self._stage_rec = None
+
+    def _staged_command(self, viewport):
+        """The commit of a held stage that already IS the result at
+        ``extrusion``: the cap slid there, the staged model captured as the
+        command's result and the clean snapshot as its undo state. Two
+        snapshots and a restore instead of a pipeline run, and the commit is
+        exactly the last frame. None when the pipeline must run: nothing
+        staged, Ctrl, outside the interval, a stale snapshot."""
+        if (self._stage_d is None or self._keep_base
+                or self._drop_stale_stage(viewport)
+                or abs(self.extrusion) < _MIN_EXTRUDE
+                or not self._stage_holds(self.extrusion)):
+            return None
+        self._slide_stage(viewport, self.extrusion)
+        mesh = self._target_mesh(viewport.scene)
+        cmd = SnapshotMutation.from_states(
+            self._preview_snapshot, mesh.capture_state(),
+            mesh=self._group.mesh if self._group is not None else None)
+        # The command owns the snapshots now: nothing is restored.
+        self._preview_snapshot = None
+        self._preview_selection = set()
+        self._stage_cache = {}
+        self._clear_stage()
+        self._refused = False
+        return cmd
+
+    def _drop_stale_stage(self, viewport) -> bool:
+        """Something other than this tool edited the mesh while a snapshot is
+        held (File > New, a redo that bypassed on_redo): the snapshots no
+        longer describe the model, so the drag ends WITHOUT restoring one.
+        True when dropped."""
+        if self._preview_snapshot is None:
+            return False
+        mesh = self._target_mesh(viewport.scene)
+        if self._stage_serial == (id(mesh), mesh._mut_serial):
+            return False
+        viewport.set_suppressed_faces(set())
+        self._reset()
+        viewport.update()
+        return True
+
     def _revert_preview(self, viewport) -> None:
+        """Back to the clean model: the prism slid back, a staged model
+        restored (its stage dropped, not parked). The overlay calls this every
+        frame, so a model that is already clean must cost nothing: only a
+        staged one is restored, and the snapshot stays for the drag."""
         self._revert_prism_preview(viewport)
-        if self._preview_snapshot is not None:
-            self._target_mesh(viewport.scene).restore_state(self._preview_snapshot)
-            self._preview_snapshot = None
-            viewport.scene.version += 1
+        if self._drop_stale_stage(viewport):
+            return
+        if self._stage_d is not None:
+            self._restore_clean(viewport)
 
     def inference_marker(self):
         """Return ``(world_point, kind)`` for the marker the viewport draws
@@ -852,6 +1245,30 @@ class PushPullTool(Tool):
             if self._limit_in is None or lateral < self._limit_in:
                 self._limit_in = lateral
 
+    def _compute_plane_levels(self, scene) -> None:
+        """The levels (along the normal, both sides) of every face parallel to
+        the base that overlaps it laterally — where a staged preview's
+        topology changes: the far face a push punches through, a floor it
+        lands flush on, an overhang a pull runs into. Stored in
+        ``self._plane_levels``; see _resolve_stage."""
+        self._plane_levels = []
+        if (not self._attached or self._prism_cap or self.base_face is None
+                or self._normal is None):
+            return                # never staged: the overlay or the prism
+        n = self._normal
+        nn = n.normalized()
+        base_xy = _project_loop_2d(self.base_face.vertices, nn)
+        for g in scene.faces:
+            if g is self.base_face:
+                continue
+            if abs(QVector3D.dotProduct(g.normal().normalized(), nn)) <= 0.999:
+                continue  # not parallel
+            level = QVector3D.dotProduct(g.centroid() - self._anchor, n)
+            if abs(level) <= _STITCH_TOL:
+                continue  # the base's own plane: level 0 is always an event
+            if _loops_overlap_2d(base_xy, _project_loop_2d(g.vertices, nn)):
+                self._plane_levels.append(level)
+
     def _clamp_extrusion(self, viewport=None) -> None:
         if self._limit_in is not None and self.extrusion < -self._limit_in:
             self.extrusion = -self._limit_in
@@ -889,11 +1306,13 @@ class PushPullTool(Tool):
     def _infer_reference_distance(self, ctx: ToolContext):
         """Distance making the moved face level with the model geometry under the
         cursor — the classic mid-push inference ("push until even with that
-        corner / that face"). Scans the *clean* mesh (the caller reverts the live
-        preview first, so the forming solid's own moving vertices never feed
-        back). A model **vertex** within the snap threshold wins first (a precise
-        corner); otherwise the **face** under the cursor is used, projecting the
-        ray∩plane hit onto the push axis (level with where you point on it).
+        corner / that face"). Reads the *clean* mesh (the caller reverts a prism
+        preview first, the vertex cache predates any stage, and a staged
+        preview's own faces/edges are skipped), so the forming solid's moving
+        points never feed back. A model **vertex** within the snap threshold
+        wins first (a precise corner); otherwise the **face** under the cursor
+        is used, projecting the ray∩plane hit onto the push axis (level with
+        where you point on it).
         Records the engaged point in ``self._inference_point`` for the overlay
         marker. Returns ``None`` when nothing engages."""
         vp = ctx.viewport
@@ -918,7 +1337,9 @@ class PushPullTool(Tool):
                 if id(mesh) in seen:      # shared prototypes: project once
                     continue
                 seen.add(id(mesh))
-                verts = mesh.vertices
+                # A COPY: a staged preview edits the live list in place, and
+                # the rows of ``arr`` must keep naming the same vertices.
+                verts = list(mesh.vertices)
                 if not verts:
                     continue
                 arr = np.array(
@@ -984,10 +1405,10 @@ class PushPullTool(Tool):
         # while pushing (Marco's capture, 2026-09-14: the half cylinder
         # pushed until level with the slab's far edge). The point on the
         # edge nearest the cursor ray sets the distance; the base's own
-        # edges are not references.
+        # edges are not references, nor the ones a staged preview created.
         edge = getattr(vp, "_hover_edge", None)
         project = getattr(vp, "_project_to_lock_line", None)
-        if edge is not None and project is not None:
+        if edge is not None and project is not None and edge not in self._stage_new:
             a, b = QVector3D(edge.a), QVector3D(edge.b)
             ab = b - a
             if (_key(a) not in exclude or _key(b) not in exclude) and ab.length() > 1e-9:
@@ -1004,10 +1425,12 @@ class PushPullTool(Tool):
         # No edge either: align to the face under the cursor (its plane).
         # Project the ray∩plane hit onto the push axis. The base face (and
         # anything coplanar with it) reads ~0 distance — guarded out so the
-        # push doesn't pin to its own plane.
+        # push doesn't pin to its own plane; a face the staged preview
+        # created (its moving cap, a riser) would pin it to itself.
         pick = getattr(vp, "pick_face_placement", None) or vp.pick_face_any
         face, _grp = pick(sx, sy)
-        if face is not None and face is not self.base_face:
+        if (face is not None and face is not self.base_face
+                and face not in self._stage_new):
             origin, direction = vp._pixel_to_ray(sx, sy)
             if origin is not None and direction is not None:
                 # In world space — a placed component's face lives in its
@@ -1179,7 +1602,11 @@ class PushPullTool(Tool):
         self._light_faces = []
         self._light_rings = []
         viewport.set_suppressed_faces(set())
-        self._revert_preview(viewport)  # drop the live preview; redo it for real
+        # A held stage showing this very distance is kept as the result;
+        # otherwise drop the live preview and redo it for real.
+        cmd = self._staged_command(viewport)
+        if cmd is None:
+            self._revert_preview(viewport)
         if self.base_face is None or abs(self.extrusion) < _MIN_EXTRUDE:
             self._reset()
             self._spend_keep_mode(viewport)
@@ -1189,9 +1616,11 @@ class PushPullTool(Tool):
         # and it is the identical mutation the live preview just showed. A push
         # aimed at a group snapshots that group's mesh instead.
         self._topped_out = False
-        viewport.history.execute(SnapshotMutation(
-            self._mutate_or_top_out,
-            mesh=self._group.mesh if self._group is not None else None))
+        if cmd is None:
+            cmd = SnapshotMutation(
+                self._mutate_or_top_out,
+                mesh=self._group.mesh if self._group is not None else None)
+        viewport.history.execute(cmd)
         if self._topped_out:
             viewport.flash_status(tr(
                 "Push stopped at {d}: going further would break the "
@@ -1224,11 +1653,12 @@ class PushPullTool(Tool):
         with an already-raised neighbour — is refused, and refusing outright
         would leave the user's drag doing nothing. The live preview used to
         carry this: it re-ran the pipeline per mouse-move and remembered the
-        last distance that worked. Now that the drag is an overlay there is no
-        such record, so the search happens here, where it is paid once and only
-        on a push that was going to be a no-op. Bisection finds a closer height
-        than the old sampling did — it converges on the true limit rather than
-        on wherever the cursor happened to be."""
+        last distance that worked. Now that the drag no longer re-runs the
+        pipeline per frame there is no such record, so the search happens
+        here, where it is paid once and only on a push that was going to be a
+        no-op. Bisection finds a closer height than the old sampling did — it
+        converges on the true limit rather than on wherever the cursor
+        happened to be."""
         self._mutate(scene)
         if not self._refused:
             return
@@ -1783,6 +2213,13 @@ class PushPullTool(Tool):
         self._normal = None
         self._cap_positions = []
         self._preview_snapshot = None
+        self._preview_selection = set()
+        self._clear_stage()
+        self._stage_cache = {}
+        self._stage_refusal = None
+        self._stage_slow = False
+        self._plane_levels = []
+        self._stage_serial = None
         self._drag_pre_oriented = False
         self._inference_point = None
         self._inference_kind = None

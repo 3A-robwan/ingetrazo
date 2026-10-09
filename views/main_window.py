@@ -4886,6 +4886,13 @@ class MainWindow(QMainWindow):
             self.viewport.notify_scene_changed()
 
     def _on_redo(self) -> None:
+        # The same first refusal as undo: Push/Pull ends a drag whose staged
+        # preview sits in the model, so the redo lands on the clean one.
+        tool = self.viewport.active_tool
+        handler = getattr(tool, "on_redo", None)
+        if callable(handler) and handler(self.viewport):
+            self.viewport.notify_scene_changed()
+            return
         if self.viewport.history.redo():
             self.viewport.notify_scene_changed()
 
