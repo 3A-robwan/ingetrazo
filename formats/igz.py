@@ -560,8 +560,11 @@ def save_scene(scene, path: Path) -> dict:
     if style:
         payload["dimension_style"] = dict(style)
     cam = getattr(scene, "camera_home", None)
-    if isinstance(cam, dict):
+    if isinstance(cam, dict) and _non_finite_where(cam) == "scene":
         payload["camera"] = dict(cam)      # what the author was looking at
+    # A camera holding a NaN is left out instead of refusing the save: it is
+    # only the view, and the file opens framed on the model (#485). The
+    # geometry keeps its own guard below.
     units = getattr(scene, "units", None)
     if isinstance(units, dict) and units != {"length": "m", "precision": 2}:
         payload["units"] = dict(units)     # only when not the metre default
