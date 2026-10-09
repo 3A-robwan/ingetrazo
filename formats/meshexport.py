@@ -290,7 +290,9 @@ def _add_face(face, materials, prims) -> None:
             prims.setdefault(key, []).append(
                 (n, [(pts[k], (uv[k][0], uv[k][1])) for k in range(3)]))
     else:
-        col = tuple(face.attrs.get("color") or _DEFAULT_COLOR)
+        # RGB: the AI recipes paint (r, g, b, 1.0) and every writer reads
+        # three channels (transparency is attrs["opacity"], above).
+        col = tuple(face.attrs.get("color") or _DEFAULT_COLOR)[:3]
         key = ("color", col) if op is None else ("color", col, op)
         materials.setdefault(key, {"color": col, "map": None,
                                    "opacity": op})

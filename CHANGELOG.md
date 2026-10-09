@@ -259,6 +259,11 @@ follow [SemVer](https://semver.org).
   guardar 2,3 → 1,6 s solo por esto (#158, @pacaeiro).
 
 ### Corregido
+- **Exportar a GLB, DAE u OBJ fallaba con cualquier modelo hecho por la
+  IA** («too many values to unpack», #462, @blackflash73): el recetario y
+  el puente MCP pintan con `(r, g, b, 1.0)` y los exportadores leían tres
+  canales. Ahora toman el RGB (la transparencia sigue viniendo de la
+  opacidad).
 - **El asistente IA ya no rompe la vista al añadir dos veces un grupo**:
   si el modelo hacía `groups.append(...)` con lo que `house()` o `box()`
   ya habían agregado, el grupo quedaba repetido o, con `house()`, entraba

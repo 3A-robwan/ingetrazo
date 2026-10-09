@@ -224,3 +224,31 @@ def test_dae_without_textures_has_no_empty_library_images(tmp_path):
     scene2 = Scene()
     dae_format.load_dae(scene2, path)
     assert scene2.mesh.faces or scene2.groups
+
+
+def test_rgba_painted_faces_export_to_glb_dae_and_obj(tmp_path):
+    """The AI recipes (and the MCP bridge's run_python) paint
+    ``attrs["color"] = (r, g, b, 1.0)``; every mesh writer unpacked three
+    channels and File ▸ Export failed with "too many values to unpack" on
+    any model the assistant had built."""
+    from formats import obj as obj_format
+    scene = Scene()
+    hist = History(scene)
+    _cube(scene, hist)
+    for f in scene.mesh.faces:
+        f.attrs["color"] = (0.8, 0.2, 0.1, 1.0)
+
+    glb = tmp_path / "rgba.glb"
+    gltf_format.save_glb(scene, glb)
+    gltf, _ = _read_glb(glb)
+    factors = [m["pbrMetallicRoughness"].get("baseColorFactor")
+               for m in gltf["materials"]]
+    assert [0.8, 0.2, 0.1, 1.0] in factors
+
+    dae = tmp_path / "rgba.dae"
+    dae_format.save_dae(scene, dae)
+    assert "0.8000 0.2000 0.1000 1" in dae.read_text(encoding="utf-8")
+
+    obj = tmp_path / "rgba.obj"
+    obj_format.save_obj(scene, obj)
+    assert "Kd 0.8000 0.2000 0.1000" in (tmp_path / "rgba.mtl").read_text()
