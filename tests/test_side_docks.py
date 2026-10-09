@@ -30,10 +30,10 @@ def _close(win):
     win.hide()
 
 
-def test_tray_tabs_sit_on_top_with_their_whole_names():
+def test_tray_tabs_sit_at_the_bottom_with_their_whole_names():
     win = _window()
-    assert win.tabPosition(Qt.RightDockWidgetArea) == QTabWidget.North
-    assert win.tabPosition(Qt.LeftDockWidgetArea) == QTabWidget.North
+    assert win.tabPosition(Qt.RightDockWidgetArea) == QTabWidget.South
+    assert win.tabPosition(Qt.LeftDockWidgetArea) == QTabWidget.South
     bars = win._dock_tab_bars()
     assert bars
     for tb in bars:
