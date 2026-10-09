@@ -323,8 +323,10 @@ Wilson's Windowizer 3 by Bane Andreev, an architect, written with AI help.
 - `plugins/python_console.py` — the Python Console. A stateful,
   command-layer-integrated plugin.
 - `plugins/solid_inspector.py` — Solid Inspector: per-edge watertightness
-  diagnosis with viewport highlighting. A modeless, selection-driven
-  plugin.
+  diagnosis with viewport highlighting, step-by-step navigation and a
+  one-undo-step repair (`RepairSolidsCommand`, snapshot undo over several
+  meshes). A side-tray tab (`setup(app)` + `add_panel`) with a viewport
+  overlay that paints each problem in its colour.
 - `plugins/ai_assistant.py` — the in-app AI assistant (Ctrl+Shift+A): a
   multi-provider chat agent that models through `core.ai`, in the «AI»
   tray tab. The reference for worker threads, per-provider settings and a
