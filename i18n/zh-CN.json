@@ -2849,5 +2849,11 @@
  "Included with IngeTrazo": "随 IngeTrazo 附带",
  "Ships with IngeTrazo {version}": "随 IngeTrazo {version} 提供",
  "INCLUDED": "已附带",
- "Install": "安装"
+ "Install": "安装",
+ "Open extensions folder": "打开扩展文件夹",
+ "Open the folder of your extensions; one put there loads at the next start.": "打开你的扩展文件夹；放在那里的扩展会在下次启动时加载。",
+ "Develop an extension…": "开发扩展…",
+ "Open the guide to writing extensions for IngeTrazo.": "打开为 IngeTrazo 编写扩展的指南。",
+ "Replace with the version included with IngeTrazo": "替换为 IngeTrazo 附带的版本",
+ "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "用 IngeTrazo 附带的版本替换手动安装的「{name}」？手动安装的副本会被放到一边（重命名为以点开头的名称），不会删除，之后附带的版本可以在这里停用和卸载。"
 }

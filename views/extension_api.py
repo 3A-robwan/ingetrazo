@@ -203,7 +203,7 @@ class ExtensionApp:
             # Above the menu's own entries (examples, manager, plugins
             # folder, guide), as in 0.5.7: since setup() runs after the
             # window is up (#440) those entries already exist, and an
-            # appended action landed under «Develop a plugin…».
+            # appended action landed under «Develop an extension…».
             menu.insertAction(anchor, action)
         else:
             menu.addAction(action)

@@ -2307,14 +2307,14 @@ class MainWindow(QMainWindow):
 
         # The on-ramp for plugin authors: their folder and the dev guide.
         ext_menu.addSeparator()
-        act = ext_menu.addAction(tr("Open plugins folder"))
+        act = ext_menu.addAction(tr("Open extensions folder"))
         act.setStatusTip(tr(
-            "Open the folder for your plugins; one put there loads at the "
+            "Open the folder of your extensions; one put there loads at the "
             "next start."))
         act.triggered.connect(self._on_open_plugins_folder)
-        act = ext_menu.addAction(tr("Develop a plugin…"))
+        act = ext_menu.addAction(tr("Develop an extension…"))
         act.setStatusTip(tr(
-            "Open the guide to writing plugins for IngeTrazo."))
+            "Open the guide to writing extensions for IngeTrazo."))
         act.triggered.connect(self._on_develop_plugin)
 
         # The app itself (main.py) defers the plugins' setup until the window

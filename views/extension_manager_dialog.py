@@ -676,7 +676,10 @@ class ExtensionManagerDialog(QDialog):
             # Installed by hand before the manager existed (or copied in):
             # the catalog version replaces it, or it is set aside.
             if compatible:
-                replace = QPushButton(tr("Replace with the catalog version"))
+                replace = QPushButton(
+                    tr("Replace with the version included with IngeTrazo")
+                    if extension.bundled
+                    else tr("Replace with the catalog version"))
                 replace.clicked.connect(
                     lambda _checked=False, e=extension: self._replace(e))
                 actions.addWidget(replace)
@@ -980,10 +983,15 @@ class ExtensionManagerDialog(QDialog):
         name = display_name(extension, current_language())
         answer = QMessageBox.question(
             self, tr("Extension manager"),
-            tr("Replace the copy of «{name}» installed by hand with the "
-               "catalog version? The copy is set aside (renamed with a dot "
-               "in front), not deleted, and the catalog version can then be "
-               "updated, disabled and uninstalled from here.", name=name),
+            (tr("Replace the copy of «{name}» installed by hand with the "
+                "version included with IngeTrazo? The copy is set aside "
+                "(renamed with a dot in front), not deleted, and the "
+                "included version can then be disabled and uninstalled from "
+                "here.", name=name) if extension.bundled else
+             tr("Replace the copy of «{name}» installed by hand with the "
+                "catalog version? The copy is set aside (renamed with a dot "
+                "in front), not deleted, and the catalog version can then be "
+                "updated, disabled and uninstalled from here.", name=name)),
             QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         if answer != QMessageBox.Yes:
             return

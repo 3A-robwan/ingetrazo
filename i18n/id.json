@@ -2732,5 +2732,11 @@
  "Included with IngeTrazo": "Disertakan dengan IngeTrazo",
  "Ships with IngeTrazo {version}": "Hadir bersama IngeTrazo {version}",
  "INCLUDED": "DISERTAKAN",
- "Install": "Pasang"
+ "Install": "Pasang",
+ "Open extensions folder": "Buka folder ekstensi",
+ "Open the folder of your extensions; one put there loads at the next start.": "Membuka folder ekstensi Anda; ekstensi yang ditaruh di sana dimuat pada awal berikutnya.",
+ "Develop an extension…": "Kembangkan ekstensi…",
+ "Open the guide to writing extensions for IngeTrazo.": "Membuka panduan menulis ekstensi untuk IngeTrazo.",
+ "Replace with the version included with IngeTrazo": "Ganti dengan versi yang disertakan IngeTrazo",
+ "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "Ganti salinan «{name}» yang dipasang manual dengan versi yang disertakan IngeTrazo? Salinan itu disisihkan (diberi titik di depan namanya), tidak dihapus, dan versi yang disertakan nantinya bisa dinonaktifkan dan dicopot dari sini."
 }

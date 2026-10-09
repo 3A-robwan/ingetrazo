@@ -2739,5 +2739,11 @@
  "Included with IngeTrazo": "Incluse avec IngeTrazo",
  "Ships with IngeTrazo {version}": "Fournie avec IngeTrazo {version}",
  "INCLUDED": "INCLUSE",
- "Install": "Installer"
+ "Install": "Installer",
+ "Open extensions folder": "Ouvrir le dossier des extensions",
+ "Open the folder of your extensions; one put there loads at the next start.": "Ouvre le dossier de vos extensions ; une extension placée là se charge au prochain démarrage.",
+ "Develop an extension…": "Développer une extension…",
+ "Open the guide to writing extensions for IngeTrazo.": "Ouvre le guide pour écrire des extensions pour IngeTrazo.",
+ "Replace with the version included with IngeTrazo": "Remplacer par la version incluse avec IngeTrazo",
+ "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "Remplacer la copie de «{name}» installée à la main par la version incluse avec IngeTrazo ? La copie est mise de côté (renommée avec un point devant), pas supprimée, et la version incluse pourra ensuite être désactivée et désinstallée depuis ici."
 }

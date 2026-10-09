@@ -220,8 +220,8 @@ def test_menu_placeholder_when_no_plugins(main_window):
     assert not actions[0].isEnabled()
     # The plugin-author on-ramp is always at the bottom of the menu.
     texts = [a.text() for a in actions]
-    assert "Open plugins folder" in texts
-    assert "Develop a plugin…" in texts
+    assert "Open extensions folder" in texts
+    assert "Develop an extension…" in texts
     assert "Manage extensions…" in texts
 
 
