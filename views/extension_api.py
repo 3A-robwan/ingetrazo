@@ -198,7 +198,15 @@ class ExtensionApp:
                 action.setShortcut(QKeySequence(shortcut))
                 taken.add(seq)
         action.triggered.connect(lambda _c=False: fn())
-        menu.addAction(action)
+        anchor = getattr(win, "_ext_anchor", None)
+        if anchor is not None:
+            # Above the menu's own entries (examples, manager, plugins
+            # folder, guide), as in 0.5.7: since setup() runs after the
+            # window is up (#440) those entries already exist, and an
+            # appended action landed under «Develop a plugin…».
+            menu.insertAction(anchor, action)
+        else:
+            menu.addAction(action)
         return action
 
     def add_menu(self, title: str):
@@ -206,7 +214,15 @@ class ExtensionApp:
         for an extension with several commands; returns the QMenu to fill
         (``None`` outside a window with that menu)."""
         menu = getattr(self._window, "_ext_menu", None)
-        return menu.addMenu(title) if menu is not None else None
+        if menu is None:
+            return None
+        anchor = getattr(self._window, "_ext_anchor", None)
+        if anchor is None:
+            return menu.addMenu(title)
+        from PySide6.QtWidgets import QMenu
+        sub = QMenu(title, menu)
+        menu.insertMenu(anchor, sub)        # above the menu's own entries
+        return sub
 
     def add_outliner_kind(self, fn) -> None:
         """Say what YOUR container groups are, in the Browser:

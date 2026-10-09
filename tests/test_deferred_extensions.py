@@ -73,3 +73,16 @@ def test_plugin_entries_sit_above_the_fixed_entries(deferred):
                   if a.text() == tr("Open plugins folder"))
     assert anchor >= 1                  # something was put above the mark
     assert folder > anchor              # the fixed entries stay below it
+
+
+def test_deferred_plugin_entries_sit_above_the_menus_own_entries(deferred):
+    # 0.5.7 ran setup() before the menu's own entries were added, so the
+    # plugins' commands sat on top. Deferred (#440), add_menu_action and
+    # add_menu appended them under «Develop a plugin…» — a jumbled menu.
+    deferred.load_extensions()
+    texts = _menu_texts(deferred)
+    fixed = texts.index("Manage extensions…")
+    for entry in ("AI Assistant", "AI Bridge (MCP)", "Render with Blender…"):
+        if entry in texts:
+            assert texts.index(entry) < fixed, texts
+    assert texts[-1] == "Develop a plugin…", texts
