@@ -8820,6 +8820,12 @@ class Viewport(QOpenGLWidget):
         cache[id(group)] = entry
         _store = getattr(self, "_chunk_cache_store", None)   # stub VPs in tests
         editing = getattr(self, "_editing_meshes", None)
+        if not (callable(editing) and id(mesh) in editing()):
+            # The per-face memo only pays off for the mesh being edited
+            # (each stroke rebuilds its chunk); kept for every mesh it cost
+            # +140 MB on the Plaza (release_check 10-10). Entering a group
+            # rebuilds it on the first stroke, as before the memo existed.
+            mesh.__dict__.pop("_face_geom_memo", None)
         # Not while the group is open: each stroke inside it rebuilds this
         # chunk, and pickling 25 000 faces after every one held the GIL
         # ~350 ms beside the UI (Plaza, 09-10) for an entry the next stroke
