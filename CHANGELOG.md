@@ -320,6 +320,9 @@ follow [SemVer](https://semver.org).
   vista previa, fantasma de los grupos, búferes de escena y de profundidad,
   componentes instanciados) seguían apuntando al contexto viejo. Ahora se
   rehacen en el contexto nuevo.
+- **Un atajo con Mayús y un número se guarda como tal** (#493,
+  @pacaeiro): Mayús+5 quedaba como «Mayús+%», el símbolo que escribe la
+  tecla, en vez de la tecla pulsada.
 - **Esc durante un arrastre en el compositor lo deshace** (#504,
   @pacaeiro): una vista (o cualquier elemento) arrastrada o redimensionada
   vuelve a donde estaba al pulsar Esc, sin dejar paso de deshacer; antes

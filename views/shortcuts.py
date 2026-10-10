@@ -264,6 +264,36 @@ def import_shortcuts(window, data) -> tuple:
     return applied, len(wanted) - applied, clashes
 
 
+# The digit row by physical key: with Shift held, Qt reports the symbol the
+# layout types (Shift+5 → «%» on most layouts) and the shortcut was saved
+# as «Shift+%» (#493, @pacaeiro). Qt matches «Shift+5» on a real Shift+5
+# (checked by hand on xcb and Wayland, 10-10), so the digit is what we keep.
+_DIGITS = "1234567890"
+#: macOS virtual key codes (kVK_ANSI_1 … kVK_ANSI_0).
+_MAC_DIGIT_VK = {0x12: "1", 0x13: "2", 0x14: "3", 0x15: "4", 0x17: "5",
+                 0x16: "6", 0x1A: "7", 0x1C: "8", 0x19: "9", 0x1D: "0"}
+
+
+def digit_row_key(event):
+    """The Qt key of the digit-row key pressed, read from the physical
+    key — or ``None`` when it is not one (or the platform says nothing)."""
+    from PySide6.QtGui import QGuiApplication
+    platform = QGuiApplication.platformName()
+    scan = event.nativeScanCode()
+    if platform in ("xcb", "wayland", "offscreen"):
+        index = scan - 10               # xkb keycodes: «1» is 10 … «0» is 19
+    elif platform == "windows":
+        index = (scan & 0xFF) - 2       # set-1 scan codes: «1» is 2 … «0» is 11
+    elif platform == "cocoa":
+        digit = _MAC_DIGIT_VK.get(event.nativeVirtualKey())
+        return None if digit is None else Qt.Key(ord(digit))
+    else:
+        return None
+    if 0 <= index < 10:
+        return Qt.Key(ord(_DIGITS[index]))
+    return None
+
+
 class _KeyCapture(QLineEdit):
     """A box that takes ONE key combination (the keys pressed in it).
 
@@ -295,6 +325,8 @@ class _KeyCapture(QLineEdit):
                    Qt.Key_AltGr, Qt.Key_unknown, 0):
             return                            # wait for the real key
         mods = event.modifiers() & ~Qt.KeypadModifier
+        if mods & Qt.ShiftModifier and not (Qt.Key_0 <= key <= Qt.Key_9):
+            key = digit_row_key(event) or key   # Shift+5, not Shift+%
         self.setKeySequence(QKeySequence(QKeyCombination(mods, Qt.Key(key))))
         self.keyCaptured.emit(self._seq)
 
