@@ -2851,10 +2851,15 @@ def _coplanar_component(mesh, f0, seedkeys: set,
             ncache[f] = v
         return v
 
+    key = scache.get("__keymemo__")
+    if key is None:
+        from core.topology import KeyMemo
+        key = scache["__keymemo__"] = KeyMemo()
+
     def seeded(f):
         v = scache.get(f)
         if v is None:
-            v = any(_key(p) in seedkeys for p in f.vertices)
+            v = any(key(p) in seedkeys for p in f.vertices)
             scache[f] = v
         return v
 

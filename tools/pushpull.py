@@ -2213,8 +2213,10 @@ class PushPullTool(Tool):
         entry point into the solid(s) it edited, for scoping the orientation
         pass to those components. ``None`` (meaning "the whole mesh") when the
         op left none, so a collapse can never silently skip orientation."""
+        from core.topology import KeyMemo
+        key = KeyMemo()
         hit = [f for f in mesh.faces
-               if any(_key(v) in seedkeys for v in f.vertices)]
+               if any(key(v) in seedkeys for v in f.vertices)]
         return hit or None
 
     @staticmethod
@@ -2353,9 +2355,26 @@ class PushPullTool(Tool):
         push = fn if d > 0 else -fn
         origin = face.centroid()
         best = None
+        # The far face must overlap the box the push sweeps (the face and its
+        # copy |d| along the push): only those reach the normal and the
+        # containment tests — every face's Newell normal was computed before,
+        # on every push (09-10). Grown far beyond the 1e-4 tolerances.
+        swept = list(face.vertices) + [v + push * abs(d) for v in face.vertices]
+        sx = [p.x() for p in swept]; sy = [p.y() for p in swept]
+        sz = [p.z() for p in swept]
+        mg = 0.01 + 1e-6 * max(map(abs, sx + sy + sz))
+        w0 = (min(sx) - mg, min(sy) - mg, min(sz) - mg)
+        w1 = (max(sx) + mg, max(sy) + mg, max(sz) + mg)
         for g in faces:
             if g is face:
                 continue
+            gv = g.vertices
+            if (max(p.x() for p in gv) < w0[0] or min(p.x() for p in gv) > w1[0]
+                    or max(p.y() for p in gv) < w0[1]
+                    or min(p.y() for p in gv) > w1[1]
+                    or max(p.z() for p in gv) < w0[2]
+                    or min(p.z() for p in gv) > w1[2]):
+                continue  # nowhere near what the push sweeps
             if abs(QVector3D.dotProduct(fn, g.normal().normalized())) < 0.999:
                 continue  # not parallel
             dist = QVector3D.dotProduct(g.centroid() - origin, push)

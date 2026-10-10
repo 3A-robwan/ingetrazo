@@ -33,6 +33,26 @@ def _key(p: QVector3D) -> tuple[float, float, float]:
             round(p.z(), _KEY_DECIMALS))
 
 
+class KeyMemo:
+    """``_key`` memoised per point OBJECT for the length of one scan. A push
+    on a 25 797-face group called ``_key`` 655 000 times (2 M ``round``) —
+    each vertex once per face and edge it belongs to. Only for a scan that
+    moves nothing: a position mutated in place keeps its object."""
+
+    __slots__ = ("_seen",)
+
+    def __init__(self) -> None:
+        self._seen: dict = {}
+
+    def __call__(self, p: QVector3D) -> tuple:
+        hit = self._seen.get(id(p))
+        if hit is not None and hit[0] is p:
+            return hit[1]
+        k = _key(p)
+        self._seen[id(p)] = (p, k)
+        return k
+
+
 def same_position(p: QVector3D, q: QVector3D) -> bool:
     """Whether two points coincide within the welding tolerance (≈ 0.1 mm)."""
     return _key(p) == _key(q)
@@ -414,15 +434,23 @@ def orphaned_edges_at(
     elsewhere (only those touching the operation's vertices are considered).
     """
     vkeys = {_key(v) for v in vertices}
+    key = KeyMemo()
     face_edges: set = set()
     for f in faces:
-        face_edges.update(_loop_edges(f.vertices))
-        for hole in f.holes:
-            face_edges.update(_loop_edges(hole))
+        loops = [[key(p) for p in lp] for lp in (f.vertices, *f.holes)]
+        # Only an edge with an end in ``vkeys`` is asked about, and a face
+        # can only carry it if it has that corner: the others are skipped
+        # (exact — every face was walked before).
+        if not any(k in vkeys for lk in loops for k in lk):
+            continue
+        for lk in loops:
+            n = len(lk)
+            face_edges.update(frozenset((lk[i], lk[(i + 1) % n]))
+                              for i in range(n))
     out: list[Edge] = []
     for e in edges:
-        ek = frozenset((_key(e.a), _key(e.b)))
-        if (_key(e.a) in vkeys or _key(e.b) in vkeys) and ek not in face_edges:
+        ka, kb = key(e.a), key(e.b)
+        if (ka in vkeys or kb in vkeys) and frozenset((ka, kb)) not in face_edges:
             out.append(e)
     return out
 
@@ -487,9 +515,16 @@ def refine_loop_with_points(
     the existing vertices sitting on it makes each sub-segment carried by one
     face, so push/pull classifies (and consumes) it correctly. Returns a new loop
     with the collinear points inserted in order; the originals are untouched."""
+    import numpy as np
     out: list[QVector3D] = []
     n = len(loop)
     pts = list(points)
+    # A point on a segment's interior lies inside its box (grown by the
+    # tolerance): only those reach the exact test below, in their order. The
+    # pushed face's loop against every vertex of a 25 797-face group was
+    # ~80 000 same_position calls per push (09-10).
+    xyz = (np.array([(p.x(), p.y(), p.z()) for p in pts], dtype=np.float64)
+           if pts else np.zeros((0, 3)))
     for i in range(n):
         a = loop[i]
         b = loop[(i + 1) % n]
@@ -498,8 +533,16 @@ def refine_loop_with_points(
         length = ab.length()
         if length < tol:
             continue
+        g = 2.0 * tol + 1e-6 * max(abs(a.x()), abs(a.y()), abs(a.z()),
+                                   abs(b.x()), abs(b.y()), abs(b.z()))
+        lo = np.array([min(a.x(), b.x()), min(a.y(), b.y()),
+                       min(a.z(), b.z())]) - g
+        hi = np.array([max(a.x(), b.x()), max(a.y(), b.y()),
+                       max(a.z(), b.z())]) + g
+        near = np.flatnonzero(((xyz >= lo) & (xyz <= hi)).all(axis=1))
         on: list[tuple[float, QVector3D]] = []
-        for p in pts:
+        for j in near:
+            p = pts[j]
             if same_position(p, a) or same_position(p, b):
                 continue
             t = QVector3D.dotProduct(p - a, ab) / (length * length)

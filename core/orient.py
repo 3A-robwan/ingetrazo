@@ -139,10 +139,80 @@ class _PackedTris:
     every triangle in pure Python — the O(F²·T) hot loop that froze the app as
     solids grew; one vectorised pass per ray replaces it."""
 
-    __slots__ = ("a", "e1", "e2", "face_idx")
+    __slots__ = ("a", "e1", "e2", "face_idx", "bvh")
 
     def __init__(self, a, e1, e2, face_idx) -> None:
         self.a, self.e1, self.e2, self.face_idx = a, e1, e2, face_idx
+        self.bvh = None             # _Clusters, built on first use
+
+
+#: Below this many triangles a ray just tests them all.
+_BVH_MIN_TRIS = 2048
+#: Triangles per cluster of the ray index.
+_BVH_LEAF = 32
+
+
+class _Clusters:
+    """A one-level ray index over a packed triangle set: triangles sorted
+    along a Morton curve of their centroids, cut into clusters of
+    ``_BVH_LEAF`` neighbours, each with a box grown far beyond the ray test's
+    tolerances (barycentric 1e-7, t > 1e-6). A ray keeps only the clusters
+    whose box it crosses; the exact Möller–Trumbore count then runs on those
+    triangles alone — the same count, since every triangle the exact test
+    would accept lies inside its cluster's box. Orienting one 25 797-face
+    component cast ~360 000 rays against every triangle: 3 minutes for one
+    push on the Plaza's terrain (09-10)."""
+
+    def __init__(self, packed: "_PackedTris") -> None:
+        import numpy as np
+        a, e1, e2 = packed.a, packed.e1, packed.e2
+        b, c = a + e1, a + e2
+        lo = np.minimum(np.minimum(a, b), c)
+        hi = np.maximum(np.maximum(a, b), c)
+        cen = (lo + hi) * 0.5
+        span = cen.max(axis=0) - cen.min(axis=0)
+        span[span <= 0] = 1.0
+        q = ((cen - cen.min(axis=0)) / span * 1023).astype(np.int64)
+        code = np.zeros(len(q), dtype=np.int64)
+        for bit in range(10):
+            for axis in range(3):
+                code |= ((q[:, axis] >> bit) & 1) << (3 * bit + axis)
+        order = np.argsort(code, kind="stable")
+        n = len(order)
+        starts = np.arange(0, n, _BVH_LEAF)
+        clo = np.minimum.reduceat(lo[order], starts, axis=0)
+        chi = np.maximum.reduceat(hi[order], starts, axis=0)
+        ext = (chi - clo).max(axis=1, keepdims=True)
+        big = np.maximum(np.abs(clo).max(axis=1, keepdims=True),
+                         np.abs(chi).max(axis=1, keepdims=True))
+        margin = 1e-5 + 1e-6 * big + 1e-5 * ext
+        self.lo, self.hi = clo - margin, chi + margin
+        self.cen = (self.lo + self.hi) * 0.5
+        self.half = np.linalg.norm(self.hi - self.lo, axis=1) * 0.5
+        self.order = order
+        self.counts = np.diff(np.append(starts, n))
+
+    def rows(self, origin, direction, spread: float):
+        """Rows of the triangles in a cluster any ray from ``origin`` within
+        ``spread`` radians of ``direction`` can cross: ONE slab test along
+        ``direction`` against each box grown by how far such a ray can stray
+        before leaving it (spread × the box's farthest distance) — the
+        jittered rays of one parity query differ by < 0.03°."""
+        import numpy as np
+        o = np.asarray(origin, dtype=np.float64)
+        reach = np.linalg.norm(self.cen - o, axis=1) + self.half
+        grow = (spread * reach)[:, None]
+        lo, hi = self.lo - grow, self.hi + grow
+        dv = np.asarray(direction, dtype=np.float64)
+        dv = np.where(np.abs(dv) < 1e-30, 1e-30, dv)
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            inv = 1.0 / dv
+            t1 = (lo - o) * inv
+            t2 = (hi - o) * inv
+            tmin = np.minimum(t1, t2).max(axis=1)
+            tmax = np.maximum(t1, t2).min(axis=1)
+        hit = (tmax >= tmin) & (tmax >= 0.0)
+        return self.order[np.repeat(hit, self.counts)]
 
 
 def _pack_lists(triangle_lists, face_ids=None) -> _PackedTris:
@@ -236,11 +306,10 @@ def ray_parity_outside(origin: QVector3D, direction: QVector3D,
     if packed is None:
         packed = _pack_lists(triangle_lists)
         mask = None
-    query = _ParityQuery(origin, packed, mask)
     n = direction.normalized()
     u, v = _basis(n)
-    outside_votes = 0
-    inside_votes = 0
+    # The rays first (the same draws from ``rng``, in the same order).
+    rays = []
     for r in range(_RAYS):
         if r == 0:
             d = n
@@ -248,6 +317,23 @@ def ray_parity_outside(origin: QVector3D, direction: QVector3D,
             d = (n
                  + u * rng.uniform(-_JITTER, _JITTER)
                  + v * rng.uniform(-_JITTER, _JITTER)).normalized()
+        rays.append(d)
+    if packed.a.shape[0] >= _BVH_MIN_TRIS:
+        if packed.bvh is None:
+            packed.bvh = _Clusters(packed)
+        # Each jittered ray is within 2·√2·_JITTER of ``n`` (a unit vector
+        # nudged by two perpendicular offsets of at most _JITTER, then
+        # renormalised); the index is asked with three times that.
+        rows = packed.bvh.rows((origin.x(), origin.y(), origin.z()),
+                               (n.x(), n.y(), n.z()), 3.0 * 2.83 * _JITTER)
+        packed = _PackedTris(packed.a[rows], packed.e1[rows],
+                             packed.e2[rows], packed.face_idx[rows])
+        if mask is not None:
+            mask = mask[rows]
+    query = _ParityQuery(origin, packed, mask)
+    outside_votes = 0
+    inside_votes = 0
+    for d in rays:
         crossings = query.crossings(d)
         if crossings % 2 == 0:
             outside_votes += 1

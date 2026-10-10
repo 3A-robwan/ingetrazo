@@ -236,6 +236,15 @@ follow [SemVer](https://semver.org).
   modelo importado, cientos y lejos de donde se empujaba. Ahora solo los que
   el empuje pudo dejar abiertos: una cara enorme de la plaza pasa de no
   terminar en 5 minutos a unos 3, y nada lejano se recalcula.
+- **Empujar/Tirar en mallas grandes, hasta 9× más rápido**: en un grupo
+  grande que forma una sola pieza (un terreno o un modelo importado),
+  decidir qué lado de cada cara es «fuera» lanzaba cientos de miles de
+  rayos contra todos los triángulos — un empuje cualquiera podía congelar
+  IngeTrazo 3–4 minutos. Ahora cada rayo solo prueba los triángulos cerca
+  de su trayectoria (un índice por bloques, como el de Blender): 21–31 s en
+  esos casos, y el resto del empuje (aristas sueltas, cosido, cara opuesta)
+  ya no recorre todo el grupo — 1,5 s → 0,8 s en una cara normal. El
+  resultado es idéntico: misma malla, cara a cara, en 12 empujes de prueba.
 - **Editar ya no paga los paneles laterales**: la lista «En el modelo» de
   Componentes y el Navegador se refrescaban tras cada edición, aunque
   estuvieran plegados u ocultos (+20 ms por edición en un modelo como la
