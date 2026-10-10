@@ -2857,5 +2857,20 @@
  "Restore default panels": "Rétablir les panneaux par défaut",
  "Restore default tabs": "Rétablir les onglets par défaut",
  "The tabs on the left of the page: drag any tab there, or back to the right.": "Les onglets à gauche de la page : faites-y glisser n'importe quel onglet, ou ramenez-le à droite.",
- "Properties and the Browser open, the other panels closed, all on the right in the factory order.": "Propriétés et le Navigateur ouverts, les autres panneaux fermés, tous à droite dans l'ordre d'origine."
+ "Properties and the Browser open, the other panels closed, all on the right in the factory order.": "Propriétés et le Navigateur ouverts, les autres panneaux fermés, tous à droite dans l'ordre d'origine.",
+ "Import photogrammetric mesh": "Importer un maillage photogrammétrique",
+ "ODM textured model (*.obj);;All files (*)": "Modèle texturé ODM (*.obj);;Tous les fichiers (*)",
+ "glTF binary (*.glb)": "glTF binaire (*.glb)",
+ "COLLADA (*.dae)": "COLLADA (*.dae)",
+ "Photogrammetric mesh (WebODM)…": "Maillage photogrammétrique (WebODM)…",
+ "glTF / GLB (3D, single file)…": "glTF / GLB (3D, fichier unique)…",
+ "{name} is not available here.": "{name} n'est pas disponible ici.",
+ "Leave the group first (Esc) — nested groups aren't supported yet": "Quittez d'abord le groupe (Échap) : les groupes imbriqués ne sont pas encore pris en charge",
+ "No triangles found in the model.": "Aucun triangle trouvé dans le modèle.",
+ "This model is not georeferenced and the scene has no datum yet. Set a location in the Terrain tray first, or pick an ODM export that includes odm_georeferencing_model_geo.txt.": "Ce modèle n'est pas géoréférencé et la scène n'a pas encore de datum. Définissez d'abord un emplacement dans le panneau Terrain, ou choisissez un export ODM qui inclut odm_georeferencing_model_geo.txt.",
+ "Imported {name} — {n} texture(s) not found": "{name} importé : {n} texture(s) introuvable(s)",
+ "Imported {name} — {t} triangles": "{name} importé : {t} triangles",
+ "Distribute": "Distribuer",
+ "Top view, parallel — so the trace lands where you click. Restored when you leave the tool.": "Vue de dessus en parallèle, pour que le tracé tombe là où vous cliquez. Rétablie en quittant l'outil.",
+ "No code came back — asking for the recipe.": "Aucun code reçu : demande de la recette."
 }

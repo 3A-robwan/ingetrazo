@@ -2857,5 +2857,20 @@
  "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "¿Reemplazar la copia de «{name}» instalada a mano por la versión incluida con IngeTrazo? La copia se aparta (renombrada con un punto delante), no se borra, y la incluida podrá desactivarse y desinstalarse desde aquí.",
  "Parametric windows from selected faces.": "Ventanas paramétricas a partir de las caras seleccionadas.",
  "Building levels as an IngeTrazo EXTENSION.": "Niveles del edificio, como EXTENSIÓN de IngeTrazo.",
- "Area, centroid and second moments of the selected faces.": "Área, centroide y momentos de inercia de las caras seleccionadas."
+ "Area, centroid and second moments of the selected faces.": "Área, centroide y momentos de inercia de las caras seleccionadas.",
+ "Import photogrammetric mesh": "Importar malla fotogramétrica",
+ "ODM textured model (*.obj);;All files (*)": "Modelo texturizado de ODM (*.obj);;Todos los archivos (*)",
+ "glTF binary (*.glb)": "glTF binario (*.glb)",
+ "COLLADA (*.dae)": "COLLADA (*.dae)",
+ "Photogrammetric mesh (WebODM)…": "Malla fotogramétrica (WebODM)…",
+ "glTF / GLB (3D, single file)…": "glTF / GLB (3D, un solo archivo)…",
+ "{name} is not available here.": "{name} no está disponible aquí.",
+ "Leave the group first (Esc) — nested groups aren't supported yet": "Sal primero del grupo (Esc): todavía no se admiten grupos anidados",
+ "No triangles found in the model.": "No se encontraron triángulos en el modelo.",
+ "This model is not georeferenced and the scene has no datum yet. Set a location in the Terrain tray first, or pick an ODM export that includes odm_georeferencing_model_geo.txt.": "Este modelo no está georreferenciado y la escena aún no tiene datum. Fija primero una ubicación en el panel Terreno, o elige una exportación de ODM que incluya odm_georeferencing_model_geo.txt.",
+ "Imported {name} — {n} texture(s) not found": "{name} importado: no se encontraron {n} textura(s)",
+ "Imported {name} — {t} triangles": "{name} importado: {t} triángulos",
+ "Distribute": "Distribuir",
+ "Top view, parallel — so the trace lands where you click. Restored when you leave the tool.": "Vista superior en paralela, para que el trazo caiga donde haces clic. Se restaura al salir de la herramienta.",
+ "No code came back — asking for the recipe.": "No llegó código: pidiendo la receta."
 }

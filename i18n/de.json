@@ -2880,5 +2880,8 @@
  "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "Die von Hand installierte Kopie von «{name}» durch die in IngeTrazo enthaltene Version ersetzen? Die Kopie wird beiseitegelegt (mit einem Punkt davor umbenannt), nicht gelöscht, und die enthaltene Version lässt sich dann von hier aus deaktivieren und deinstallieren.",
  "Parametric windows from selected faces.": "Parametrische Fenster aus den ausgewählten Flächen.",
  "Building levels as an IngeTrazo EXTENSION.": "Gebäudeebenen als ERWEITERUNG von IngeTrazo.",
- "Area, centroid and second moments of the selected faces.": "Fläche, Schwerpunkt und Flächenträgheitsmomente der ausgewählten Flächen."
+ "Area, centroid and second moments of the selected faces.": "Fläche, Schwerpunkt und Flächenträgheitsmomente der ausgewählten Flächen.",
+ "Leave the group first (Esc) — nested groups aren't supported yet": "Zuerst die Gruppe verlassen (Esc) – verschachtelte Gruppen werden noch nicht unterstützt",
+ "This model is not georeferenced and the scene has no datum yet. Set a location in the Terrain tray first, or pick an ODM export that includes odm_georeferencing_model_geo.txt.": "Dieses Modell ist nicht georeferenziert und die Szene hat noch kein Datum. Legen Sie zuerst im Bereich Gelände einen Standort fest oder wählen Sie einen ODM-Export mit odm_georeferencing_model_geo.txt.",
+ "Top view, parallel — so the trace lands where you click. Restored when you leave the tool.": "Draufsicht, parallel – damit der Linienzug dort landet, wo Sie klicken. Wird beim Verlassen des Werkzeugs wiederhergestellt."
 }

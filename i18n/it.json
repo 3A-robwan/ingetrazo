@@ -2858,5 +2858,20 @@
  "Restore default panels": "Ripristina i pannelli",
  "Restore default tabs": "Ripristina le schede",
  "The tabs on the left of the page: drag any tab there, or back to the right.": "Le schede a sinistra della pagina: trascina lì qualsiasi scheda, o di nuovo a destra.",
- "Properties and the Browser open, the other panels closed, all on the right in the factory order.": "Proprietà e il Browser aperti, gli altri pannelli chiusi, tutti a destra nell'ordine predefinito."
+ "Properties and the Browser open, the other panels closed, all on the right in the factory order.": "Proprietà e il Browser aperti, gli altri pannelli chiusi, tutti a destra nell'ordine predefinito.",
+ "Import photogrammetric mesh": "Importa mesh fotogrammetrica",
+ "ODM textured model (*.obj);;All files (*)": "Modello texturizzato ODM (*.obj);;Tutti i file (*)",
+ "glTF binary (*.glb)": "glTF binario (*.glb)",
+ "COLLADA (*.dae)": "COLLADA (*.dae)",
+ "Photogrammetric mesh (WebODM)…": "Mesh fotogrammetrica (WebODM)…",
+ "glTF / GLB (3D, single file)…": "glTF / GLB (3D, file singolo)…",
+ "{name} is not available here.": "{name} non è disponibile qui.",
+ "Leave the group first (Esc) — nested groups aren't supported yet": "Esci prima dal gruppo (Esc): i gruppi annidati non sono ancora supportati",
+ "No triangles found in the model.": "Nessun triangolo trovato nel modello.",
+ "This model is not georeferenced and the scene has no datum yet. Set a location in the Terrain tray first, or pick an ODM export that includes odm_georeferencing_model_geo.txt.": "Questo modello non è georeferenziato e la scena non ha ancora un datum. Imposta prima una posizione nel pannello Terreno, oppure scegli un'esportazione ODM che includa odm_georeferencing_model_geo.txt.",
+ "Imported {name} — {n} texture(s) not found": "{name} importato: {n} texture non trovate",
+ "Imported {name} — {t} triangles": "{name} importato: {t} triangoli",
+ "Distribute": "Distribuisci",
+ "Top view, parallel — so the trace lands where you click. Restored when you leave the tool.": "Vista dall'alto in parallela, perché il tracciato cada dove fai clic. Ripristinata quando esci dallo strumento.",
+ "No code came back — asking for the recipe.": "Nessun codice ricevuto: richiesta della ricetta."
 }

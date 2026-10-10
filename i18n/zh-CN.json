@@ -2858,5 +2858,20 @@
  "Replace the copy of «{name}» installed by hand with the version included with IngeTrazo? The copy is set aside (renamed with a dot in front), not deleted, and the included version can then be disabled and uninstalled from here.": "用 IngeTrazo 附带的版本替换手动安装的「{name}」？手动安装的副本会被放到一边（重命名为以点开头的名称），不会删除，之后附带的版本可以在这里停用和卸载。",
  "Parametric windows from selected faces.": "根据所选面生成参数化窗户。",
  "Building levels as an IngeTrazo EXTENSION.": "建筑楼层，作为 IngeTrazo 的扩展。",
- "Area, centroid and second moments of the selected faces.": "所选面的面积、形心和惯性矩。"
+ "Area, centroid and second moments of the selected faces.": "所选面的面积、形心和惯性矩。",
+ "Import photogrammetric mesh": "导入摄影测量网格",
+ "ODM textured model (*.obj);;All files (*)": "ODM 带纹理模型 (*.obj);;所有文件 (*)",
+ "glTF binary (*.glb)": "glTF 二进制 (*.glb)",
+ "COLLADA (*.dae)": "COLLADA (*.dae)",
+ "Photogrammetric mesh (WebODM)…": "摄影测量网格 (WebODM)…",
+ "glTF / GLB (3D, single file)…": "glTF / GLB（3D，单个文件）…",
+ "{name} is not available here.": "{name} 在此处不可用。",
+ "Leave the group first (Esc) — nested groups aren't supported yet": "请先退出组 (Esc) —— 尚不支持嵌套组",
+ "No triangles found in the model.": "模型中未找到三角形。",
+ "This model is not georeferenced and the scene has no datum yet. Set a location in the Terrain tray first, or pick an ODM export that includes odm_georeferencing_model_geo.txt.": "此模型没有地理参考，场景也还没有基准。请先在“地形”面板中设置位置，或选择包含 odm_georeferencing_model_geo.txt 的 ODM 导出。",
+ "Imported {name} — {n} texture(s) not found": "已导入 {name} —— 未找到 {n} 个纹理",
+ "Imported {name} — {t} triangles": "已导入 {name} —— {t} 个三角形",
+ "Distribute": "分布",
+ "Top view, parallel — so the trace lands where you click. Restored when you leave the tool.": "俯视图，平行投影 —— 使轨迹落在你点击的位置。离开工具时恢复。",
+ "No code came back — asking for the recipe.": "没有返回代码 —— 正在请求配方。"
 }

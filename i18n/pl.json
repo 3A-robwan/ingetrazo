@@ -2865,5 +2865,20 @@
  "Open border (hole)": "Otwarta krawędź (otwór)",
  "Overconnected edges": "Krawędzie z nadmiarem połączeń",
  "Reversed face": "Odwrócona ściana",
- "Stray edges": "Luźne krawędzie"
+ "Stray edges": "Luźne krawędzie",
+ "Import photogrammetric mesh": "Importuj siatkę fotogrametryczną",
+ "ODM textured model (*.obj);;All files (*)": "Model z teksturą ODM (*.obj);;Wszystkie pliki (*)",
+ "glTF binary (*.glb)": "glTF binarny (*.glb)",
+ "COLLADA (*.dae)": "COLLADA (*.dae)",
+ "Photogrammetric mesh (WebODM)…": "Siatka fotogrametryczna (WebODM)…",
+ "glTF / GLB (3D, single file)…": "glTF / GLB (3D, jeden plik)…",
+ "{name} is not available here.": "{name} nie jest tutaj dostępne.",
+ "Leave the group first (Esc) — nested groups aren't supported yet": "Najpierw opuść grupę (Esc) — zagnieżdżone grupy nie są jeszcze obsługiwane",
+ "No triangles found in the model.": "W modelu nie znaleziono trójkątów.",
+ "This model is not georeferenced and the scene has no datum yet. Set a location in the Terrain tray first, or pick an ODM export that includes odm_georeferencing_model_geo.txt.": "Ten model nie jest georeferencjonowany, a scena nie ma jeszcze układu odniesienia. Najpierw ustaw lokalizację w panelu Teren albo wybierz eksport ODM zawierający odm_georeferencing_model_geo.txt.",
+ "Imported {name} — {n} texture(s) not found": "Zaimportowano {name} — nie znaleziono tekstur (liczba: {n})",
+ "Imported {name} — {t} triangles": "Zaimportowano {name} — trójkąty (liczba: {t})",
+ "Distribute": "Rozmieść",
+ "Top view, parallel — so the trace lands where you click. Restored when you leave the tool.": "Widok z góry, równoległy — aby ślad trafiał tam, gdzie klikasz. Przywracany po wyjściu z narzędzia.",
+ "No code came back — asking for the recipe.": "Nie wrócił żaden kod — proszę o przepis."
 }

@@ -2866,5 +2866,20 @@
  "Parallel Projection": "Projeção paralela",
  "No vanishing points: measured elevations, plans and isometrics.": "Sem pontos de fuga: elevações, plantas e isométricas em escala.",
  "The view as the eye sees it.": "A vista como o olho a vê.",
- "Vertical lines stay vertical, the usual view for architectural presentations.": "As linhas verticais permanecem verticais, a vista usual para apresentações de arquitetura."
+ "Vertical lines stay vertical, the usual view for architectural presentations.": "As linhas verticais permanecem verticais, a vista usual para apresentações de arquitetura.",
+ "Import photogrammetric mesh": "Importar malha fotogramétrica",
+ "ODM textured model (*.obj);;All files (*)": "Modelo texturizado do ODM (*.obj);;Todos os arquivos (*)",
+ "glTF binary (*.glb)": "glTF binário (*.glb)",
+ "COLLADA (*.dae)": "COLLADA (*.dae)",
+ "Photogrammetric mesh (WebODM)…": "Malha fotogramétrica (WebODM)…",
+ "glTF / GLB (3D, single file)…": "glTF / GLB (3D, arquivo único)…",
+ "{name} is not available here.": "{name} não está disponível aqui.",
+ "Leave the group first (Esc) — nested groups aren't supported yet": "Saia primeiro do grupo (Esc): grupos aninhados ainda não são suportados",
+ "No triangles found in the model.": "Nenhum triângulo encontrado no modelo.",
+ "This model is not georeferenced and the scene has no datum yet. Set a location in the Terrain tray first, or pick an ODM export that includes odm_georeferencing_model_geo.txt.": "Este modelo não está georreferenciado e a cena ainda não tem datum. Defina primeiro uma localização no painel Terreno, ou escolha uma exportação do ODM que inclua odm_georeferencing_model_geo.txt.",
+ "Imported {name} — {n} texture(s) not found": "{name} importado: {n} textura(s) não encontrada(s)",
+ "Imported {name} — {t} triangles": "{name} importado: {t} triângulos",
+ "Distribute": "Distribuir",
+ "Top view, parallel — so the trace lands where you click. Restored when you leave the tool.": "Vista superior em paralela, para que o traçado caia onde você clica. Restaurada ao sair da ferramenta.",
+ "No code came back — asking for the recipe.": "Nenhum código voltou: pedindo a receita."
 }
