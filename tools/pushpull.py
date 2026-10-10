@@ -235,6 +235,23 @@ def _seam_planes_along(mesh, segments) -> list:
     return out
 
 
+def _faces_window(faces):
+    """The box around ``faces`` grown by 1 cm (plus a relative term far from
+    the origin), or ``None`` for none — every crack then, as before."""
+    xs, ys, zs = [], [], []
+    for f in faces:
+        for lp in (f.loop, *f.hole_loops):
+            for v in lp:
+                p = v.position
+                xs.append(p.x()); ys.append(p.y()); zs.append(p.z())
+    if not xs:
+        return None
+    lo = (min(xs), min(ys), min(zs))
+    hi = (max(xs), max(ys), max(zs))
+    m = 0.01 + 1e-6 * max(abs(c) for c in lo + hi)
+    return (lo[0] - m, lo[1] - m, lo[2] - m, hi[0] + m, hi[1] + m, hi[2] + m)
+
+
 class PushPullTool(Tool):
     name = "Push / Pull"
     #: P is the usual key for this tool (Marco, 2026-09-10). U, the one
@@ -2247,7 +2264,7 @@ class PushPullTool(Tool):
             for origin, plane_n in seam_planes(mesh, fresh):
                 planes.setdefault(plane_key(origin, plane_n)[0],
                                   (origin, plane_n))
-            for origin, plane_n in crack_planes(mesh):
+            for origin, plane_n in crack_planes(mesh, _faces_window(fresh)):
                 planes.setdefault(plane_key(origin, plane_n)[0],
                                   (origin, plane_n))
             # A strip the last round dropped as inside the solid (#94) leaves
