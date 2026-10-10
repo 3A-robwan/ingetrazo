@@ -23,6 +23,16 @@ from pathlib import Path  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 app = QApplication([])
+# Never the user's own settings (window layout, recent files) nor their
+# extensions: closing the window saves its state, and release_check runs
+# these six times (09-10: Marco's window and recent files were the bench's).
+import tempfile as _tempfile
+from PySide6.QtCore import QSettings as _QSettings
+_bench_dir = _tempfile.mkdtemp(prefix="ingetrazo-bench-")
+os.environ["XDG_DATA_HOME"] = _bench_dir
+_QSettings.setDefaultFormat(_QSettings.IniFormat)
+for _scope in (_QSettings.UserScope, _QSettings.SystemScope):
+    _QSettings.setPath(_QSettings.IniFormat, _scope, _bench_dir)
 app.setApplicationName("IngeTrazo")
 app.setOrganizationName("IngeTrazo")
 from views.main_window import MainWindow  # noqa: E402
