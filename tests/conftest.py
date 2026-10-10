@@ -10,6 +10,20 @@ import sys
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+# The user's own extensions folder stays out of the suite, like their
+# settings below. Every MainWindow a test built loaded whatever the developer
+# had installed (core.extensions.user_plugins_dir): 09-10, with three
+# extensions installed from the manager, tests/test_outliner.py went from
+# 29 s to 174 s and the fast suite from 12 min to over an hour — and a
+# result could depend on someone's extensions. Same for the app's local
+# data (the manager's screenshot cache). Set before anything reads it.
+import tempfile  # noqa: E402
+
+_data_dir = tempfile.mkdtemp(prefix="ingetrazo-tests-data-")
+os.environ["XDG_DATA_HOME"] = _data_dir
+if sys.platform == "win32":
+    os.environ["APPDATA"] = _data_dir
+
 # Windows: the offscreen platform has NO font database there (fontconfig
 # finds the fonts on Linux; on Windows nothing looks), so every glyph drew
 # as an empty box — 3D text lost the O's counter and built faces for
