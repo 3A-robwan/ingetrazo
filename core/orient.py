@@ -284,6 +284,33 @@ class _ParityQuery:
         ok &= t > _T_MIN
         return int(ok.sum())
 
+    def crossings_many(self, dirs) -> list:
+        """``crossings`` for several rays at once: the same arithmetic,
+        element by element, over a (rays × triangles) block instead of one
+        NumPy pass per ray (tests/test_orient_batched_rays.py checks the
+        counts against ``crossings`` itself)."""
+        import numpy as np
+        r = len(dirs)
+        if self.n == 0 or r == 0:
+            return [0] * r
+        D = np.array([[d.x(), d.y(), d.z()] for d in dirs], dtype=np.float64)
+        ax, ay, az = D[:, 0:1], D[:, 1:2], D[:, 2:3]
+        bx, by, bz = self.e2[:, 0], self.e2[:, 1], self.e2[:, 2]
+        p = np.stack((ay * bz - az * by,
+                      az * bx - ax * bz,
+                      ax * by - ay * bx), axis=-1)          # (r, n, 3)
+        det = np.einsum("ij,rij->ri", self.e1, p)
+        ok = (np.abs(det) >= _EPS) & self.base
+        inv = np.zeros((r, self.n))
+        inv[ok] = 1.0 / det[ok]
+        u = np.einsum("ij,rij->ri", self.tvec, p) * inv
+        ok &= (u >= -_EPS) & (u <= 1.0 + _EPS)
+        v = np.stack([self.q @ D[i] for i in range(r)]) * inv
+        ok &= (v >= -_EPS) & (u + v <= 1.0 + _EPS)
+        t = self.e2q * inv
+        ok &= t > _T_MIN
+        return [int(c) for c in ok.sum(axis=1)]
+
 
 def ray_parity_outside(origin: QVector3D, direction: QVector3D,
                        triangle_lists, rng: random.Random,
@@ -333,8 +360,7 @@ def ray_parity_outside(origin: QVector3D, direction: QVector3D,
     query = _ParityQuery(origin, packed, mask)
     outside_votes = 0
     inside_votes = 0
-    for d in rays:
-        crossings = query.crossings(d)
+    for crossings in query.crossings_many(rays):
         if crossings % 2 == 0:
             outside_votes += 1
         else:
