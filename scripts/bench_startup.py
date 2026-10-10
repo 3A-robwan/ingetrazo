@@ -77,6 +77,11 @@ for _ in range(REOPENS):
     win.viewport.repaint()
     settle()
     res["open_s"].append(round(time.perf_counter() - t, 2))
+    # The side panels refresh 300 ms after the last change (0.5.8): until
+    # then the «In model» list still points at the previous document, and
+    # counting at once found two documents alive (release_check 10-10).
+    time.sleep(0.5)
+    settle()
     res["rss_after_open_mb"].append(round(rss_mb(), 1))
     res["live_after_open"].append(live())
 first, last = res["live_after_open"][1], res["live_after_open"][-1]

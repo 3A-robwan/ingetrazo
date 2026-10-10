@@ -34,8 +34,11 @@ done
 cd "$HERE"
 # In batches, one process each: the fast suite no longer fits in memory as
 # a single run (07-10, >15 GB) — see scripts/pytest_batches.py.
-FAST="$(QT_QPA_PLATFORM=offscreen "$PY" scripts/pytest_batches.py -m 'not slow' tests 2>/dev/null | tail -1)"
-SLOW="$(QT_QPA_PLATFORM=offscreen "$PY" scripts/pytest_batches.py -m slow tests 2>/dev/null | tail -1)"
+# A failing test is recorded in the report (and named below), not a reason
+# to throw the measurements away: the run used to stop here with nothing.
+FAST="$(QT_QPA_PLATFORM=offscreen "$PY" scripts/pytest_batches.py -m 'not slow' tests 2>"$WORK/fast.err" | tail -1 || true)"
+SLOW="$(QT_QPA_PLATFORM=offscreen "$PY" scripts/pytest_batches.py -m slow tests 2>"$WORK/slow.err" | tail -1 || true)"
+grep -hE "^(FAILED|ERROR)|CRASHED" "$WORK/fast.err" "$WORK/slow.err" || true
 
 "$PY" - "$WORK" "$VER" "$PREV" "$DOC" "$FAST" "$SLOW" <<'PYEOF'
 import json, sys, datetime, os
