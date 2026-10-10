@@ -320,6 +320,9 @@ follow [SemVer](https://semver.org).
   vista previa, fantasma de los grupos, búferes de escena y de profundidad,
   componentes instanciados) seguían apuntando al contexto viejo. Ahora se
   rehacen en el contexto nuevo.
+- **El panel de la cota de radio del compositor vuelve a funcionar**:
+  cambiar el radio, el tipo, el texto o el estilo de una cota de radio o
+  diámetro ya colocada daba un error y no hacía nada.
 - **Las herramientas que vienen con IngeTrazo conservan sus atajos**: con
   la carga diferida de extensiones, una extensión instalada (Point Cloud
   Splat) le quitaba `Ctrl+Shift+P` a la consola de Python. Ahora los atajos
