@@ -2448,6 +2448,9 @@ class MainWindow(QMainWindow):
         dialog.exec()
         dialog.deleteLater()
 
+    PLUGIN_GUIDE_URL = ("https://github.com/ingelibre/ingetrazo"
+                        "/blob/main/docs/plugins.md")
+
     @staticmethod
     def example_extensions() -> list:
         """``(path, title, blurb)`` of each extension shipped with the app
