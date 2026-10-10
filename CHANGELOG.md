@@ -225,6 +225,17 @@ follow [SemVer](https://semver.org).
   caiga, arranca el empuje sobre ella: el flujo clásico de preselección.
 
 ### Rendimiento
+- **Editar dentro de un grupo grande, el doble de rápido**: dibujar una
+  línea dentro de un grupo de 25 000 caras pasaba de 1,9 s a 0,86 s. El
+  visor ya no vuelve a preparar las caras que la edición no tocó, ni
+  reescribe la caché de disco mientras el grupo está abierto; y el motor
+  solo busca cruces, caras partidas y duplicados entre lo que está cerca de
+  la línea. El resultado es idéntico (comprobado cara a cara).
+- **Empujar/Tirar ya no rehace planos lejos del empuje**: tras cada empuje se
+  rehacían todos los planos con alguna arista abierta del grupo — en un
+  modelo importado, cientos y lejos de donde se empujaba. Ahora solo los que
+  el empuje pudo dejar abiertos: una cara enorme de la plaza pasa de no
+  terminar en 5 minutos a unos 3, y nada lejano se recalcula.
 - **Editar ya no paga los paneles laterales**: la lista «En el modelo» de
   Componentes y el Navegador se refrescaban tras cada edición, aunque
   estuvieran plegados u ocultos (+20 ms por edición en un modelo como la
