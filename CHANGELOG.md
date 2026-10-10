@@ -320,6 +320,10 @@ follow [SemVer](https://semver.org).
   vista previa, fantasma de los grupos, búferes de escena y de profundidad,
   componentes instanciados) seguían apuntando al contexto viejo. Ahora se
   rehacen en el contexto nuevo.
+- **Esc durante un arrastre en el compositor lo deshace** (#504,
+  @pacaeiro): una vista (o cualquier elemento) arrastrada o redimensionada
+  vuelve a donde estaba al pulsar Esc, sin dejar paso de deshacer; antes
+  se quedaba donde la pillaba la tecla.
 - **Importar un GLB hecho con IngeTrazo lo trae a su tamaño**: un modelo
   de más de 40 m se tomaba por uno en pulgadas y llegaba encogido 39
   veces. Los GLB de otros programas siguen adivinando la unidad.

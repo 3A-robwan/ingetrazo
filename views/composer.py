@@ -5267,6 +5267,11 @@ class ComposerCanvasView(QGraphicsView):
                     getattr(self.composer, slot)()
                     event.accept()
                     return
+        if (event.key() == Qt.Key_Escape
+                and getattr(self.composer, "cancel_drag", None) is not None
+                and self.composer.cancel_drag()):
+            event.accept()              # a drag undone in place (#504)
+            return
         if (event.key() in (Qt.Key_Escape, Qt.Key_Return, Qt.Key_Enter)
                 and getattr(self.composer, "view_edit_item", None)
                 is not None):
@@ -8593,6 +8598,47 @@ class ComposerWindow(QMainWindow):
         self._drag_snapshot = {
             id(it.model): (float(it.model.x_mm), float(it.model.y_mm))
             for it in self.canvas.selectedItems() if isinstance(it, _SheetItem)}
+
+    def cancel_drag(self) -> bool:
+        """Esc while an item is being dragged or resized: everything the
+        drag moved goes back where it was, and the drag ends with no undo
+        step (#504, @pacaeiro: the view stayed where Esc caught it). False
+        when no drag is in progress."""
+        grabber = self.canvas.mouseGrabberItem()
+        snap = getattr(self, "_drag_snapshot", None) or {}
+        if not isinstance(grabber, _SheetItem) or (
+                getattr(grabber, "_press_state", None) is None
+                and id(grabber.model) not in snap):
+            return False
+        items = [it for it in self.canvas.selectedItems()
+                 if isinstance(it, _SheetItem)]
+        if grabber not in items:
+            items.append(grabber)
+        for it in items:
+            was = (getattr(it, "_press_state", None) if it is grabber
+                   else None)
+            if was is None:
+                xy = snap.get(id(it.model))
+                if xy is None:
+                    continue
+                was = {"x_mm": xy[0], "y_mm": xy[1]}
+            it.prepareGeometryChange()
+            for key, value in was.items():
+                setattr(it.model, key, value)
+            it._nudging = True          # no magnetic snap on the way back
+            try:
+                it.setPos(QPointF(it.model.x_mm, it.model.y_mm))
+            finally:
+                it._nudging = False
+            it.update()
+        grabber._press_state = None     # its release must not commit
+        grabber._resizing = False
+        set_cache = getattr(grabber, "_set_drag_cache", None)
+        if set_cache is not None:
+            set_cache(False)
+        grabber.ungrabMouse()
+        self._drag_snapshot = None
+        return True
 
     def _group_drag_commands(self, model) -> list:
         snap = getattr(self, "_drag_snapshot", None) or {}
