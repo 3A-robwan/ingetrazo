@@ -225,6 +225,11 @@ follow [SemVer](https://semver.org).
   caiga, arranca el empuje sobre ella: el flujo clásico de preselección.
 
 ### Rendimiento
+- **Editar ya no paga los paneles laterales**: la lista «En el modelo» de
+  Componentes y el Navegador se refrescaban tras cada edición, aunque
+  estuvieran plegados u ocultos (+20 ms por edición en un modelo como la
+  plaza). Ahora, ocultos, esperan a mostrarse; a la vista, se refrescan una
+  vez 300 ms después de la última edición de una ráfaga.
 - **Los modelos enormes abren 3× más rápido, guardan 3,6× más rápido y
   pesan un tercio**: el `.igz` gana el **formato 3**. En un documento
   grande (más de 20 000 caras y aristas) cada malla pesada guarda sus

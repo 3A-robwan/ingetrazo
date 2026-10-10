@@ -439,12 +439,21 @@ class OutlinerPanel(QWidget):
         return self._window.viewport.scene
 
     def on_scene_changed(self) -> None:
-        """The dock's per-change call: refreshed now when on screen, on
-        showing otherwise — a hidden tab costs nothing per edit."""
-        if self.isVisible():
-            self.refresh()
-        else:
+        """The dock's per-change call: refreshed when on screen, on
+        showing otherwise — a hidden tab costs nothing per edit. On screen,
+        one refresh 300 ms after the last edit: every row's state is read
+        again (17 ms per edit on the Plaza, release_check 09-10), and a
+        burst of edits pays it once."""
+        if not self.isVisible():
             self._stale = True
+            return
+        timer = getattr(self, "_refresh_timer", None)
+        if timer is None:
+            from PySide6.QtCore import QTimer
+            timer = self._refresh_timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(self.refresh)
+        timer.start(300)
 
     def showEvent(self, ev) -> None:
         super().showEvent(ev)

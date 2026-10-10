@@ -1186,6 +1186,35 @@ class ComponentsPanel(QWidget):
         rows.sort(key=lambda r: (-len(r[2]), (r[0] or "").lower()))
         return rows
 
+    def on_scene_changed(self) -> None:
+        """The tray's per-change call. The «In model» list reads every
+        definition's signature (its faces and paint) to know whether its
+        thumbnail changed: on the Plaza that was +20 ms on every edit, its
+        section folded or its tab hidden (release_check, 09-10). Refreshed
+        now when on screen, on showing otherwise — like the Browser. A
+        window not shown yet (scripts, tests) refreshes at once, as before."""
+        if not self._window.isVisible():
+            self.refresh_in_model()
+            return
+        if not self.isVisible():
+            self._in_model_stale = True
+            return
+        # On screen: one refresh 300 ms after the last edit, as Materials
+        # does — a burst of edits (arrows, repeated pushes) pays it once.
+        timer = getattr(self, "_in_model_timer", None)
+        if timer is None:
+            from PySide6.QtCore import QTimer
+            timer = self._in_model_timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(self.refresh_in_model)
+        timer.start(300)
+
+    def showEvent(self, ev) -> None:
+        super().showEvent(ev)
+        if getattr(self, "_in_model_stale", False):
+            self._in_model_stale = False
+            self.refresh_in_model()
+
     def refresh_in_model(self) -> None:
         from views.component_thumbs import thumbnail
         self._in_model.clear()
@@ -4101,7 +4130,7 @@ class Tray(QDockWidget):
         timer.start(300)
         self.layers.refresh()
         self.scenes.refresh()
-        self.components.refresh_in_model()
+        self.components.on_scene_changed()
         self.parts.refresh()
 
 
