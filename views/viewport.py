@@ -836,16 +836,20 @@ class _AltWatch(QObject):
 
 def _face_geometry(f, memo, triangulate):
     """``(key, normal, area, triangles, centroid)`` of a mesh face, from
-    ``memo`` when every corner (holes included) is exactly where it was.
+    ``memo`` when every corner (holes included) is exactly where it was
+    (``memo`` None: computed, not remembered).
     Triangles are ``((x, y, z), …)`` float tuples — copies, never the live
     vertex positions, which edits move in place."""
     loop = [v.position for v in f.loop]
     holes = [[v.position for v in h] for h in f.hole_loops]
-    key = (tuple((p.x(), p.y(), p.z()) for p in loop),
-           tuple(tuple((p.x(), p.y(), p.z()) for p in h) for h in holes))
-    hit = memo.get(id(f))
-    if hit is not None and hit[0] == key:
-        return hit
+    if memo is None:
+        key = None                  # a closed group: nothing to remember
+    else:
+        key = (tuple((p.x(), p.y(), p.z()) for p in loop),
+               tuple(tuple((p.x(), p.y(), p.z()) for p in h) for h in holes))
+        hit = memo.get(id(f))
+        if hit is not None and hit[0] == key:
+            return hit
     if len(loop) < 3:
         geom = (key, QVector3D(0.0, 0.0, 1.0), 0.0, [], None, {}, (), None)
     else:
@@ -860,7 +864,8 @@ def _face_geometry(f, memo, triangulate):
         # 5: shaded colour per base colour · 6: triangles as 9 floats each
         # · 7: the soft-edge silhouette props (normal, centroid)
         geom = (key, normal, 0.5 * ln, tris, c, {}, flat, props)
-    memo[id(f)] = geom
+    if memo is not None:
+        memo[id(f)] = geom
     return geom
 
 
@@ -8635,9 +8640,15 @@ class Viewport(QOpenGLWidget):
         # triangulation was redone on each edit — ~1 s per stroke inside the
         # Plaza's 25 797-face group (09-10). Reused only when every corner is
         # where it was, so the chunk is the one a full rebuild makes.
-        memo = mesh.__dict__.get("_face_geom_memo")
-        if memo is None or len(memo) > 2 * len(mesh.faces) + 64:
-            memo = mesh.__dict__["_face_geom_memo"] = {}
+        editing_now = getattr(self, "_editing_meshes", None)
+        if callable(editing_now) and id(mesh) not in editing_now():
+            memo = None             # see below: only the edited mesh keeps one
+            built: dict = {}        # this build's geometry, never kept
+        else:
+            memo = mesh.__dict__.get("_face_geom_memo")
+            if memo is None or len(memo) > 2 * len(mesh.faces) + 64:
+                memo = mesh.__dict__["_face_geom_memo"] = {}
+            built = memo
         for f in mesh.faces:
             if f.attrs.get("hidden"):
                 # Hide on a face: out of the chunk entirely — not
@@ -8647,6 +8658,8 @@ class Viewport(QOpenGLWidget):
             i = len(faces)
             faces.append(f)
             geom = _face_geometry(f, memo, _triangulate)
+            if memo is None:
+                built[id(f)] = geom     # this build's, for the soft edges
             normal, area, tri_list = geom[1], geom[2], geom[3]
             areas.append(area)
             fprops[id(f)] = normal
@@ -8705,7 +8718,7 @@ class Viewport(QOpenGLWidget):
         def props(f):
             r = sprops.get(id(f))
             if r is None:
-                hit = memo.get(id(f))
+                hit = built.get(id(f))
                 if hit is not None and hit[7] is not None:
                     r = sprops[id(f)] = hit[7]
                     return r
