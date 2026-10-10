@@ -64,6 +64,8 @@ def plan_edge_commands(
     simulated: list[Edge] = list(scene.edges)
     faces_snapshot: list[Face] = list(scene.faces)
     near = _Nearby(simulated, faces_snapshot)
+    from core.topology import KeyMemo
+    near.key = KeyMemo()            # nothing moves while a plan is made
 
     for a, b in segments:
         # The searches only look at what can touch the segment (a box test
@@ -205,24 +207,30 @@ class _Nearby:
                 hi[0] + m, hi[1] + m, hi[2] + m)
 
     def _pick(self, items, pts):
+        np = self._np
         w = self._window(pts)
         arr = self._arr
         mask = ((arr[:, 3] >= w[0]) & (arr[:, 0] <= w[3])
                 & (arr[:, 4] >= w[1]) & (arr[:, 1] <= w[4])
                 & (arr[:, 5] >= w[2]) & (arr[:, 2] <= w[5]))
-        rows, known = self._row, self._items
-        out = []
-        for it in items:
-            r = rows.get(id(it))
-            if r is not None and known[r] is it:
-                if mask[r]:
-                    out.append(it)
-                continue
-            x0, y0, z0, x1, y1, z1 = self._box(it)
-            if (x1 >= w[0] and x0 <= w[3] and y1 >= w[1] and y0 <= w[4]
-                    and z1 >= w[2] and z0 <= w[5]):
-                out.append(it)
-        return out
+        known = self._items
+        # Boxed at the start (kept alive in ``known``, so an id is never
+        # reused): the mask says. The plan's own new pieces are boxed here.
+        # The set work runs in C; only the hits and the new pieces reach
+        # Python, and the result keeps the order of ``items``.
+        keep = {id(known[r]) for r in np.flatnonzero(mask)}
+        ids = list(map(id, items))
+        new = set(ids).difference(self._row)
+        if new:
+            for it in items:
+                if id(it) in new:
+                    x0, y0, z0, x1, y1, z1 = self._box(it)
+                    if (x1 >= w[0] and x0 <= w[3] and y1 >= w[1]
+                            and y0 <= w[4] and z1 >= w[2] and z0 <= w[5]):
+                        keep.add(id(it))
+        if not keep:
+            return []
+        return [it for it, i in zip(items, ids) if i in keep]
 
     def edges(self, edges, a, b):
         return self._pick(edges, (a, b))
@@ -274,7 +282,9 @@ def _plan_faces(commands, faces_snapshot, simulated, sa, sb, eye=None,
                 faces_snapshot.append(Face(list(loop), attrs=keep))
         return
 
-    for cycle in find_cycles_through(simulated, sa, sb):
+    for cycle in find_cycles_through(
+            simulated, sa, sb,
+            key=getattr(near, "key", None) if near is not None else None):
         if is_planar(cycle) and not face_exists(
                 _around(near, faces_snapshot, cycle), cycle):
             cycle = face_up_or_toward(cycle, eye)

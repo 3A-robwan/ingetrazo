@@ -100,22 +100,36 @@ def find_smallest_cycle_through(
     ka, kb = _key(a), _key(b)
     if ka == kb:
         return None
+    return _smallest_cycle(_cycle_adjacency(edges, ka, kb), a, b, ka, kb,
+                           max_len)
 
-    # adj[u] -> [(v_key, v_pos), ...]
+
+def _cycle_adjacency(edges, ka, kb, key=_key) -> dict:
+    """``adj[u] -> [(v_key, v_pos), …]`` of the edge graph, in edge order,
+    without an existing copy of segment ``ka``–``kb`` (the cycle would just
+    find itself, a length-2 loop a→b→a)."""
     adj: dict[tuple, list[tuple[tuple, QVector3D]]] = {}
     for edge in edges:
-        ea, eb = _key(edge.a), _key(edge.b)
+        ea, eb = key(edge.a), key(edge.b)
         if ea == eb:
             continue
-        # Skip an existing copy of the same edge, otherwise the cycle just
-        # finds itself (length-2 loop a→b→a).
         if {ea, eb} == {ka, kb}:
             continue
         adj.setdefault(ea, []).append((eb, edge.b))
         adj.setdefault(eb, []).append((ea, edge.a))
+    return adj
 
+
+def _smallest_cycle(adj, a, b, ka, kb, max_len: int = 32,
+                    skip=frozenset()):
+    """Breadth-first search from ``b`` to ``a`` over ``adj``, never entering a
+    node of ``skip`` — the same search ``adj`` built without the edges that
+    touch those nodes would make (adjacency lists keep the edge order)."""
     if ka not in adj or kb not in adj:
         return None
+    if skip and not (any(v not in skip for v, _p in adj[ka])
+                     and any(v not in skip for v, _p in adj[kb])):
+        return None             # an end with no edge left once ``skip`` goes
 
     parent: dict = {kb: None}
     parent_pos: dict = {kb: b}
@@ -127,7 +141,7 @@ def find_smallest_cycle_through(
             found = True
             break
         for v_key, v_pos in adj.get(u, ()):
-            if v_key not in parent:
+            if v_key not in parent and v_key not in skip:
                 parent[v_key] = u
                 parent_pos[v_key] = v_pos
                 q.append(v_key)
@@ -982,7 +996,8 @@ def _same_cycle(c1: list[QVector3D], c2: list[QVector3D]) -> bool:
 
 
 def find_cycles_through(
-    edges: Iterable[Edge], a: QVector3D, b: QVector3D, max_results: int = 2
+    edges: Iterable[Edge], a: QVector3D, b: QVector3D, max_results: int = 2,
+    key=None,
 ) -> list[list[QVector3D]]:
     """Up to ``max_results`` distinct minimal cycles through segment ``a``–``b``.
 
@@ -992,19 +1007,24 @@ def find_cycles_through(
     first's interior nodes, which routes the search to the other side. This is
     what stops auto-facing from creating only one of the two triangles.
     """
-    edges = list(edges)
-    first = find_smallest_cycle_through(edges, a, b)
+    # One adjacency for both searches: the second one (the other side)
+    # skips the first cycle's interior nodes instead of rebuilding the graph
+    # without them — the same search, since the lists keep the edge order.
+    # ``key`` (a KeyMemo) keys each vertex once per plan; a 38 700-edge group
+    # rounded every endpoint twice per stroke (09-10).
+    key = key or _key
+    ka, kb = _key(a), _key(b)
+    if ka == kb:
+        return []
+    adj = _cycle_adjacency(edges, ka, kb, key)
+    first = _smallest_cycle(adj, a, b, ka, kb)
     if first is None:
         return []
     cycles = [first]
     if max_results >= 2:
-        interior = {_key(v) for v in first} - {_key(a), _key(b)}
+        interior = {_key(v) for v in first} - {ka, kb}
         if interior:
-            filtered = [
-                e for e in edges
-                if _key(e.a) not in interior and _key(e.b) not in interior
-            ]
-            second = find_smallest_cycle_through(filtered, a, b)
+            second = _smallest_cycle(adj, a, b, ka, kb, skip=interior)
             if second is not None and not _same_cycle(second, first):
                 cycles.append(second)
     return cycles
