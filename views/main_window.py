@@ -2354,6 +2354,27 @@ class MainWindow(QMainWindow):
         # ambiguity that silently disables the built-in key for both.
         taken = {a.shortcut().toString() for a in self.findChildren(QAction)
                  if not a.shortcut().isEmpty()}
+        # The tools that ship with IngeTrazo (Python Console, Model Info…)
+        # keep their keys whatever an extension's setup() asks for first:
+        # with Point Cloud Splat installed, the console lost Ctrl+Shift+P
+        # (extension bench, 10-10). Reserved here, granted to them below.
+        from pathlib import Path
+        from core.paths import app_root
+        bundled = (app_root() / "plugins").resolve()
+        reserved: dict = {}
+        for plug in plugins:
+            try:
+                ships = bundled in Path(plug.path).resolve().parents
+            except (OSError, TypeError):
+                ships = False
+            if not ships:
+                continue
+            for tool in plug.tools:
+                seq = (QKeySequence(tool.shortcut).toString()
+                       if tool.shortcut else "")
+                if seq and seq not in taken and seq not in reserved:
+                    reserved[seq] = f"plugin_{plug.stem}_{type(tool).__name__}"
+        taken |= set(reserved)
         self._ext_taken_keys = taken
 
         count = 0
@@ -2387,7 +2408,7 @@ class MainWindow(QMainWindow):
                 action.setStatusTip(tr(tool.description))
             if tool.shortcut:
                 seq = QKeySequence(tool.shortcut).toString()
-                if seq and seq not in taken:
+                if seq and (seq not in taken or reserved.get(seq) == key):
                     action.setShortcut(QKeySequence(tool.shortcut))
                     from views.shortcuts import set_tooltip
                     set_tooltip(action, tr(tool.name))
