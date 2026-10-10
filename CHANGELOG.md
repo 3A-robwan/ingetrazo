@@ -320,6 +320,9 @@ follow [SemVer](https://semver.org).
   vista previa, fantasma de los grupos, búferes de escena y de profundidad,
   componentes instanciados) seguían apuntando al contexto viejo. Ahora se
   rehacen en el contexto nuevo.
+- **Importar un GLB hecho con IngeTrazo lo trae a su tamaño**: un modelo
+  de más de 40 m se tomaba por uno en pulgadas y llegaba encogido 39
+  veces. Los GLB de otros programas siguen adivinando la unidad.
 - **El panel de la cota de radio del compositor vuelve a funcionar**:
   cambiar el radio, el tipo, el texto o el estilo de una cota de radio o
   diámetro ya colocada daba un error y no hacía nada.

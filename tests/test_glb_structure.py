@@ -17,6 +17,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import numpy as np  # noqa: E402
+import pytest  # noqa: E402
 from PySide6.QtGui import QImage, QColor, QMatrix4x4, QVector3D as V  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
@@ -176,3 +177,21 @@ def test_only_the_selection(tmp_path):
     xs = _world_tris(out)[:, :, 0]
     assert xs.max() < 12.0 and xs.min() >= 0.0
     assert not np.any((xs > 4.5) & (xs < 6.5))          # the other loose face
+
+
+def test_our_own_wide_model_comes_back_in_metres(tmp_path):
+    """Two 1 m squares 60 m apart: wider than the 40 m the importer's guess
+    allows, so a file of ours came back shrunk to inches (app bench, 10-10).
+    glTF is metres, and ours says who wrote it."""
+    from formats.glb import load_glb
+    scene = Scene()
+    scene.mesh = _square(0.0)
+    far = Group(_square(0.0), "far")
+    far.xform = _at(60.0)
+    scene.groups.append(far)
+    path = tmp_path / "wide.glb"
+    save_glb(scene, path)
+    back = Scene()
+    load_glb(back, path)
+    lo, hi = back.bounds()
+    assert hi.x() - lo.x() == pytest.approx(61.0, abs=1e-3)
