@@ -1816,11 +1816,11 @@ class SheetsPanel(QWidget):
         self.tree.setToolTip(tr(
             "Drag a scene onto the page to place it where you drop it, or "
             "double-click it to place it in a free spot. Double-click a sheet "
-            "to open it. F2 renames, Alt+↑/↓ moves a sheet, Supr deletes "
+            "to open it. F2 renames, Alt+↑/↓ moves a sheet, Delete removes "
             "it.") if composer is not None else tr(
             "Drag a scene onto a sheet to place it there. Double-click a "
             "scene to show it, a sheet or a view to open the sheet. F2 "
-            "renames, Alt+↑/↓ moves a sheet, Supr deletes it. Selecting a "
+            "renames, Alt+↑/↓ moves a sheet, Delete removes it. Selecting a "
             "scene marks the views that show it."))
         self.tree.setEditTriggers(QAbstractItemView.EditKeyPressed)
         self.tree.itemDoubleClicked.connect(

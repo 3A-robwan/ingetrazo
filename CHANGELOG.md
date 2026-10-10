@@ -555,6 +555,8 @@ follow [SemVer](https://semver.org).
 ### Traducciones
 - **Francés** (#295, @YannFR81) y **alemán** (#365, @PESI3D), completados
   con las frases añadidas después.
+- **Los nueve idiomas, completos**: chino, italiano, indonesio, polaco y
+  portugués reciben también todas las frases nuevas de esta versión.
 - **El español habla de «tú» en todo el programa** y recupera las tildes
   que faltaban (#352, @kant).
 
