@@ -1187,6 +1187,12 @@ class Viewport(QOpenGLWidget):
 
     # ---- GL lifecycle -------------------------------------------------------
     def initializeGL(self) -> None:
+        # initializeGL re-runs when Qt recreates the context — the widget
+        # moved to another window, which is what MultiView does to put the
+        # viewport in its grid. Everything below is rebuilt; what the frame
+        # makes lazily must be forgotten too, or it is bound in a context it
+        # does not belong to (segfault in _draw_image_planes, 10-10).
+        self._forget_context_objects()
         self._gl = QOpenGLFunctions(self.context())
         self._gl.initializeOpenGLFunctions()
         # Who is drawing: the GPU driver or a software rasteriser. Recorded
@@ -3650,6 +3656,26 @@ class Viewport(QOpenGLWidget):
             self.doneCurrent()
         cache.clear()
         self.update()
+
+    #: GL objects the frame creates on first use, outside initializeGL —
+    #: dropped (not destroyed: their context is gone) when it re-runs.
+    _LAZY_GL = ("_img_vao", "_img_vbo",
+                "_pv_edges_vao", "_pv_edges_vbo", "_pv_vcol_vao",
+                "_pv_vcol_vbo", "_pv_tex_vao", "_pv_tex_vbo",
+                "_ghost_edges_vao", "_ghost_edges_vbo", "_ghost_vcol_vao",
+                "_ghost_vcol_vbo", "_ghost_tex_vao", "_ghost_tex_vbo",
+                "_depth_fbo", "_scene_fbo", "_shadow_fbo", "_depth_snap")
+
+    def _forget_context_objects(self) -> None:
+        """Forget every lazily made GL object (see ``_LAZY_GL``) and the
+        per-prototype draw entries (their VAOs and buffers): the next frame
+        makes them again in the current context."""
+        for name in self._LAZY_GL:
+            if getattr(self, name, None) is not None:
+                setattr(self, name, None)
+        self._fbo_size = (0, 0)
+        if getattr(self, "_proto_draw", None):
+            self._proto_draw = {}
 
     def release_gl_textures(self) -> None:
         """Free every GL texture while the context can still take them back.

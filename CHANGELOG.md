@@ -314,6 +314,12 @@ follow [SemVer](https://semver.org).
   guardar 2,3 → 1,6 s solo por esto (#158, @pacaeiro).
 
 ### Corregido
+- **Activar MultiView (u otra extensión que mueva el visor) cerraba
+  IngeTrazo**: al pasar el visor a otra ventana, Qt recrea su contexto de
+  OpenGL, y los objetos que el visor crea al primer uso (planos de imagen,
+  vista previa, fantasma de los grupos, búferes de escena y de profundidad,
+  componentes instanciados) seguían apuntando al contexto viejo. Ahora se
+  rehacen en el contexto nuevo.
 - **Empujar/Tirar muestra el resultado real mientras arrastras** (#434,
   #458, PR #487 de @FG-RVT): al empujar o tirar parte de una cara partida,
   las caras viejas ya no tapan el hueco ni quedan aristas cruzando las
