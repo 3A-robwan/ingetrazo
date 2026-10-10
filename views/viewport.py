@@ -834,6 +834,36 @@ class _AltWatch(QObject):
         return False
 
 
+def _face_geometry(f, memo, triangulate):
+    """``(key, normal, area, triangles, centroid)`` of a mesh face, from
+    ``memo`` when every corner (holes included) is exactly where it was.
+    Triangles are ``((x, y, z), …)`` float tuples — copies, never the live
+    vertex positions, which edits move in place."""
+    loop = [v.position for v in f.loop]
+    holes = [[v.position for v in h] for h in f.hole_loops]
+    key = (tuple((p.x(), p.y(), p.z()) for p in loop),
+           tuple(tuple((p.x(), p.y(), p.z()) for p in h) for h in holes))
+    hit = memo.get(id(f))
+    if hit is not None and hit[0] == key:
+        return hit
+    if len(loop) < 3:
+        geom = (key, QVector3D(0.0, 0.0, 1.0), 0.0, [], None, {}, (), None)
+    else:
+        n_raw = f._newell()
+        ln = n_raw.length()
+        normal = n_raw / ln if ln > 1e-9 else QVector3D(0.0, 0.0, 1.0)
+        tris = [tuple((t.x(), t.y(), t.z()) for t in tri)
+                for tri in triangulate(loop, holes, normal)]
+        c = f.centroid()
+        flat = tuple(x for tri in tris for corner in tri for x in corner)
+        props = ((normal.x(), normal.y(), normal.z()), (c.x(), c.y(), c.z()))
+        # 5: shaded colour per base colour · 6: triangles as 9 floats each
+        # · 7: the soft-edge silhouette props (normal, centroid)
+        geom = (key, normal, 0.5 * ln, tris, c, {}, flat, props)
+    memo[id(f)] = geom
+    return geom
+
+
 class Viewport(QOpenGLWidget):
     """OpenGL viewport with orbital camera, grid, XYZ axes, tools and snapping."""
 
@@ -8570,9 +8600,18 @@ class Viewport(QOpenGLWidget):
         dback_faces: list = []        # face index → its back is the default
         faces: list = []
         areas: list = []
-        tris: list = []
+        tris = array("d")             # 9 doubles per triangle
         tri_ent: list = []
         from core.materials import back_is_default
+        # Per-face geometry memo (normal, area, triangles as floats, centroid)
+        # keyed on the face's exact vertex positions: an edit inside a big
+        # group touches a few faces, and every other face's Newell walk and
+        # triangulation was redone on each edit — ~1 s per stroke inside the
+        # Plaza's 25 797-face group (09-10). Reused only when every corner is
+        # where it was, so the chunk is the one a full rebuild makes.
+        memo = mesh.__dict__.get("_face_geom_memo")
+        if memo is None or len(memo) > 2 * len(mesh.faces) + 64:
+            memo = mesh.__dict__["_face_geom_memo"] = {}
         for f in mesh.faces:
             if f.attrs.get("hidden"):
                 # Hide on a face: out of the chunk entirely — not
@@ -8581,16 +8620,9 @@ class Viewport(QOpenGLWidget):
             fattrs = effective_attrs(f.attrs, paint)
             i = len(faces)
             faces.append(f)
-            if len(f.loop) < 3:
-                normal = QVector3D(0.0, 0.0, 1.0)
-                areas.append(0.0)
-                tri_list = []
-            else:
-                n_raw = f._newell()
-                ln = n_raw.length()
-                normal = n_raw / ln if ln > 1e-9 else QVector3D(0.0, 0.0, 1.0)
-                areas.append(0.5 * ln)
-                tri_list = _triangulate(f.vertices, f.holes, normal)
+            geom = _face_geometry(f, memo, _triangulate)
+            normal, area, tri_list = geom[1], geom[2], geom[3]
+            areas.append(area)
             fprops[id(f)] = normal
             back = fattrs.get("back")
             fcull = 0
@@ -8618,7 +8650,11 @@ class Viewport(QOpenGLWidget):
             else:
                 col = fattrs.get("color")
                 base = tuple(col) if col is not None else self.DEFAULT_FACE_COLOR
-                r, g, b = self._shaded_color(base, normal)
+                shade = geom[5]
+                rgb = shade.get(base)
+                if rgb is None:
+                    rgb = shade[base] = self._shaded_color(base, normal)
+                r, g, b = rgb
                 if op < 0.999:
                     dest = tcol.setdefault((round(op, 3), fcull), array("f"))
                 elif fcull:
@@ -8628,20 +8664,13 @@ class Viewport(QOpenGLWidget):
                 if dest is None:
                     buf = array("f")
                     for t0, t1, t2 in tri_list:
-                        buf.extend([t0.x(), t0.y(), t0.z(), r, g, b,
-                                    t1.x(), t1.y(), t1.z(), r, g, b,
-                                    t2.x(), t2.y(), t2.z(), r, g, b])
+                        buf.extend([*t0, r, g, b, *t1, r, g, b, *t2, r, g, b])
                     fcull_vcol_parts.append(buf.tobytes())
                     dest = array("f")   # discarded sink for the shared loop
                 for t0, t1, t2 in tri_list:
-                    dest.extend([t0.x(), t0.y(), t0.z(), r, g, b,
-                                 t1.x(), t1.y(), t1.z(), r, g, b,
-                                 t2.x(), t2.y(), t2.z(), r, g, b])
-            for t0, t1, t2 in tri_list:
-                tris.append([[t0.x(), t0.y(), t0.z()],
-                             [t1.x(), t1.y(), t1.z()],
-                             [t2.x(), t2.y(), t2.z()]])
-                tri_ent.append(i)
+                    dest.extend([*t0, r, g, b, *t1, r, g, b, *t2, r, g, b])
+            tris.extend(geom[6])
+            tri_ent.extend([i] * len(tri_list))
             if tri_list and back_is_default(fattrs):
                 dback_faces.append(i)
 
@@ -8650,6 +8679,10 @@ class Viewport(QOpenGLWidget):
         def props(f):
             r = sprops.get(id(f))
             if r is None:
+                hit = memo.get(id(f))
+                if hit is not None and hit[7] is not None:
+                    r = sprops[id(f)] = hit[7]
+                    return r
                 n = fprops.get(id(f))
                 if n is None:
                     n = f.normal()
@@ -8682,7 +8715,7 @@ class Viewport(QOpenGLWidget):
             soft_n1.append(n1)
             soft_c1.append(c1)
         if tris:
-            t = np.asarray(tris, dtype=np.float64)
+            t = np.frombuffer(tris.tobytes(), dtype=np.float64).reshape(-1, 3, 3)
             v0, e1, e2 = t[:, 0], t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]
             tri_ent_a = np.asarray(tri_ent, dtype=np.int64)
             # The default-back tint triangles, cut from the pick triangles
@@ -8760,7 +8793,13 @@ class Viewport(QOpenGLWidget):
         entry["mesh"] = mesh
         cache[id(group)] = entry
         _store = getattr(self, "_chunk_cache_store", None)   # stub VPs in tests
-        if callable(_store):
+        editing = getattr(self, "_editing_meshes", None)
+        # Not while the group is open: each stroke inside it rebuilds this
+        # chunk, and pickling 25 000 faces after every one held the GIL
+        # ~350 ms beside the UI (Plaza, 09-10) for an entry the next stroke
+        # made stale. The cold build on opening still lands on disk.
+        if callable(_store) and not (callable(editing)
+                                     and id(mesh) in editing()):
             _store(mesh, entry)
         return entry
 
