@@ -225,8 +225,8 @@ follow [SemVer](https://semver.org).
   caiga, arranca el empuje sobre ella: el flujo clásico de preselección.
 
 ### Rendimiento
-- **Editar dentro de un grupo grande, el doble de rápido**: dibujar una
-  línea dentro de un grupo de 25 000 caras pasaba de 1,9 s a 0,86 s. El
+- **Editar dentro de un grupo grande, casi 3× más rápido**: dibujar una
+  línea dentro de un grupo de 25 000 caras pasa de 1,9 s a unos 0,7 s. El
   visor ya no vuelve a preparar las caras que la edición no tocó, ni
   reescribe la caché de disco mientras el grupo está abierto; y el motor
   solo busca cruces, caras partidas y duplicados entre lo que está cerca de
