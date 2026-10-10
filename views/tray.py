@@ -1197,6 +1197,11 @@ class ComponentsPanel(QWidget):
             self.refresh_in_model()
             return
         if not self.isVisible():
+            if not getattr(self, "_in_model_stale", False):
+                # Its rows hold the groups they list: kept while it waits,
+                # they held a whole previous document in memory after
+                # Open (+130 MB on the Plaza, release_check 10-10).
+                self._in_model.clear()
             self._in_model_stale = True
             return
         # On screen: one refresh 300 ms after the last edit, as Materials

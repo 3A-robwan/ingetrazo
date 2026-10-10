@@ -445,6 +445,8 @@ class OutlinerPanel(QWidget):
         again (17 ms per edit on the Plaza, release_check 09-10), and a
         burst of edits pays it once."""
         if not self.isVisible():
+            if not self._stale and self._holds_departed_groups():
+                self._forget_rows()     # New / Open: let the old one go
             self._stale = True
             return
         timer = getattr(self, "_refresh_timer", None)
@@ -490,6 +492,29 @@ class OutlinerPanel(QWidget):
         self._empty.setVisible(not self._items)
         self._update_summary()
 
+    def _holds_departed_groups(self) -> bool:
+        """Whether a row still holds a group the model no longer has —
+        after New or Open (both load into the same scene), or a delete."""
+        if not self._groups:
+            return False
+        live = {id(g) for g, _p, _d in outliner.walk(self._scene().groups)}
+        return any(key not in live for key in self._groups)
+
+    def _forget_rows(self) -> None:
+        """Drop the rows of a document that is no longer open. Each row
+        holds its group, so a hidden Browser waiting to be shown kept the
+        whole previous document in memory after Open (release_check
+        10-10); the next refresh builds the rows of the new one."""
+        self._kept_expanded = {self._groups[key].uid
+                               for key, item in self._items.items()
+                               if item.isExpanded()}
+        self.tree.clear()
+        self._items = {}
+        self._groups = {}
+        self._state = {}
+        self._root = None
+        self._shape = None
+
     def _update_summary(self) -> None:
         """The footer: what the model holds, or what the filter found."""
         total = len(self._state)
@@ -512,6 +537,7 @@ class OutlinerPanel(QWidget):
         cache it fills tells ``_update_rows`` there is nothing left to do."""
         expanded = {self._groups[key].uid
                     for key, item in self._items.items() if item.isExpanded()}
+        expanded |= self.__dict__.pop("_kept_expanded", set())
         scroll = self.tree.verticalScrollBar().value()
         counts = outliner.instance_counts(scene.groups)
         opened = {id(g) for g in outliner.open_path(scene)}

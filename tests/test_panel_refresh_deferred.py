@@ -65,3 +65,36 @@ def test_a_burst_of_edits_refreshes_the_visible_panels_once(win, monkeypatch):
     panel._in_model_timer.timeout.emit()
     outliner._refresh_timer.timeout.emit()
     assert len(comp_calls) == 1 and len(tree_calls) == 1
+
+
+def test_hidden_panels_let_the_previous_document_go(win):
+    """Waiting to be shown, the «In model» list and the Browser kept their
+    rows — and each row holds its group, so after New or Open the whole
+    previous document stayed in memory (+130 MB on the Plaza,
+    release_check 10-10)."""
+    import gc
+    from PySide6.QtGui import QVector3D as V
+    from core.group import Group
+    from core.mesh import Mesh
+    m = Mesh()
+    m.add_face([V(0, 0, 0), V(1, 0, 0), V(1, 1, 0), V(0, 1, 0)])
+    g = Group(m, "previous-document-marker")
+    g.component = True
+    vp = win.viewport
+    vp.scene.groups.append(g)
+    vp.scene.version += 1
+    panel = win.tray.components
+    browser = win.project_browser.outliner
+    panel.refresh_in_model()
+    browser.refresh()
+    assert browser._groups                      # the rows hold the group
+    panel.hide()
+    browser.hide()
+    del g, m
+    win._saved_version = vp.scene.version       # no «discard?» question
+    win._on_new()
+    _app.processEvents()
+    gc.collect()
+    alive = [o for o in gc.get_objects() if isinstance(o, Group)
+             and o.name == "previous-document-marker"]
+    assert alive == []
