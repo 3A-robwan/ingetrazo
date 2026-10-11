@@ -141,20 +141,20 @@ def _root():
 
 
 def test_the_flatpak_installs_the_converter():
-    recipe = (_root() / "packaging/flatpak/com.ingetrazo.IngeTrazo.yml").read_text()
+    recipe = (_root() / "packaging/flatpak/com.ingetrazo.IngeTrazo.yml").read_text(encoding="utf-8")
     assert ("vendor/libredwg/bin/dwg2dxf ${FLATPAK_DEST}/ingetrazo/"
             "vendor/libredwg/bin/dwg2dxf") in recipe
     assert "vendor/libredwg/SOURCES.md" in recipe
 
 
 def test_the_spec_bundles_it_on_all_three_platforms():
-    spec = (_root() / "ingetrazo.spec").read_text()
+    spec = (_root() / "ingetrazo.spec").read_text(encoding="utf-8")
     for name in ('"dwg2dxf.exe"', '"libredwg-0.dll"', '"libiconv-2.dll"',
                  '"linux": ["dwg2dxf"]', '"darwin": ["dwg2dxf"]'):
         assert name in spec
-    win = (_root() / ".github/workflows/build-windows.yml").read_text()
+    win = (_root() / ".github/workflows/build-windows.yml").read_text(encoding="utf-8")
     assert "libredwg-$V-win64.zip" in win and "sha256sum -c" in win
-    mac = (_root() / ".github/workflows/release-macos.yml").read_text()
+    mac = (_root() / ".github/workflows/release-macos.yml").read_text(encoding="utf-8")
     assert "programs/dwg2dxf" in mac and "shasum -a 256 -c" in mac
 
 

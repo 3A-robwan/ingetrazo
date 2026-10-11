@@ -20,6 +20,7 @@ the recipes always execute on the Qt main thread.
 from __future__ import annotations
 
 import base64
+import os
 import threading
 
 from PySide6.QtCore import QBuffer, QIODevice, QSettings, Qt, Signal
@@ -465,7 +466,7 @@ class AsistentePanel(QWidget):
         if encoded is None:
             self._append(tr("Could not read the image."), "err")
             return
-        name = path.rsplit("/", 1)[-1]
+        name = os.path.basename(path)      # «\» too, on Windows
         self._foto = (*encoded, name)
         self._foto_chip.setText("📷 " + name)
         self._foto_chip.setVisible(True)
