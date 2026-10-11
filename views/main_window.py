@@ -1955,8 +1955,8 @@ class MainWindow(QMainWindow):
     _OUT_PX = 24
 
     def _setup_side_docks(self) -> None:
-        """The trays as the composer's side panels: tabs at the bottom, as
-        in 0.5.7 (Marco, 09-10: on top they crowd the toolbar), with their
+        """The trays as the composer's side panels: tabs on top, like the
+        composer's (Marco, 11-10, after Gabriel and Pedro), with their
         whole names (scroll arrows when they do not fit), reordered by
         dragging along the bar (Qt's own), moved to the other side by
         dragging a tab out of it — onto the viewport's left or right half,
@@ -1966,7 +1966,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtCore import QSize
         from PySide6.QtWidgets import QTabWidget, QToolButton
         self.setTabPosition(Qt.LeftDockWidgetArea | Qt.RightDockWidgetArea,
-                            QTabWidget.South)
+                            QTabWidget.North)
         self.viewport.setAcceptDrops(True)
         self.installEventFilter(self)           # new tab bars, as Qt makes them
         act = QAction(tr("Left sidebar"), self)
