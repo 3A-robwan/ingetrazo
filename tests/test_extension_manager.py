@@ -939,3 +939,28 @@ def test_opening_decodes_only_the_visible_screenshots_and_a_same_refresh_keeps_t
         dialog.close()
         dialog.deleteLater()
         app.processEvents()
+
+
+def test_on_windows_the_manager_appears_only_once_painted(
+        tmp_path, monkeypatch):
+    """#555: Windows showed the new window white until its first paint
+    (~0.4 s); it now opens transparent and appears once painted."""
+    app = QApplication.instance() or QApplication([])
+    from views import extension_manager_dialog as dialog_module
+    _stub_catalog(monkeypatch, dialog_module, [_extension(b"one")])
+    monkeypatch.setattr(manager, "user_plugins_dir", lambda: tmp_path)
+    monkeypatch.setattr(dialog_module, "_HIDE_UNTIL_PAINTED", True)
+    dialog = dialog_module.ExtensionManagerDialog()
+    try:
+        _wait_for_catalog(dialog, app)
+        assert dialog.windowOpacity() == 0.0
+        dialog.show()
+        dialog.repaint()
+        loop = QEventLoop()
+        QTimer.singleShot(50, loop.quit)
+        loop.exec()
+        assert dialog.windowOpacity() == 1.0
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        app.processEvents()
