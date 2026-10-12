@@ -314,6 +314,12 @@ follow [SemVer](https://semver.org).
   guardar 2,3 → 1,6 s solo por esto (#158, @pacaeiro).
 
 ### Corregido
+- **Trazar siguiendo un eje hasta una arista vuelve a caer justo en la
+  arista**: con el eje enganchado, el punto «En arista» quedaba callado y
+  una línea o un arco de un borde al opuesto de una cara terminaba 1–2 mm
+  dentro o fuera según el píxel, dejando aristas sueltas. Ahora se ofrece el
+  cruce del eje con la arista bajo el cursor: el punto sigue sobre el eje y
+  cae exacto en la arista, como en la 0.5.7.
 - **Activar MultiView (u otra extensión que mueva el visor) cerraba
   IngeTrazo**: al pasar el visor a otra ventana, Qt recrea su contexto de
   OpenGL, y los objetos que el visor crea al primer uso (planos de imagen,

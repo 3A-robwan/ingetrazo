@@ -1732,6 +1732,25 @@ def compute_snap(
             continue
         if best_edge is None or d < best_edge[0]:
             best_edge = (d, on_pt, edge)
+    # 7a. With an axis engaged the on-edge point is silenced (it would pull
+    #     the point off the line), but the edge under the cursor may CROSS
+    #     the axis line: that crossing is on the line AND on the edge, the
+    #     junction the arrow lock already offers (1c). Without it a line or
+    #     arc drawn along red from one edge of a face to the opposite one
+    #     landed 1–2 mm inside or outside the edge depending on the pixel,
+    #     and left loose stubs (0.5.7 landed exactly; the chair backrest of
+    #     the tutorial hunt, 2026-10-12).
+    if best_edge is not None and axis_engaged is not None:
+        _d, _on_pt, edge = best_edge
+        hit = _line_segment_intersection(
+            start_point, _AXIS_VECTORS[axis_engaged], edge.a, edge.b)
+        if hit is not None:
+            hp = world_to_pixel(hit)
+            if (hp is not None
+                    and math.hypot(hp[0] - cx, hp[1] - cy) <= et
+                    and (is_occluded is None or not is_occluded(hit))):
+                return SnapResult(hit, "intersection", COLOR_ENDPOINT,
+                                  guide=(start_point, hit))
     if best_edge is not None and axis_engaged is None:
         _d, on_pt, edge = best_edge
         if line_inferences and acquired_point is not None:

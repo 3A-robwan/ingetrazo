@@ -136,14 +136,51 @@ def test_the_axis_silences_the_derived_inference(edges, start, cand, magnetic, e
                   magnetic=magnetic, **extra)
     assert loose.kind == kind, (loose.kind, loose.point)
 
-    # Engaged: the axis takes command and the inference is gone.
+    # Engaged: the axis takes command and the inference is gone. Where an
+    # edge under the cursor crosses the axis line, that crossing is offered
+    # (7a) - it lies ON the line, so it steals nothing from it.
     held = _snap(cand, edges=edges, start=start, engaged=True,
                  magnetic=magnetic, **extra)
-    assert held.kind == "axis", (held.kind, held.point)
-    assert held.axis is not None
+    assert held.kind in ("axis", "intersection"), (held.kind, held.point)
+    axis = held.axis or _engaged_name(start, held.point)
+    assert axis is not None
     # ...and it lands on the axis line through the start, at the cursor's foot.
-    on_the_line = _closest_on_line(cand)(start, _AXIS_VECTORS[held.axis])
+    on_the_line = _closest_on_line(cand)(start, _AXIS_VECTORS[axis])
     assert _same(held.point, on_the_line), (held.point, on_the_line)
+
+
+def _engaged_name(start, p):
+    """The world axis the segment start→p runs along, if any."""
+    d = p - start
+    for name, v in _AXIS_VECTORS.items():
+        if QVector3D.crossProduct(d, v).length() <= 1e-5 * max(d.length(), 1.0):
+            return name
+    return None
+
+
+def test_an_edge_crossing_the_engaged_axis_offers_the_crossing():
+    """The chair backrest of the tutorial hunt (2026-10-12): drawing along red
+    from the left edge of a face to the right one, with the cursor on the
+    right edge, must land exactly ON that edge - 0.5.7 did, the engaged axis
+    left the point 1-2 mm inside or outside depending on the pixel and the arc
+    left loose stubs. The crossing is on the axis line, so the rule above
+    (nothing may pull the point off the line) still holds."""
+    wall = _edge(V(0.5, -1.0), V(0.5, 0.6))     # its midpoint is 20 px away
+    for dx in (-0.03, 0.0, 0.03):              # ±3 px around the edge
+        cand = V(0.5 + dx, 0.02)
+        held = _snap(cand, edges=[wall], start=V(0, 0, 0), engaged=True,
+                     magnetic=3.0)
+        assert held.kind == "intersection", (dx, held.kind, held.point)
+        assert _same(held.point, V(0.5, 0.0)), (dx, held.point)
+
+
+def test_an_edge_parallel_to_the_engaged_axis_still_gives_the_axis():
+    """An edge running along the axis never crosses it: the axis keeps the
+    point at the cursor's foot (the 7-on-edge case above, from the other
+    side)."""
+    held = _snap(V(2.0, 0.05), edges=[_edge(V(0.2, 0.08), V(3, 0.08))],
+                 start=V(0, 0, 0), engaged=True, magnetic=3.0)
+    assert held.kind == "axis", (held.kind, held.point)
 
 
 def test_a_vertex_under_the_cursor_is_not_silenced_though_it_sits_off_the_axis():
