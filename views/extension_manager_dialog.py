@@ -261,7 +261,10 @@ class ExtensionManagerDialog(QDialog):
         filters.setContentsMargins(0, 0, 10, 0)
         filters.addWidget(search, 1)
         reviewed = QCheckBox(tr("Reviewed only"))
-        reviewed.setVisible(key == "browse")
+        if key != "browse":
+            # Hide only. setVisible(True) on a widget with no parent yet
+            # makes it a window of its own and shows it (#555).
+            reviewed.hide()
         reviewed.toggled.connect(
             lambda _checked, page_key=key: self._render_page(page_key))
         filters.addWidget(reviewed)
@@ -697,7 +700,12 @@ class ExtensionManagerDialog(QDialog):
         # The catalog's check only admits https:// — enforced here too, so
         # a tampered cache cannot hand the browser a file:// or app link.
         repository.setEnabled(extension.repository.startswith("https://"))
-        repository.setVisible(not extension.bundled)
+        if extension.bundled:
+            # Hide only: setVisible(True) here, before the button is in the
+            # card, made it a window of its own and showed it — on Windows
+            # 43 little windows flashed while the manager was built, ~0.8 s
+            # of the 0.9 s it took (#555, measured on Marco's machine).
+            repository.hide()
         repository.clicked.connect(
             lambda _checked=False, url=extension.repository:
             QDesktopServices.openUrl(QUrl(url)))

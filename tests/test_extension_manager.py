@@ -980,3 +980,46 @@ def test_on_windows_the_manager_appears_only_once_painted(
         dialog.close()
         dialog.deleteLater()
         app.processEvents()
+
+
+def test_building_the_manager_never_shows_a_stray_window(tmp_path, monkeypatch):
+    """#555: each card's «Repository ↗» button got setVisible(True) before
+    it was in the card, so it became a window of its own and was shown —
+    on Windows 43 little windows flashed and the build took 0.9 s."""
+    app = QApplication.instance() or QApplication([])
+    from PySide6.QtCore import QEvent, QObject
+    extensions = [_extension(f"source {i}".encode(), f"extension_{i}")
+                  for i in range(5)]
+    from views import extension_manager_dialog as dialog_module
+    _stub_catalog(monkeypatch, dialog_module, extensions)
+    monkeypatch.setattr(manager, "user_plugins_dir", lambda: tmp_path)
+    shown = []
+
+    class Watch(QObject):
+        def eventFilter(self, obj, event):
+            if (event.type() == QEvent.Show and obj.isWidgetType()
+                    and obj.isWindow()):
+                shown.append(type(obj).__name__)
+            return False
+
+    watch = Watch()
+    app.installEventFilter(watch)
+    try:
+        dialog = dialog_module.ExtensionManagerDialog()
+        _wait_for_catalog(dialog, app)
+    finally:
+        app.removeEventFilter(watch)
+    try:
+        assert shown == []
+        dialog.show()
+        app.processEvents()
+        row = dialog._pages["browse"]["grid"].itemAt(0).widget()
+        repository = next(button for button in row.findChildren(QPushButton)
+                          if button.text() == "Repository ↗")
+        assert repository.isVisible()
+        assert dialog._pages["browse"]["reviewed"].isVisible()
+        assert not dialog._pages["installed"]["reviewed"].isVisibleTo(dialog)
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+        app.processEvents()

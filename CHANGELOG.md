@@ -20,7 +20,11 @@ follow [SemVer](https://semver.org).
   blanco durante la animación de apertura, y abre mucho antes: cada tarjeta
   llevaba una docena de hojas de estilo propias, que en Windows costaban
   24 ms por tarjeta (más de un segundo con el programa congelado); ahora
-  comparten una sola, con el mismo aspecto píxel a píxel.
+  comparten una sola, con el mismo aspecto píxel a píxel. La causa
+  principal estaba en el botón «Repositorio» de cada tarjeta: se mostraba
+  antes de entrar en la tarjeta, y en Windows eso lo convertía un instante en
+  una ventana propia; eran 43 ventanitas que aparecían y desaparecían al
+  abrir el gestor, unos 0,8 s de los 0,9 s que tardaba.
 
 ## [0.5.8] — 2026-10-12
 
