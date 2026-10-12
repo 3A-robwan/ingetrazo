@@ -11468,12 +11468,12 @@ class Viewport(QOpenGLWidget):
             # reset». It used to be a no-op.
             if tool is not None:
                 tool.on_cancel(self)
+            self.inference.clear_references()
             self.axis_lock = None
             self._shift_lock = None
             self.reference_edge = None
             self.reference_mode = None
             self.linear_inference_mode = "all"
-            self.last_snap = None
             self._refresh_snap()
             return
         # Picking a drawing tool always leaves camera-navigation mode — and
@@ -11494,13 +11494,7 @@ class Viewport(QOpenGLWidget):
         # quietly constraining a tool that never asked for it.
         self.axis_lock = None
         self._hover_entity = None  # stale highlight from the previous tool
-        self.last_snap = None      # stale snap marker from the previous tool
-        self._center_ref = None
-        self._acquired_edge = None  # drop any held parallel reference
-        self._acquired_point = None
-        self._acquired_face_normal = None
-        self._encouraged = []
-        self._dwell_point = None
+        self.inference.clear_references()
         if tool is not None:
             tool.on_activate(self)
         self._apply_tool_cursor()
@@ -11786,6 +11780,7 @@ class Viewport(QOpenGLWidget):
         this viewport has shown before it is drawn."""
         self.end_group_edit()
         old = (self.scene, self.history)
+        self.inference.reset()
         self.reset_document_caches()
         seen = max(getattr(self, "_versions_seen", 0), self.scene.version, scene.version)
         scene.version = self._versions_seen = seen + 1
