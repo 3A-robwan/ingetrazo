@@ -4832,11 +4832,15 @@ class MainWindow(QMainWindow):
         tool = self.viewport.active_tool
         handler = getattr(tool, "on_undo", None)
         if callable(handler) and handler(self.viewport):
-            self.viewport.inference.clear_references()
+            inference = getattr(self.viewport, "inference", None)
+            if inference is not None:
+                inference.clear_references()
             self.viewport.notify_scene_changed()
             return
         if self.viewport.history.undo():
-            self.viewport.inference.clear_references()
+            inference = getattr(self.viewport, "inference", None)
+            if inference is not None:
+                inference.clear_references()
             self.viewport.notify_scene_changed()
 
     def _on_redo(self) -> None:
@@ -4845,11 +4849,15 @@ class MainWindow(QMainWindow):
         tool = self.viewport.active_tool
         handler = getattr(tool, "on_redo", None)
         if callable(handler) and handler(self.viewport):
-            self.viewport.inference.clear_references()
+            inference = getattr(self.viewport, "inference", None)
+            if inference is not None:
+                inference.clear_references()
             self.viewport.notify_scene_changed()
             return
         if self.viewport.history.redo():
-            self.viewport.inference.clear_references()
+            inference = getattr(self.viewport, "inference", None)
+            if inference is not None:
+                inference.clear_references()
             self.viewport.notify_scene_changed()
 
     # ---- File handling ------------------------------------------------------
