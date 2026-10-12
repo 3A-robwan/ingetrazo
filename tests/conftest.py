@@ -79,10 +79,14 @@ def _world_drawing_axes():
     axes.sync(None)
 
 
+_exit_status = [0]
+
+
 def pytest_sessionfinish(session, exitstatus):
     """Leave no Python-owned clipboard entry (``formats.clip.ClipMime``) in
     Qt's clipboard while the interpreter tears down — a Copy in a test puts
     one there, and the CI run of 9393ef5 passed and then segfaulted on exit."""
+    _exit_status[0] = int(exitstatus)
     try:
         from PySide6.QtWidgets import QApplication
         if QApplication.instance() is not None:
@@ -91,6 +95,20 @@ def pytest_sessionfinish(session, exitstatus):
             QApplication.clipboard().clear()
     except Exception:  # noqa: BLE001 - teardown must not fail the run
         pass
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_unconfigure(config):
+    """Leave without tearing the interpreter down. The windows the tests
+    build outlive them (~170 MainWindows, see scripts/pytest_batches.py),
+    and destroying them all at exit, in whatever order Python picks, is
+    not something the app ever does: the public CI of 0.5.8 passed every
+    test and then two batches segfaulted on exit («shared QObject was
+    deleted directly»). Everything is reported by now; the status is
+    pytest's own."""
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(_exit_status[0])
 
 
 @pytest.fixture(autouse=True, scope="session")
