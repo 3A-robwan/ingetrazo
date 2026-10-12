@@ -6,6 +6,14 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+### Añadido
+- **Color de acento de los iconos y las barras** (#393): en Ventana ▸
+  Preferencias ▸ General se elige el color de los detalles de los iconos y
+  del fondo de los botones bajo el ratón: naranja IngeTrazo (el de siempre,
+  por defecto), azul, verde, rojo, morado, amarillo o «Igual que el sistema»,
+  que toma el color de acento del escritorio. Se aplica al instante; la
+  selección en el visor 3D sigue en naranja.
+
 ### Corregido
 - **El gestor de extensiones ya no parpadea al cambiar de pestaña, instalar
   o descargar** (#555): cada cambio entre Explorar e Instaladas reconstruía

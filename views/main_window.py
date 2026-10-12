@@ -209,7 +209,8 @@ class _DockDropZone(QWidget):
         from PySide6.QtGui import QColor, QPainter, QPen
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        accent = QColor(243, 115, 41)
+        from views.theme import accent_color
+        accent = accent_color()
         fill = QColor(accent)
         fill.setAlpha(110 if self._hot else 45)
         p.setBrush(fill)
@@ -1792,10 +1793,11 @@ class MainWindow(QMainWindow):
         btn.setToolTip(act.toolTip())
         btn.setCursor(Qt.PointingHandCursor)
         btn.setAutoRaise(True)
-        btn.setStyleSheet(
-            "QToolButton { background: palette(mid); border: none;"
-            " border-radius: 4px; }"
-            "QToolButton:hover { background: rgb(243, 115, 41); }")
+        from views.theme import style as theme_style
+        theme_style(btn,             # {accent_rgb}: Preferences ▸ Accent colour
+            "QToolButton {{ background: palette(mid); border: none;"
+            " border-radius: 4px; }}"
+            "QToolButton:hover {{ background: rgb({accent_rgb}); }}")
         btn.clicked.connect(lambda: act.setChecked(not act.isChecked()))
         self._sidebar_handle = btn
         self._icon_actions.append((btn, "side_collapse"))
@@ -1920,11 +1922,12 @@ class MainWindow(QMainWindow):
         btn.setToolTip(tr("Back to the workspace (Ctrl+0)"))
         btn.setCursor(Qt.PointingHandCursor)
         btn.setAutoRaise(True)
-        btn.setStyleSheet(
-            "QToolButton { background: rgba(30, 36, 44, 170); color: white;"
+        from views.theme import style as theme_style
+        theme_style(btn,
+            "QToolButton {{ background: rgba(30, 36, 44, 170); color: white;"
             " border: 1px solid rgba(255, 255, 255, 90); border-radius: 6px;"
-            " padding: 4px 10px; font-weight: bold; }"
-            "QToolButton:hover { background: rgba(243, 115, 41, 220); }")
+            " padding: 4px 10px; font-weight: bold; }}"
+            "QToolButton:hover {{ background: rgba({accent_rgb}, 220); }}")
         btn.clicked.connect(lambda: self._act_clean_screen.setChecked(False))
         btn.hide()
         self._clean_exit_btn = btn
