@@ -92,8 +92,10 @@ modules:
       # (import 1.2 → 0.26 s on his laptop). «unchecked-hash» because ostree
       # sets every file's mtime to 0, which makes timestamp-checked .pyc
       # files stale — these are trusted as built. site-packages too, for the
-      # same mtime reason (pip wrote timestamp .pyc there).
-      - python3 -m compileall -q -j0 --invalidation-mode unchecked-hash ${FLATPAK_DEST}/ingetrazo ${FLATPAK_DEST}/lib
+      # same mtime reason (pip wrote timestamp .pyc there). PySide6's
+      # deploy templates (*.tmpl.py, Jinja, not Python) are skipped: they
+      # failed the v0.5.8 tag build.
+      - python3 -m compileall -q -j0 --invalidation-mode unchecked-hash -x '\.tmpl\.py$' ${FLATPAK_DEST}/ingetrazo ${FLATPAK_DEST}/lib
       # 3. Launcher + desktop integration (exports must carry the app id).
       - install -Dm755 packaging/flatpak/flatpak-launcher.sh ${FLATPAK_DEST}/bin/ingetrazo
       - install -Dm644 packaging/flatpak/${FLATPAK_ID}.desktop ${FLATPAK_DEST}/share/applications/${FLATPAK_ID}.desktop
