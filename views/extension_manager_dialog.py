@@ -311,7 +311,16 @@ class ExtensionManagerDialog(QDialog):
         QThreadPool.globalInstance().start(worker)
 
     def _apply_catalog(self, snapshot) -> None:
+        previous = self._catalog_snapshot
         self._catalog_snapshot = snapshot
+        if (previous is not None
+                and snapshot.extensions == previous.extensions
+                and snapshot.reviewed == previous.reviewed):
+            # The refresh brought the catalog already on screen (the usual
+            # case: the cached copy shows first): only the date changes.
+            # Rebuilding both pages repainted the whole window (#555).
+            self._show_count(self._active_page_key())
+            return
         self._extensions = self._with_bundled(snapshot.extensions)
         self._reviewed = snapshot.reviewed
         for key in self._pages:
@@ -547,6 +556,10 @@ class ExtensionManagerDialog(QDialog):
                         grid.removeWidget(row)
                     self._place_cards(key, rows)
         return super().eventFilter(obj, event)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._images_timer.start()
 
     def _on_tab_changed(self, _index: int) -> None:
         # Both pages are rebuilt whenever what they show changes (catalog,
@@ -852,6 +865,12 @@ class ExtensionManagerDialog(QDialog):
 
     def _load_visible_images(self, *_args) -> None:
         page = self._active_page()
+        if not page["scroll"].isVisible():
+            return   # showEvent asks again once there is a screen to fill
+        # Place the cards first: before the layout has run they all sit at
+        # the top-left, every one looked visible and opening the manager
+        # decoded all the screenshots (#555; ~0.25 s of white on Windows).
+        page["cards"].layout().activate()
         visible = page["scroll"].viewport().rect()
         for extension in self._filtered_extensions():
             label = page["image_labels"].get(extension.id)
