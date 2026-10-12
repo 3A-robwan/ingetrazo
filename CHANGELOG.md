@@ -6,6 +6,18 @@ follow [SemVer](https://semver.org).
 
 ## [Sin publicar]
 
+## [0.5.8] — 2026-10-12
+
+**Gestor de extensiones, unidades para todo el documento y un Navegador del
+modelo.** Las extensiones del catálogo se instalan, actualizan y desactivan
+desde el programa; el documento trabaja en metros, milímetros, imperial o a
+medida; y un árbol muestra todos los grupos y componentes. Editar dentro de
+grupos grandes y empujar en terreno es varias veces más rápido, y los modelos
+enormes abren, guardan y pesan bastante menos (formato 3: un modelo grande
+guardado con esta versión no abre en las anteriores). Además, más de cuarenta
+arreglos de herramientas, inferencias y láminas, y los nueve idiomas
+completos.
+
 ### Añadido
 - **Gestor de extensiones** (Extensiones → Gestionar extensiones…, #452,
   @kagehak): explora el catálogo de ingetrazo.com con búsqueda, etiquetas
