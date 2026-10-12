@@ -17,7 +17,10 @@ follow [SemVer](https://semver.org).
   las visibles, y el catálogo recién descargado, igual al guardado, volvía a
   reconstruir las dos páginas. En Windows, además, el gestor se abre
   transparente y aparece en cuanto está pintado, en vez de mostrarse en
-  blanco durante la animación de apertura.
+  blanco durante la animación de apertura, y abre mucho antes: cada tarjeta
+  llevaba una docena de hojas de estilo propias, que en Windows costaban
+  24 ms por tarjeta (más de un segundo con el programa congelado); ahora
+  comparten una sola, con el mismo aspecto píxel a píxel.
 
 ## [0.5.8] — 2026-10-12
 

@@ -62,6 +62,22 @@ def _stub_catalog(monkeypatch, module, extensions, reviewed=None):
         monkeypatch.setattr(module, "bundled_extensions", lambda: [])
 
 
+def _card_rule(row, widget) -> str:
+    """The rule a card's widget wears. Cards share one style sheet, set on
+    each page's card area (#555: a dozen per card cost 24 ms a card on
+    Windows), and each widget is found in it by its object name."""
+    from views.extension_manager_dialog import _CARD_RULES
+    sheet = row.parentWidget().styleSheet()
+    if widget is row:
+        selector = ""
+    elif widget.objectName():
+        selector = f" {type(widget).__name__}#{widget.objectName()}"
+    else:
+        selector = f" {type(widget).__name__}"
+    assert _CARD_RULES[selector] in sheet
+    return _CARD_RULES[selector]
+
+
 def _wait_for_catalog(dialog, app):
     if dialog._catalog_worker is None:
         return
@@ -439,18 +455,18 @@ def test_manager_shows_update_and_trust_details_without_downloading(
         assert "Repository ↗" in buttons
         repository = next(button for button in row.findChildren(QPushButton)
                           if button.text() == "Repository ↗")
-        assert "padding: 3px 7px" in repository.styleSheet()
+        assert "padding: 3px 7px" in _card_rule(row, repository)
         author_column = row.findChildren(QLabel)
         author = next(label for label in row.findChildren(QLabel)
                       if label.text() == "by Author")
-        assert "font-size: 13px" in author.styleSheet()
+        assert "font-size: 13px" in _card_rule(row, author)
         license_label = next(label for label in row.findChildren(QLabel)
                              if label.text() == "License: MIT")
         assert author_column.index(license_label) > author_column.index(
             next(label for label in author_column
                  if label.text().startswith("Drawing")))
-        assert "font-size: 13px" in license_label.styleSheet()
-        assert "font-weight: bold" in license_label.styleSheet()
+        assert "font-size: 13px" in _card_rule(row, license_label)
+        assert "font-weight: bold" in _card_rule(row, license_label)
         assert download_calls == []
     finally:
         dialog.close()
@@ -492,7 +508,7 @@ def test_long_author_tags_and_license_wrap_within_preview_width(
         tags_layout = next(layout for layout in row.findChildren(
             dialog_module.FlowLayout))
         image_details = tags_layout.parentWidget()
-        assert image_details.styleSheet() == "background: transparent;"
+        assert _card_rule(row, image_details) == "background: transparent;"
         assert tags_layout.heightForWidth(dialog_module._IMAGE_SIZE[0]) \
             > max(tags_layout.itemAt(index).sizeHint().height()
                   for index in range(tags_layout.count()))
@@ -686,13 +702,13 @@ def test_extension_manager_styles_follow_dark_palette(tmp_path, monkeypatch):
             _wait_for_catalog(dialog, app)
             row = dialog._pages["browse"]["grid"].itemAt(0).widget()
             assert "background: palette(window)" in dialog.styleSheet()
-            assert "background: palette(base)" in row.styleSheet()
-            assert "color: palette(text)" in row.styleSheet()
+            assert "background: palette(base)" in _card_rule(row, row)
+            assert "color: palette(text)" in _card_rule(row, QLabel())
             assert "background: palette(base)" in (
                 dialog._pages["browse"]["search"].styleSheet())
-            assert "color: palette(link)" in next(
+            assert "color: palette(link)" in _card_rule(row, next(
                 button for button in row.findChildren(QPushButton)
-                if button.text() == "Repository ↗").styleSheet()
+                if button.text() == "Repository ↗"))
         finally:
             dialog.close()
             dialog.deleteLater()
