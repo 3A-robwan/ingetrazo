@@ -4832,9 +4832,11 @@ class MainWindow(QMainWindow):
         tool = self.viewport.active_tool
         handler = getattr(tool, "on_undo", None)
         if callable(handler) and handler(self.viewport):
+            self.viewport.inference.clear_references()
             self.viewport.notify_scene_changed()
             return
         if self.viewport.history.undo():
+            self.viewport.inference.clear_references()
             self.viewport.notify_scene_changed()
 
     def _on_redo(self) -> None:
@@ -4843,9 +4845,11 @@ class MainWindow(QMainWindow):
         tool = self.viewport.active_tool
         handler = getattr(tool, "on_redo", None)
         if callable(handler) and handler(self.viewport):
+            self.viewport.inference.clear_references()
             self.viewport.notify_scene_changed()
             return
         if self.viewport.history.redo():
+            self.viewport.inference.clear_references()
             self.viewport.notify_scene_changed()
 
     # ---- File handling ------------------------------------------------------
@@ -5011,6 +5015,7 @@ class MainWindow(QMainWindow):
         self.viewport.end_group_edit()
         if not self._confirm_discard(tr("Discard current drawing?")):
             return
+        self.viewport.inference.reset()
         # The discarded drawing's recovery slot dies with it.
         from core import autosave
         autosave.clear(self._current_path)
@@ -5202,6 +5207,7 @@ class MainWindow(QMainWindow):
         finally:
             self.viewport.setUpdatesEnabled(True)
         dlg.close()
+        self.viewport.inference.reset()
         self._apply_camera_home()
         self._current_path = path
         self._remember_recent(path)
