@@ -13384,9 +13384,16 @@ class Viewport(QOpenGLWidget):
                 if _re.search(r"[\d\"']\s*(mm|cm|m|in|ft)\b|\d\s*[\"']",
                               self._value_buffer.lower()):
                     value = ("abs_len", value)
+            # Did this value actually commit geometry? Same signal as a
+            # click that commits (see _dispatch_tool_click): a chaining tool
+            # like Line stays busy the instant the segment exists, so "busy"
+            # is not "the operation that used the arrow lock has ended". The
+            # typed length must drop the lock exactly like the second click.
+            _before = len(self.history.undo_stack)
             self.active_tool.on_value(self, value)
+            _drew = len(self.history.undo_stack) > _before
             self._set_value_buffer("")
-            self._release_axis_lock_after_operation()
+            self._release_axis_lock_after_operation(committed=_drew)
             return True
 
         if key == Qt.Key_Backspace:
