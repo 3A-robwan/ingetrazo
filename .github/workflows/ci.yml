@@ -67,7 +67,9 @@ jobs:
       - name: Tests
         # The slow marker is long fuzz sweeps; the PR gate is the fast set,
         # same as the release gate. Offscreen so no test can accidentally
-        # depend on a display.
+        # depend on a display. In batches, one process each: the fast suite
+        # no longer fits in a runner's memory as one process (see
+        # scripts/pytest_batches.py).
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest -q -m "not slow"
+        run: python scripts/pytest_batches.py -m "not slow" tests
