@@ -15,6 +15,11 @@ follow [SemVer](https://semver.org).
   selección en el visor 3D sigue en naranja.
 
 ### Corregido
+- **El Asistente IA vuelve a funcionar con OpenAI** (#517, @jb-dev-github):
+  los modelos nuevos de OpenAI rechazaban cada pedido con «HTTP 400:
+  Unsupported parameter: 'max_tokens'». Con OpenAI se manda ahora
+  `max_completion_tokens`, que aceptan todos sus modelos; Groq, Gemini,
+  OpenRouter, DeepSeek y Ollama siguen con el nombre de siempre.
 - **El STL exportado sale en milímetros** (#513, @toSvenson): un STL no
   guarda la unidad y los programas de impresión 3D lo leen en milímetros,
   pero IngeTrazo escribía los metros del modelo, así que una pieza de
