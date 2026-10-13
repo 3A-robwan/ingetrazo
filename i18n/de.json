@@ -2891,5 +2891,7 @@
  "Red": "Rot",
  "Purple": "Lila",
  "Yellow": "Gelb",
- "Colour of the details of the icons and of the toolbar buttons under the mouse. «Same as the system» uses the desktop's accent colour. The selection in the 3D view stays orange. Applies at once.": "Farbe der Details der Symbole und der Symbolleistenknöpfe unter der Maus. „Wie das System“ verwendet die Akzentfarbe des Desktops. Die Auswahl in der 3D-Ansicht bleibt orange. Wirkt sofort."
+ "Colour of the details of the icons and of the toolbar buttons under the mouse. «Same as the system» uses the desktop's accent colour. The selection in the 3D view stays orange. Applies at once.": "Farbe der Details der Symbole und der Symbolleistenknöpfe unter der Maus. „Wie das System“ verwendet die Akzentfarbe des Desktops. Die Auswahl in der 3D-Ansicht bleibt orange. Wirkt sofort.",
+ "Export STL": "STL exportieren",
+ "Unit of the STL file (3D printing programs expect millimetres)": "Einheit der STL-Datei (3D-Druckprogramme erwarten Millimeter)"
 }
