@@ -20,12 +20,10 @@ follow [SemVer](https://semver.org).
   en cualquiera de los dos sentidos, y casi la mitad de las veces la cara
   unida quedaba del revés. Ahora conserva el lado de la cara original y su
   pintura por delante y por detrás.
-- **Intersecar caras ▸ Con el modelo funciona con todo seleccionado**
-  (#541): con Ctrl+A no cortaba nada («Ninguna cara cruza la selección»),
-  porque lo seleccionado se sacaba de «el resto» y no quedaba contra qué
-  cortar. Ahora lo seleccionado se corta también entre sí: da las mismas
-  aristas que seleccionar solo la pieza atravesada, y un grupo nunca se
-  corta contra sí mismo, así que no aparecen líneas sueltas sobre sus aristas.
+- **Intersecar caras ya no falla con caras casi paralelas**: dos planos
+  separados por un ángulo minúsculo hacían una división por cero y la orden
+  no hacía nada. Además, la búsqueda de qué caras pueden cruzarse va mucho
+  más rápida en modelos grandes.
 - **«x5» tras copiar hace la matriz, igual que «5x»** (#542): después de
   copiar con Mover o Rotar + Ctrl, teclear «x5» abría la herramienta Texto,
   porque la X sola es su atajo. Justo después de una copia, mientras «3x» o
