@@ -84,12 +84,16 @@ jobs:
 
       - name: PyInstaller
         shell: bash
-        run: pyinstaller ingetrazo.spec --noconfirm
+        run: |
+          # The Beta's own name, settings and folders (core/edition.py)
+          echo beta > resources/edition.txt
+          pyinstaller ingetrazo.spec --noconfirm
 
       - name: The package runs the Rust engine
         shell: bash
         run: |
           test -n "$(ls dist/ingetrazo/_internal/ingetrazo_core/*.pyd)"
+          test "$(cat dist/ingetrazo/_internal/resources/edition.txt)" = "beta"
           ./dist/ingetrazo/ingetrazo.exe --check
 
       - name: README in the package
@@ -156,7 +160,10 @@ jobs:
         run: ./venv/bin/python scripts/pytest_batches.py -m "not slow" tests
 
       - name: Build the AppImage
-        run: packaging/build-appimage.sh dist
+        run: |
+          # The Beta's own name, settings and folders (core/edition.py)
+          echo beta > resources/edition.txt
+          packaging/build-appimage.sh dist
 
       - name: Smoke test with a display
         run: |

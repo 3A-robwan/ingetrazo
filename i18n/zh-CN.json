@@ -2883,5 +2883,7 @@
  "Yellow": "黄色",
  "Colour of the details of the icons and of the toolbar buttons under the mouse. «Same as the system» uses the desktop's accent colour. The selection in the 3D view stays orange. Applies at once.": "图标细节以及鼠标悬停时工具栏按钮的颜色。“与系统相同”使用桌面的强调色。3D 视图中的选择仍为橙色。立即生效。",
  "Export STL": "导出 STL",
- "Unit of the STL file (3D printing programs expect millimetres)": "STL 文件的单位（3D 打印软件默认使用毫米）"
+ "Unit of the STL file (3D printing programs expect millimetres)": "STL 文件的单位（3D 打印软件默认使用毫米）",
+ "Engine": "引擎",
+ "This is a TEST version of IngeTrazo with the new native engine (engine in use: {engine}). It keeps its own settings and extensions, apart from the stable IngeTrazo, which it does not touch. Keep a copy of the files you open here, and please report anything odd with the label beta-rust.": "这是 IngeTrazo 的测试版，使用新的原生引擎（当前引擎：{engine}）。它有自己的设置和扩展，与稳定版 IngeTrazo 分开，不会改动稳定版。请保留在此打开的文件的副本，如发现异常请用 beta-rust 标签报告。"
 }

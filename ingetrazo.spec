@@ -74,6 +74,10 @@ for opt_src, opt_dst in [
 ]:
     if (ROOT / opt_src).is_dir():
         datas.append((opt_src, opt_dst))
+# The Beta's marker (core/edition.py): written by build-beta.yml only, so
+# a stable build never carries it.
+if (ROOT / 'resources' / 'edition.txt').is_file():
+    datas.append(('resources/edition.txt', 'resources'))
 
 # The DWG satellite (LibreDWG dwg2dxf, see vendor/libredwg/SOURCES.md),
 # found by formats/dwg_bridge.py at vendor/libredwg/bin inside the bundle

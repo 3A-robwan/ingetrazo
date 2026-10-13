@@ -7110,9 +7110,10 @@ class MainWindow(QMainWindow):
         self._update_title()
 
     def _update_title(self) -> None:
+        from core.edition import APP_NAME
         if self._workspace is not None:
             marker = " *" if self._is_dirty() else ""
-            self.setWindowTitle(f"IngeTrazo — {self._workspace.title()}{marker}")
+            self.setWindowTitle(f"{APP_NAME} — {self._workspace.title()}{marker}")
             return
         if self._current_path is not None:
             name = self._current_path.name
@@ -7121,7 +7122,7 @@ class MainWindow(QMainWindow):
         else:
             name = tr("Untitled")
         marker = " *" if self._is_dirty() else ""
-        self.setWindowTitle(f"IngeTrazo — {name}{marker}")
+        self.setWindowTitle(f"{APP_NAME} — {name}{marker}")
         self._refresh_sheet_tabs()      # a new / opened document: its sheets
 
     # ---- Window lifecycle ---------------------------------------------------

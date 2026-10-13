@@ -2893,5 +2893,7 @@
  "Yellow": "Gelb",
  "Colour of the details of the icons and of the toolbar buttons under the mouse. «Same as the system» uses the desktop's accent colour. The selection in the 3D view stays orange. Applies at once.": "Farbe der Details der Symbole und der Symbolleistenknöpfe unter der Maus. „Wie das System“ verwendet die Akzentfarbe des Desktops. Die Auswahl in der 3D-Ansicht bleibt orange. Wirkt sofort.",
  "Export STL": "STL exportieren",
- "Unit of the STL file (3D printing programs expect millimetres)": "Einheit der STL-Datei (3D-Druckprogramme erwarten Millimeter)"
+ "Unit of the STL file (3D printing programs expect millimetres)": "Einheit der STL-Datei (3D-Druckprogramme erwarten Millimeter)",
+ "Engine": "Rechenkern",
+ "This is a TEST version of IngeTrazo with the new native engine (engine in use: {engine}). It keeps its own settings and extensions, apart from the stable IngeTrazo, which it does not touch. Keep a copy of the files you open here, and please report anything odd with the label beta-rust.": "Dies ist eine TESTVERSION von IngeTrazo mit dem neuen nativen Rechenkern (aktiv: {engine}). Sie hat eigene Einstellungen und Erweiterungen, getrennt vom stabilen IngeTrazo, das sie nicht verändert. Bewahre eine Kopie der Dateien auf, die du hier öffnest, und melde Auffälliges bitte mit dem Label beta-rust."
 }

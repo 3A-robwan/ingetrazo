@@ -134,6 +134,30 @@ def _configure_surface_format() -> None:
     QSurfaceFormat.setDefaultFormat(fmt)
 
 
+def _beta_notice(window) -> None:
+    """The Beta says what it is, once: a test build with the new engine,
+    its own settings, and the stable install untouched. Not modal."""
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QMessageBox
+
+    from core._native import engine
+    from core.i18n import tr
+    s = QSettings()
+    if s.value("beta/notice_shown", False, type=bool):
+        return
+    box = QMessageBox(
+        QMessageBox.Information, tr("IngeTrazo Beta"),
+        tr("This is a TEST version of IngeTrazo with the new native engine "
+           "(engine in use: {engine}). It keeps its own settings and "
+           "extensions, apart from the stable IngeTrazo, which it does not "
+           "touch. Keep a copy of the files you open here, and please report "
+           "anything odd with the label beta-rust.", engine=engine()),
+        QMessageBox.Ok, window)
+    box.setAttribute(Qt.WA_DeleteOnClose)
+    box.open()
+    s.setValue("beta/notice_shown", True)
+
+
 def _open_document_in(window, doc: "Path") -> None:
     """Open *doc* in *window*: .igz as the document, .skp imported through
     the native backend after the first paint (big models parse for seconds —
@@ -236,6 +260,8 @@ def _self_check() -> int:
     # Python code runs, so a missing module is not a fault — except in a
     # build that promises them (the Beta), which sets INGETRAZO_REQUIRE_RUST.
     from core._native import engine, native
+    from core.edition import APP_NAME
+    print(f"  edition        : {APP_NAME}")
     print(f"  engine         : {engine()}"
           + (f" (ingetrazo_core {native.__version__})" if native else ""))
     if native is None and os.environ.get("INGETRAZO_REQUIRE_RUST") == "1":
@@ -397,7 +423,9 @@ def main() -> int:
     _configure_surface_format()
     app = _App(sys.argv)
     app.setProperty("platform_forced", platform_forced)
-    app.setApplicationName("IngeTrazo")
+    from core.edition import APP_NAME
+    # The Beta files its settings and data under its own name (core.edition).
+    app.setApplicationName(APP_NAME)
     app.setOrganizationName("IngeTrazo")
     app.setProperty("gpu_pref", gpu_pref)
     # A driver that cannot serve the format we just asked for takes the
@@ -430,7 +458,8 @@ def main() -> int:
     # matched nothing, so the shell (and GNOME Software's Open button, which
     # waits for the launched app to appear) never tied it to the launcher.
     import os as _os
-    app.setDesktopFileName(_os.environ.get("FLATPAK_ID") or "ingetrazo")
+    from core.edition import SLUG
+    app.setDesktopFileName(_os.environ.get("FLATPAK_ID") or SLUG)
     # Light or dark chrome: follows the desktop by default, live
     # (Preferences ▸ General ▸ Theme pins one). See views/theme.py.
     from views.theme import apply_theme
@@ -455,7 +484,9 @@ def main() -> int:
     # then kills as a duplicate (the 'it doesn't open' failure). Fail-open:
     # any socket trouble just launches a normal standalone instance.
     from PySide6.QtNetwork import QLocalServer, QLocalSocket
-    _SOCKET = "ingetrazo-single-instance"
+    from core.edition import SLUG
+    # Per edition: the Beta must never hand its file to a stable window.
+    _SOCKET = f"{SLUG}-single-instance"
     # File ▸ New Window starts a second IngeTrazo with --new-window: it must
     # NOT hand over to the running one like a double-click does, or the
     # new window never appears (issue #76).
@@ -531,6 +562,9 @@ def main() -> int:
                 _open_document_in(window, doc)
 
     QTimer.singleShot(0, _after_first_frame)
+    from core.edition import BETA
+    if BETA:
+        QTimer.singleShot(400, lambda: _beta_notice(window))
     # Which units to work in, once the window is up (off for good with
     # «Don't show this at startup»; Preferences ▸ Units turns it back on).
     QTimer.singleShot(0, window.offer_units_at_start)
