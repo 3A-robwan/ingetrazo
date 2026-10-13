@@ -15,6 +15,11 @@ follow [SemVer](https://semver.org).
   selección en el visor 3D sigue en naranja.
 
 ### Corregido
+- **Borrar la diagonal de un rectángulo ya no le da la vuelta a la cara**
+  (#529, @GWydouw): al unir dos caras de un mismo plano, el contorno salía
+  en cualquiera de los dos sentidos, y casi la mitad de las veces la cara
+  unida quedaba del revés. Ahora conserva el lado de la cara original y su
+  pintura por delante y por detrás.
 - **Intersecar caras ▸ Con el modelo funciona con todo seleccionado**
   (#541): con Ctrl+A no cortaba nada («Ninguna cara cruza la selección»),
   porque lo seleccionado se sacaba de «el resto» y no quedaba contra qué
