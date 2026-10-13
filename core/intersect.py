@@ -196,7 +196,7 @@ def segments_for(scene, mode: str) -> list:
     """The crossing segments Intersect Faces would add, for ``mode``:
 
     * **model** — the selection against everything it touches (the whole
-      context and every group in it),
+      context and every group in it, the other selected things included),
     * **selection** — only the selected things against each other,
     * **context** — the selection against the rest of the context being
       edited (inside a group: its own geometry)."""
@@ -216,4 +216,20 @@ def segments_for(scene, mode: str) -> list:
             else scene.groups
         rest += [g for g in kids if id(g) not in selected]
     others = polys_of(rest)
-    return intersect(mine, others)
+    if mode != WITH_MODEL:
+        return intersect(mine, others)
+    # The selection is part of the model too: with everything selected
+    # (Ctrl+A, the usual way) «the rest» is empty and nothing was cut
+    # (#541). Each selected object is cut against the OTHER selected ones
+    # as well — never a group against itself, whose own faces only meet
+    # along its own edges and would leave loose lines drawn over them.
+    loose = [e for e in sel if isinstance(e, Face)]
+    parts = [polys_of([e]) for e in sel if isinstance(e, Group)]
+    loose_polys = polys_of(loose)
+    out = intersect(mine, others)
+    out += intersect(loose_polys, loose_polys, same=True)
+    parts.append(loose_polys)
+    for i, a in enumerate(parts):
+        for b in parts[i + 1:]:
+            out += intersect(a, b)
+    return _dedupe(out)

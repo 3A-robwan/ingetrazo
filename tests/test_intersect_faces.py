@@ -106,3 +106,44 @@ def test_with_selection_ignores_what_is_not_selected():
     with_model = X.segments_for(scene, X.WITH_MODEL)
     assert len(only_ab) == 6
     assert len(with_model) > len(only_ab)             # the bar counts too
+
+
+def _keys(segs):
+    def k(p):
+        return (round(p.x(), 6), round(p.y(), 6), round(p.z(), 6))
+    return {tuple(sorted((k(p), k(q)))) for p, q in segs}
+
+
+def test_with_model_and_everything_selected_still_cuts():
+    """Ctrl+A ▸ With Model, the usual way (#541): the selection was taken
+    out of «the rest», so with everything selected nothing was left to cut
+    against and the command said «No faces cross the selection». Now the
+    selected things cut each other too — the same edges as selecting the
+    loose box alone, and none over the bar's own edges."""
+    scene = Scene()
+    hist = History(scene)
+    for f in _box(0, 0, 0, 2, 2, 2, RED).mesh.faces:
+        scene.mesh.add_face(f.vertices)
+    bar = _box(1, -1, 1, 1.5, 3, 3, BLUE)
+    scene.groups.append(bar)
+    scene.selection = set(scene.mesh.faces)
+    box_only = X.segments_for(scene, X.WITH_MODEL)
+    scene.selection = set(scene.mesh.faces) | {bar}
+    everything = X.segments_for(scene, X.WITH_MODEL)
+    assert everything and _keys(everything) == _keys(box_only)
+    own = _keys([(e.a.position if hasattr(e.a, "position") else e.a,
+                  e.b.position if hasattr(e.b, "position") else e.b)
+                 for e in bar.mesh.edges])
+    assert not (_keys(everything) & own)              # no lines over the bar
+    hist.execute(build_add_edges(scene, everything, detect_faces=True))
+    assert len(scene.mesh.faces) == 10
+    assert solid_report(scene.mesh)[0]
+
+
+def test_with_model_two_selected_groups_cut_each_other():
+    scene = Scene()
+    a, b = _box(0, 0, 0, 2, 2, 2, RED), _box(1, 1, 1, 3, 3, 3, BLUE)
+    scene.groups += [a, b]
+    scene.selection = {a, b}
+    segs = X.segments_for(scene, X.WITH_MODEL)
+    assert len(segs) == 6 and math.isclose(_length(segs), 6.0, abs_tol=1e-6)
