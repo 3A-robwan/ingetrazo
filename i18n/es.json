@@ -2886,5 +2886,19 @@
  "Join Segments": "Unir segmentos",
  "Join collinear segments into single lines: the selected ones, or all of them when nothing is selected.": "Une los segmentos colineales en líneas únicas: los seleccionados o, si no hay nada seleccionado, todos.",
  "Removed {n} intermediate points": "Eliminados {n} puntos intermedios",
- "No collinear segments to join.": "No hay segmentos colineales que unir."
+ "No collinear segments to join.": "No hay segmentos colineales que unir.",
+ "{n} points will be taken away": "Se quitarán {n} puntos",
+ "No point can be taken away": "No se puede quitar ningún punto",
+ "Join": "Unir",
+ "Points taken away": "Puntos que se quitan",
+ "Kept: almost straight, but a real corner": "Se queda: casi recto, pero es una esquina real",
+ "Kept: another edge meets the line here": "Se queda: aquí llega otra arista a la línea",
+ "Kept: the pieces differ in soft, hidden or layer": "Se queda: los tramos difieren en suavizado, oculto o capa",
+ "Kept: part of a curve": "Se queda: forma parte de una curva",
+ "Taken away": "Se quitan",
+ "Kept:": "Se quedan:",
+ "Kink": "Quiebro",
+ "Another edge": "Otra arista",
+ "Soft, hidden or layer": "Suavizado, oculto o capa",
+ "Curve": "Curva"
 }

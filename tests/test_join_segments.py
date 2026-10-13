@@ -13,7 +13,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtGui import QVector3D
 from PySide6.QtWidgets import QApplication
 
-from core.edits import divide_edges, join_edges
+from core.edits import divide_edges, join_edges, join_preview
 from core.history import AddEdgeCommand, History, SnapshotMutation
 from core.mesh import Mesh
 from core.scene import Scene
@@ -230,6 +230,8 @@ def test_the_menu_command_joins_the_selection_and_reselects_the_line():
         hist.execute(AddEdgeCommand(V(0, 5), V(1, 5)))
         scene.selection.update(e for e in scene.mesh.edges if abs(e.a.y()) < 1e-9)
         win._on_join_segments()
+        assert len(scene.mesh.edges) == 5          # only the preview so far
+        win._join_preview.apply_button.click()
         assert len(scene.mesh.edges) == 2
         assert len(scene.selection) == 1
         (line,) = scene.selection
@@ -252,7 +254,126 @@ def test_the_menu_command_with_nothing_selected_cleans_the_whole_model():
             hist.execute(AddEdgeCommand(V(0, x), V(0, x + 1)))
         scene.selection.clear()
         win._on_join_segments()
+        win._join_preview.accept()
         assert len(scene.mesh.edges) == 2
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()
+
+
+# ---- The preview: what goes and what stays, before anything changes ----
+
+def _reasons(verdicts):
+    out: dict = {}
+    for v, r in verdicts.items():
+        out.setdefault(r, []).append((round(v.position.x(), 6),
+                                      round(v.position.y(), 6)))
+    return {r: sorted(p) for r, p in out.items()}
+
+
+def test_the_preview_changes_nothing_and_agrees_with_the_command():
+    m = Mesh()
+    edges = _polyline(m, [V(x, 0) for x in range(5)])
+    state = (list(m.vertices), list(m.edges))
+    verdicts = join_preview(m, edges)
+    assert (list(m.vertices), list(m.edges)) == state
+    assert all(len(v.edges) == 2 for v in verdicts)
+    assert _reasons(verdicts) == {"join": [(1, 0), (2, 0), (3, 0)]}
+    join_edges(m, edges)
+    assert len(m.edges) == 1
+
+
+def test_the_preview_tells_why_a_point_on_the_line_stays():
+    m = Mesh()
+    line = _polyline(m, [V(x, 0) for x in range(6)])
+    stem = m.add_edge(V(1, 0), V(1, 1))
+    line[3].soft = True                        # (3,0)-(4,0) soft
+    verdicts = join_preview(m, line + [stem])
+    assert _reasons(verdicts) == {"branch": [(1, 0)],
+                                  "flags": [(3, 0), (4, 0)],
+                                  "join": [(2, 0)]}
+
+
+def test_the_preview_points_out_a_kink_but_not_a_plain_corner():
+    m = Mesh()
+    t = math.radians(0.3)
+    kinked = _polyline(m, [V(0, 0), V(10, 0),
+                           V(10 + 10 * math.cos(t), 10 * math.sin(t))])
+    corner = _polyline(m, [V(0, 5), V(2, 5), V(2, 7)])
+    assert _reasons(join_preview(m, kinked + corner)) == {"kink": [(10, 0)]}
+
+
+def test_the_preview_marks_the_facets_of_a_curve():
+    m = Mesh()
+    pts = [V(x, 0) for x in range(3)]
+    arc = _polyline(m, pts)
+    m.tag_curve(pts, closed=False)
+    assert _reasons(join_preview(m, arc)) == {"curve": [(1, 0)]}
+
+
+def test_the_preview_panel_paints_and_cancel_leaves_the_model_alone():
+    from views.main_window import MainWindow
+    win = MainWindow()
+    try:
+        scene = win.viewport.scene
+        hist = win.viewport.history
+        for x in range(3):
+            hist.execute(AddEdgeCommand(V(x, 0), V(x + 1, 0)))
+        scene.selection.update(scene.mesh.edges)
+        win._on_join_segments()
+        panel = win._join_preview
+        assert panel.counts == {"join": 2}
+        assert panel._paint in win.viewport._ext_overlays
+        assert panel.parent() is win.viewport          # floats in the view
+        vp = win.viewport
+        assert panel.geometry().right() <= vp.width()
+        assert panel.geometry().bottom() <= vp.height()
+        assert panel.x() > vp.width() // 2 or vp.width() < 2 * panel.width()
+        panel.reject()
+        assert panel._paint not in win.viewport._ext_overlays
+        assert len(scene.mesh.edges) == 3
+        assert win._join_preview is None
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()
+
+
+def test_nothing_to_show_skips_the_panel():
+    from views.main_window import MainWindow
+    win = MainWindow()
+    try:
+        scene = win.viewport.scene
+        win.viewport.history.execute(AddEdgeCommand(V(0, 0), V(1, 0)))
+        scene.selection.update(scene.mesh.edges)
+        win._on_join_segments()
+        assert getattr(win, "_join_preview", None) is None
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()
+
+
+def test_enter_on_the_view_joins_and_esc_cancels():
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+    from views.main_window import MainWindow
+    win = MainWindow()
+    try:
+        scene = win.viewport.scene
+        hist = win.viewport.history
+        for x in range(3):
+            hist.execute(AddEdgeCommand(V(x, 0), V(x + 1, 0)))
+
+        def press(key):
+            QApplication.sendEvent(win.viewport, QKeyEvent(
+                QEvent.KeyPress, key, Qt.NoModifier))
+
+        scene.selection.update(scene.mesh.edges)
+        win._on_join_segments()
+        press(Qt.Key_Escape)
+        assert win._join_preview is None and len(scene.mesh.edges) == 3
+        win._on_join_segments()
+        press(Qt.Key_Return)
+        assert win._join_preview is None and len(scene.mesh.edges) == 1
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()

@@ -4355,15 +4355,53 @@ class MainWindow(QMainWindow):
     @_repeatable("Join Segments")
     def _on_join_segments(self) -> None:
         """Join the selected collinear segments into single lines; with
-        no edge selected, every one of the model being edited."""
-        from core.edits import join_edges
-        from core.history import SnapshotMutation
+        no edge selected, every one of the model being edited. First a
+        preview: a dot on each point that goes, and on each point of a
+        straight line that stays, in the colour of its reason; Enter
+        joins, Esc leaves the model alone."""
+        from core.edits import join_preview
+        from views.join_preview import JoinPreview
         scene = self.viewport.scene
         edges = [e for e in scene.selection if isinstance(e, Edge)
                  and e in scene.mesh.edges]
         whole = not edges
         if whole:
             edges = list(scene.mesh.edges)
+        verdicts = join_preview(scene.mesh, edges)
+        if not verdicts:
+            self.statusBar().showMessage(
+                tr("No collinear segments to join."), 3000)
+            return
+        old = getattr(self, "_join_preview", None)
+        if old is not None:
+            old.reject()
+        panel = JoinPreview(self.viewport, verdicts,
+                            self._edit_group_matrix())
+        panel.accepted.connect(lambda: self._apply_join_segments(edges, whole))
+        panel.finished.connect(lambda _ok: setattr(self, "_join_preview", None))
+        self._join_preview = panel
+
+    def _edit_group_matrix(self):
+        """The world placement of the group being edited (``None`` at
+        the top level), wherever it is nested."""
+        scene = self.viewport.scene
+        group = getattr(scene, "edit_group", None)
+        if group is None:
+            return None
+        from core.group import iter_placements
+        for top in scene.groups:
+            for g, m in iter_placements(top):
+                if g is group:
+                    return m
+        return getattr(group, "xform", None)
+
+    def _apply_join_segments(self, edges, whole: bool) -> None:
+        """Join Segments itself, once its preview is accepted: one undo
+        step, the joined lines selected in place of their pieces."""
+        from core.edits import join_edges
+        from core.history import SnapshotMutation
+        scene = self.viewport.scene
+        edges = [e for e in edges if e in scene.mesh.edges]
         before = len(edges)
         result: list = []
         self.viewport.history.execute(SnapshotMutation(

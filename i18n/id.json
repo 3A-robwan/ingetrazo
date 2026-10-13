@@ -2889,5 +2889,19 @@
  "Join Segments": "Gabungkan segmen",
  "Join collinear segments into single lines: the selected ones, or all of them when nothing is selected.": "Gabungkan segmen segaris menjadi satu garis: yang dipilih, atau semuanya bila tidak ada yang dipilih.",
  "Removed {n} intermediate points": "{n} titik antara dihapus",
- "No collinear segments to join.": "Tidak ada segmen segaris untuk digabungkan."
+ "No collinear segments to join.": "Tidak ada segmen segaris untuk digabungkan.",
+ "{n} points will be taken away": "{n} titik akan dihapus",
+ "No point can be taken away": "Tidak ada titik yang bisa dihapus",
+ "Join": "Gabungkan",
+ "Points taken away": "Titik yang dihapus",
+ "Kept: almost straight, but a real corner": "Tetap: hampir lurus, tetapi sudut sungguhan",
+ "Kept: another edge meets the line here": "Tetap: tepi lain bertemu garis di sini",
+ "Kept: the pieces differ in soft, hidden or layer": "Tetap: potongan berbeda dalam halus, tersembunyi, atau lapisan",
+ "Kept: part of a curve": "Tetap: bagian dari kurva",
+ "Taken away": "Dihapus",
+ "Kept:": "Tetap:",
+ "Kink": "Tekukan",
+ "Another edge": "Tepi lain",
+ "Soft, hidden or layer": "Halus, tersembunyi, atau lapisan",
+ "Curve": "Kurva"
 }
