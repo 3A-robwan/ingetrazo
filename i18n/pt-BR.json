@@ -2956,5 +2956,7 @@
  "Before": "Antes",
  "After": "Depois",
  "Rename (F2): several selected rows at once — a name and a number, find and replace, a prefix or a suffix; one row in place; nothing selected: every row the filter shows": "Renomear (F2): várias linhas selecionadas de uma vez — nome e número, localizar e substituir, prefixo ou sufixo; uma linha na própria célula; sem seleção: todas as linhas que o filtro mostra",
- "Click a swatch to apply it": "Clique numa amostra para aplicá-la"
+ "Click a swatch to apply it": "Clique numa amostra para aplicá-la",
+ "Install an unreviewed extension?": "Instalar uma extensão não revisada?",
+ "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» não foi revisada por quem mantém o IngeTrazo.\n\nExtensões são código Python: depois de instalada, ela é executada com as suas permissões e pode ler ou alterar os seus arquivos. Instale-a só se confiar no autor ({author})."
 }

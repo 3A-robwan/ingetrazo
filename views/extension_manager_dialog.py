@@ -1011,7 +1011,26 @@ class ExtensionManagerDialog(QDialog):
             QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
         return answer == QMessageBox.Yes
 
+    def _confirm_unreviewed(self, extension: Extension) -> bool:
+        """An extension nobody reviewed is its author's Python code, run with
+        the user's own permissions: say so once more before installing it,
+        with No as the default. Reviewed and bundled ones go straight on."""
+        if extension.bundled or is_reviewed(extension, self._reviewed):
+            return True
+        answer = QMessageBox.warning(
+            self, tr("Install an unreviewed extension?"),
+            tr("«{name}» has not been reviewed by an IngeTrazo maintainer.\n\n"
+               "Extensions are Python code: once installed it runs with your "
+               "permissions and can read or change your files. Install it "
+               "only if you trust its author ({author}).",
+               name=display_name(extension, current_language()),
+               author=extension.author),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        return answer == QMessageBox.Yes
+
     def _install(self, extension: Extension) -> None:
+        if not self._confirm_unreviewed(extension):
+            return
         try:
             install_extension(
                 extension, confirm_manual_copies=lambda paths:
@@ -1128,6 +1147,8 @@ class ExtensionManagerDialog(QDialog):
             self._render_page(key)
 
     def _replace(self, extension: Extension) -> None:
+        if not self._confirm_unreviewed(extension):
+            return
         name = display_name(extension, current_language())
         answer = QMessageBox.question(
             self, tr("Extension manager"),
