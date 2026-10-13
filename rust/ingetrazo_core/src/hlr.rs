@@ -10,7 +10,33 @@
 //! it, so the candidate SET is identical. Order does not matter: the
 //! occluded intervals are sorted before they are merged, as in Python.
 
+use rayon::prelude::*;
+
 const T_EPS: f64 = 1e-6; // core.hlr._T_EPS
+
+/// One thread's working buffers: a visit stamp per triangle (so the grid's
+/// candidates come out once each) and two index lists.
+struct Scratch {
+    stamp: Vec<u32>,
+    tick: u32,
+    pool: Vec<u32>,
+    idx: Vec<u32>,
+}
+
+impl Scratch {
+    fn new(n: usize) -> Self {
+        Scratch { stamp: vec![0u32; n], tick: 0, pool: Vec::new(), idx: Vec::new() }
+    }
+
+    fn next_tick(&mut self) -> u32 {
+        self.tick = self.tick.wrapping_add(1);
+        if self.tick == 0 {
+            self.stamp.iter_mut().for_each(|s| *s = 0);
+            self.tick = 1;
+        }
+        self.tick
+    }
+}
 
 pub struct Occluders {
     tris: Vec<[[f64; 3]; 3]>,
@@ -146,88 +172,104 @@ impl Occluders {
         }
     }
 
+    /// Every edge's visible spans. Edges are independent, so they are
+    /// shared out over the cores in blocks; the blocks come back in order,
+    /// so the result is the same as one edge after the other.
     pub fn visible_spans_all(&self, edges: &[([f64; 3], [f64; 3])], eps: f64) -> (Vec<i64>, Vec<(f64, f64)>) {
+        let n = self.tris.len();
+        let blocks: Vec<(Vec<usize>, Vec<(f64, f64)>)> = edges
+            .par_chunks(256)
+            .map_init(
+                || Scratch::new(n),
+                |s, chunk| {
+                    let mut counts = Vec::with_capacity(chunk.len());
+                    let mut spans = Vec::new();
+                    for (a, b) in chunk {
+                        let before = spans.len();
+                        self.edge_spans(*a, *b, eps, s, &mut spans);
+                        counts.push(spans.len() - before);
+                    }
+                    (counts, spans)
+                },
+            )
+            .collect();
         let mut offsets = Vec::with_capacity(edges.len() + 1);
         let mut spans: Vec<(f64, f64)> = Vec::new();
         offsets.push(0i64);
-        let n = self.tris.len();
-        let mut stamp = vec![0u32; n];
-        let mut tick = 0u32;
-        let mut pool: Vec<u32> = Vec::new();
-        let mut idx: Vec<u32> = Vec::new();
-        for (a, b) in edges {
-            let a2 = [a[0], a[1]];
-            let b2 = [b[0], b[1]];
-            let (az, bz) = (a[2], b[2]);
-            if n == 0 {
-                spans.push((0.0, 1.0));
-                offsets.push(spans.len() as i64);
-                continue;
+        for (counts, sp) in blocks {
+            for c in counts {
+                let last = *offsets.last().unwrap();
+                offsets.push(last + c as i64);
             }
-            // hlr_drawing's candidate filter, exactly
-            let lo = [a2[0].min(b2[0]) - 1e-9, a2[1].min(b2[1]) - 1e-9];
-            let hi = [a2[0].max(b2[0]) + 1e-9, a2[1].max(b2[1]) + 1e-9];
-            let zmax = if az >= bz { az } else { bz }; // Python max(az, bz)
-            tick = tick.wrapping_add(1);
-            if tick == 0 {
-                stamp.iter_mut().for_each(|s| *s = 0);
-                tick = 1;
-            }
-            self.gather(lo, hi, &mut stamp, tick, &mut pool);
-            idx.clear();
-            for &i in &pool {
-                let i = i as usize;
-                let out = self.tmax[i][0] < lo[0] || self.tmin[i][0] > hi[0] || self.tmax[i][1] < lo[1] || self.tmin[i][1] > hi[1];
-                if !out && self.tzmin[i] < zmax {
-                    idx.push(i as u32);
-                }
-            }
-            if idx.is_empty() {
-                spans.push((0.0, 1.0));
-            } else {
-                idx.sort_unstable(); // Python visits candidates in index order
-                visible_spans(a2, b2, az, bz, &self.tris, &idx, eps, &mut spans);
-            }
-            offsets.push(spans.len() as i64);
+            spans.extend(sp);
         }
         (offsets, spans)
+    }
+
+    /// One edge: hlr_drawing's candidate filter, exactly, then visible_spans.
+    fn edge_spans(&self, a: [f64; 3], b: [f64; 3], eps: f64, s: &mut Scratch, out: &mut Vec<(f64, f64)>) {
+        let a2 = [a[0], a[1]];
+        let b2 = [b[0], b[1]];
+        let (az, bz) = (a[2], b[2]);
+        if self.tris.is_empty() {
+            out.push((0.0, 1.0));
+            return;
+        }
+        let lo = [a2[0].min(b2[0]) - 1e-9, a2[1].min(b2[1]) - 1e-9];
+        let hi = [a2[0].max(b2[0]) + 1e-9, a2[1].max(b2[1]) + 1e-9];
+        let zmax = if az >= bz { az } else { bz }; // Python max(az, bz)
+        let tick = s.next_tick();
+        self.gather(lo, hi, &mut s.stamp, tick, &mut s.pool);
+        s.idx.clear();
+        for &i in &s.pool {
+            let i = i as usize;
+            let away = self.tmax[i][0] < lo[0] || self.tmin[i][0] > hi[0] || self.tmax[i][1] < lo[1] || self.tmin[i][1] > hi[1];
+            if !away && self.tzmin[i] < zmax {
+                s.idx.push(i as u32);
+            }
+        }
+        if s.idx.is_empty() {
+            out.push((0.0, 1.0));
+        } else {
+            s.idx.sort_unstable(); // Python visits candidates in index order
+            visible_spans(a2, b2, az, bz, &self.tris, &s.idx, eps, out);
+        }
     }
 
     /// hlr_drawing's Profiles test: true = the span is an outline.
     pub fn profile_flags(&self, probes: &[([f64; 2], [f64; 2], f64)], delta: f64, ptol: f64) -> Vec<bool> {
         let n = self.tris.len();
-        let mut stamp = vec![0u32; n];
-        let mut tick = 0u32;
-        let mut pool: Vec<u32> = Vec::new();
-        let mut near: Vec<u32> = Vec::new();
-        let mut out = Vec::with_capacity(probes.len());
-        for (mid, nrm, zm) in probes {
-            let lo2 = [mid[0] - delta * 1.001, mid[1] - delta * 1.001];
-            let hi2 = [mid[0] + delta * 1.001, mid[1] + delta * 1.001];
-            let zlim = zm + ptol;
-            tick = tick.wrapping_add(1);
-            if tick == 0 {
-                stamp.iter_mut().for_each(|s| *s = 0);
-                tick = 1;
-            }
-            near.clear();
-            if n > 0 {
-                self.gather(lo2, hi2, &mut stamp, tick, &mut pool);
-                for &i in &pool {
-                    let i = i as usize;
-                    let away = self.tmax[i][0] < lo2[0] || self.tmin[i][0] > hi2[0] || self.tmax[i][1] < lo2[1] || self.tmin[i][1] > hi2[1];
-                    if !away && self.tzmin[i] <= zlim {
-                        near.push(i as u32);
-                    }
+        probes
+            .par_chunks(256)
+            .map_init(
+                || Scratch::new(n),
+                |s, chunk| chunk.iter().map(|(mid, nrm, zm)| self.probe(*mid, *nrm, *zm, delta, ptol, s)).collect::<Vec<bool>>(),
+            )
+            .flatten_iter()
+            .collect()
+    }
+
+    fn probe(&self, mid: [f64; 2], nrm: [f64; 2], zm: f64, delta: f64, ptol: f64, s: &mut Scratch) -> bool {
+        let lo2 = [mid[0] - delta * 1.001, mid[1] - delta * 1.001];
+        let hi2 = [mid[0] + delta * 1.001, mid[1] + delta * 1.001];
+        let zlim = zm + ptol;
+        s.idx.clear();
+        if !self.tris.is_empty() {
+            let tick = s.next_tick();
+            self.gather(lo2, hi2, &mut s.stamp, tick, &mut s.pool);
+            for &i in &s.pool {
+                let i = i as usize;
+                let away = self.tmax[i][0] < lo2[0] || self.tmin[i][0] > hi2[0] || self.tmax[i][1] < lo2[1] || self.tmin[i][1] > hi2[1];
+                if !away && self.tzmin[i] <= zlim {
+                    s.idx.push(i as u32);
                 }
             }
-            let p1 = [mid[0] + nrm[0], mid[1] + nrm[1]];
-            let p2 = [mid[0] - nrm[0], mid[1] - nrm[1]];
-            let s1 = self.surface_at(p1, *zm, &near, ptol);
-            let s2 = self.surface_at(p2, *zm, &near, ptol);
-            out.push(!s1 || !s2);
         }
-        out
+        let p1 = [mid[0] + nrm[0], mid[1] + nrm[1]];
+        let p2 = [mid[0] - nrm[0], mid[1] - nrm[1]];
+        let s1 = self.surface_at(p1, zm, &s.idx, ptol);
+        let s2 = self.surface_at(p2, zm, &s.idx, ptol);
+        !s1 || !s2
     }
 
     /// core.hlr._surface_at over the candidate triangles ``cand``.
