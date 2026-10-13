@@ -465,6 +465,11 @@ class MoveTool(Tool):
         stack = getattr(viewport.history, "undo_stack", None)
         return bool(stack) and stack[-1] is last["cmd"]
 
+    def close_array_window(self) -> None:
+        """Esc right after a copy: «3x» / «/3» stop applying and a bare X
+        is the Text shortcut again (#542)."""
+        self._last = None
+
     def on_array_value(self, viewport, count: int, mode: str,
                        step: float | None = None) -> bool:
         """Arrays, typed right after a Move-copy: ``3x`` lays

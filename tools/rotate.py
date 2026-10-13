@@ -250,6 +250,11 @@ class RotateTool(ProtractorBase):
         stack = getattr(viewport.history, "undo_stack", None)
         return bool(stack) and stack[-1] is last["cmd"]
 
+    def close_array_window(self) -> None:
+        """Esc right after a rotate-copy: «3x» / «/3» stop applying and a
+        bare X is the Text shortcut again (#542)."""
+        self._last = None
+
     def on_array_value(self, viewport, count: int, mode: str) -> bool:
         """The classic polar array, typed right after a rotate-COPY: ``3x``
         lays three copies at multiples of the angle (30° → 30/60/90) and

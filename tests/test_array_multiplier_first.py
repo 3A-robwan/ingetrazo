@@ -113,3 +113,37 @@ def test_once_the_array_window_closes_x_is_text_again():
         assert type(vp.active_tool).__name__ == "TextTool"
     finally:
         _close(win)
+
+
+def test_esc_right_after_a_copy_closes_the_array_window():
+    """The Esc cascade gains one step, only right after a copy: the first
+    Esc with an empty value box closes the array window — X is Text again —
+    and the selection is left alone for the next Esc."""
+    win, vp, face = _window()
+    try:
+        tool = _move_copy(win, vp, face)
+        assert tool.array_pending(vp)
+        QTest.keyClick(vp, Qt.Key_Escape)
+        QApplication.processEvents()
+        assert not tool.array_pending(vp)
+        assert vp.scene.selection                       # still selected
+        QTest.keyClick(vp, Qt.Key_X)
+        QApplication.processEvents()
+        assert type(vp.active_tool).__name__ == "TextTool"
+    finally:
+        _close(win)
+
+
+def test_x_then_esc_esc_then_x_is_text():
+    """A stray X: the first Esc empties the value box, the second closes
+    the array window, and the next X is the Text tool."""
+    win, vp, face = _window()
+    try:
+        _move_copy(win, vp, face)
+        for key in (Qt.Key_X, Qt.Key_Escape, Qt.Key_Escape, Qt.Key_X):
+            QTest.keyClick(vp, key)
+            QApplication.processEvents()
+        assert type(vp.active_tool).__name__ == "TextTool"
+        assert _xs(vp) == [0.0, 2.0]                    # the copy stays
+    finally:
+        _close(win)
