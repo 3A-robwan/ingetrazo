@@ -13056,7 +13056,7 @@ class Viewport(QOpenGLWidget):
     def escape(self) -> None:
         """The Esc cascade (standard CAD), ONE step per press: a typed value
         buffer, then a sticky constraint (axis lock / reference), then the
-        tool's in-progress action, then the selection, then — nothing in
+        array window a copy just opened, then the tool's in-progress action, then the selection, then — nothing in
         progress — step out ONE level of the open group, and
         finally the tool's own cancel. The window's «Cancel current tool»
         action (shortcut Esc, which fires BEFORE this widget's key event)
@@ -13069,6 +13069,13 @@ class Viewport(QOpenGLWidget):
         if self.release_constraints():
             return
         tool = self.active_tool
+        close = getattr(tool, "close_array_window", None)
+        if callable(close) and self._array_pending():
+            # Right after a copy the array window is what is open: Esc
+            # closes it before touching the selection, so a bare X is the
+            # Text shortcut again (#542).
+            close()
+            return
         if tool is not None and type(tool).__name__ == "PasteTool":
             win = self.window()
             activate = getattr(win, "_activate_tool", None)
