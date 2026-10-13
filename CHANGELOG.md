@@ -15,6 +15,11 @@ follow [SemVer](https://semver.org).
   selección en el visor 3D sigue en naranja.
 
 ### Corregido
+- **«x5» tras copiar hace la matriz, igual que «5x»** (#542): después de
+  copiar con Mover o Rotar + Ctrl, teclear «x5» abría la herramienta Texto,
+  porque la X sola es su atajo. Justo después de una copia, mientras «3x» o
+  «/3» harían una matriz, la X va a la casilla de valores; en cualquier otro
+  momento sigue abriendo Texto.
 - **Un plano de sección ya no deja encajar en lo que oculta** (#384,
   @jonson7777): solo se quitaban del snap las aristas con los dos extremos
   en el lado cortado, así que la arista que cruza el corte —la vertical de
