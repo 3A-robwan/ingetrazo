@@ -232,6 +232,15 @@ def _self_check() -> int:
     if dwg is None and is_frozen() and sys.platform != "darwin":
         problems.append("DWG converter")
 
+    # The optional native kernels (rust/ingetrazo_core): without them the
+    # Python code runs, so a missing module is not a fault — except in a
+    # build that promises them (the Beta), which sets INGETRAZO_REQUIRE_RUST.
+    from core._native import engine, native
+    print(f"  engine         : {engine()}"
+          + (f" (ingetrazo_core {native.__version__})" if native else ""))
+    if native is None and os.environ.get("INGETRAZO_REQUIRE_RUST") == "1":
+        problems.append("native engine")
+
     # ``ingetrazo --mcp`` runs scripts/ingetrazo_mcp.py by path, and that
     # server reads its recipe book from core.ai_recipes. The Flatpak of
     # 0.4.9 shipped without scripts/ at all: the app ran, and the MCP door
