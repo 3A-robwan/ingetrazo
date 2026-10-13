@@ -15,6 +15,14 @@ follow [SemVer](https://semver.org).
   selección en el visor 3D sigue en naranja.
 
 ### Corregido
+- **Un plano de sección ya no deja encajar en lo que oculta** (#384,
+  @jonson7777): solo se quitaban del snap las aristas con los dos extremos
+  en el lado cortado, así que la arista que cruza el corte —la vertical de
+  un muro cortado a media altura— seguía ahí entera, y el cursor encajaba en
+  su extremo y en su tramo ocultos. Ahora lo que el corte oculta cuenta como
+  oculto para todo punto: extremos, puntos medios, «en arista», cruces, y
+  también al pulsar aristas, vértices y grupos. Vale en todos los estilos,
+  también en Rayos X y alambre; con los cortes apagados no cambia nada.
 - **El gestor de extensiones ya no parpadea al cambiar de pestaña, instalar
   o descargar** (#555): cada cambio entre Explorar e Instaladas reconstruía
   todas las tarjetas, las viejas seguían pintadas un instante debajo de las

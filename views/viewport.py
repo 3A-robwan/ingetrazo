@@ -11083,7 +11083,16 @@ class Viewport(QOpenGLWidget):
         X-ray and wireframe show everything, so nothing hides a snap there
         (the usual trick: switch to X-ray to dimension the floor of a pool through
         its water). Hidden-line and shaded keep the visible-only rule.
+
+        The active section cut is checked first, in every style: what it
+        cuts away is gone, not behind something. Dropping only the edges
+        with BOTH ends on the hidden side (``_snap_scene``) left the edge
+        that crosses the cut — a wall's vertical, cut halfway up — and its
+        hidden end and stretch still snapped (#384).
         """
+        sp = _active_cut(self.scene)
+        if sp is not None and sp.side(world) > 1e-6:
+            return True
         if self._effective_style().face_mode in ("xray", "wireframe"):
             return False
         idx = self._pick_index()
@@ -11138,6 +11147,8 @@ class Viewport(QOpenGLWidget):
         rules — it asks ``_is_occluded`` point by point."""
         import numpy as np
         worlds = list(worlds)
+        if worlds and _active_cut(self.scene) is not None:
+            return [self._is_occluded(w) for w in worlds]   # the cut first (#384)
         out = [False] * len(worlds)
         if not worlds or self._effective_style().face_mode in ("xray",
                                                                "wireframe"):
