@@ -88,6 +88,39 @@ def test_rectangle_and_centre_arc_lock_too():
     assert arc.work_plane == (V(5, 5, 5), V(0, 1, 0))
 
 
+def test_an_arrow_after_the_first_corner_still_picks_the_plane():
+    """Issue #543: «after the first click the arrows still choose the plane,
+    and the typed size always follows the preview». Before the fix the arrow
+    fell through to the viewport's linear axis lock and the rectangle kept
+    the plane captured at the first click, so a 0.4 × 0.72 typed after the
+    lock landed on the wrong plane."""
+    vp = _Stub()
+    rect = RectangleTool()
+    rect.on_activate(vp)
+    rect.on_click(_ctx(vp, V(0, 0, 0)))                 # first corner, nothing hit
+    assert rect.work_plane is None
+    assert rect.on_key(vp, int(Qt.Key_Left), Qt.NoModifier)   # the tool's, not
+    assert rect.plane_lock == "y" and "XZ" in vp.flashed[-1]  # the axis lock's
+    assert rect.work_plane == (V(0, 0, 0), V(0, 1, 0))  # re-aimed through it
+    rect.on_hover(_ctx(vp, V(0, 0.4, 0.72)))            # cursor on that plane
+    assert rect.on_value(vp, (0.4, 0.72))              # the typed size follows
+    face = vp.scene.mesh.faces[-1]
+    assert all(abs(v.y()) < 1e-9 for v in face.vertices)         # the XZ plane
+    assert {round(v.x(), 6) for v in face.vertices} == {0.0, 0.4}
+    assert {round(v.z(), 6) for v in face.vertices} == {0.0, 0.72}
+    assert rect.plane_lock is None and rect.work_plane is None   # spent
+
+    # The same arrow again frees it; the plane goes back to the cursor's.
+    vp2 = _Stub()
+    rect2 = RectangleTool()
+    rect2.on_activate(vp2)
+    rect2.on_click(_ctx(vp2, V(0, 0, 0)))
+    rect2.on_key(vp2, int(Qt.Key_Left), Qt.NoModifier)
+    rect2.on_key(vp2, int(Qt.Key_Left), Qt.NoModifier)
+    assert rect2.plane_lock is None and rect2.work_plane is None
+    assert "free" in vp2.flashed[-1].lower() or "libre" in vp2.flashed[-1].lower()
+
+
 # ---- Down arrow: the magenta reference lock (issue #10) --------------------
 
 class _Edge:
