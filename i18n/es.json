@@ -2880,5 +2880,7 @@
  "Red": "Rojo",
  "Purple": "Morado",
  "Yellow": "Amarillo",
- "Colour of the details of the icons and of the toolbar buttons under the mouse. «Same as the system» uses the desktop's accent colour. The selection in the 3D view stays orange. Applies at once.": "Color de los detalles de los iconos y de los botones de las barras bajo el ratón. «Igual que el sistema» usa el color de acento del escritorio. La selección en el visor 3D sigue en naranja. Se aplica al instante."
+ "Colour of the details of the icons and of the toolbar buttons under the mouse. «Same as the system» uses the desktop's accent colour. The selection in the 3D view stays orange. Applies at once.": "Color de los detalles de los iconos y de los botones de las barras bajo el ratón. «Igual que el sistema» usa el color de acento del escritorio. La selección en el visor 3D sigue en naranja. Se aplica al instante.",
+ "Export STL": "Exportar STL",
+ "Unit of the STL file (3D printing programs expect millimetres)": "Unidad del archivo STL (los programas de impresión 3D esperan milímetros)"
 }

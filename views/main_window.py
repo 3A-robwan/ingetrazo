@@ -6882,7 +6882,36 @@ class MainWindow(QMainWindow):
                n=count, path=path_str), 5000)
 
     def _on_export_stl(self) -> None:
-        self._export("STL", "stl", tr("STL mesh (*.stl)"), stl_format.save_stl)
+        # An STL records no unit and slicers read it as millimetres, so the
+        # model's own metres came out 1000x too small (#513): ask, the way
+        # the import does, with millimetres first and the last choice kept.
+        from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
+                                       QFormLayout)
+
+        keys = ["mm", "cm", "m", "in", "ft"]
+        labels = [tr("Millimetres"), tr("Centimetres"), tr("Metres"),
+                  tr("Inches"), tr("Feet")]
+        settings = QSettings()
+        guess = str(settings.value("export/stl_unit", "mm") or "mm")
+        dialog = QDialog(self)
+        dialog.setWindowTitle(tr("Export STL"))
+        form = QFormLayout(dialog)
+        units = QComboBox(dialog)
+        units.addItems(labels)
+        units.setCurrentIndex(keys.index(guess) if guess in keys else 0)
+        form.addRow(tr("Unit of the STL file (3D printing programs expect "
+                       "millimetres)"), units)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        unit = keys[units.currentIndex()]
+        settings.setValue("export/stl_unit", unit)
+        self._export("STL", "stl", tr("STL mesh (*.stl)"),
+                     lambda scene, path: stl_format.save_stl(scene, path, unit))
 
     def _on_export_obj(self) -> None:
         self._export("OBJ", "obj", tr("Wavefront OBJ (*.obj)"), obj_format.save_obj)

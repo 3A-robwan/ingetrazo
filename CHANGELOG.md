@@ -15,6 +15,12 @@ follow [SemVer](https://semver.org).
   selección en el visor 3D sigue en naranja.
 
 ### Corregido
+- **El STL exportado sale en milímetros** (#513, @toSvenson): un STL no
+  guarda la unidad y los programas de impresión 3D lo leen en milímetros,
+  pero IngeTrazo escribía los metros del modelo, así que una pieza de
+  15 × 25 mm entraba al laminador 1000 veces más chica. Ahora Archivo ▸
+  Exportar ▸ STL pregunta la unidad, con milímetros por defecto, y recuerda
+  la elección, igual que la importación.
 - **Un plano de sección ya no deja encajar en lo que oculta** (#384,
   @jonson7777): solo se quitaban del snap las aristas con los dos extremos
   en el lado cortado, así que la arista que cruza el corte —la vertical de
