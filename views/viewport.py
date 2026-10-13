@@ -12871,6 +12871,15 @@ class Viewport(QOpenGLWidget):
             if t == "p" and hasattr(self.active_tool, "on_profile_value"):
                 ev.accept()
                 return True
+        # Right after a copy, "x5" is the array written multiplier first
+        # (#542): the bare X must reach the value box, not the Text tool.
+        if (ev.type() == QEvent.ShortcutOverride and not self._value_buffer
+                and not _is_chord(ev.modifiers())
+                and ev.text().lower() == "x"
+                and getattr(self.active_tool, "accepts_array", False)
+                and self._array_pending()):
+            ev.accept()
+            return True
         return super().event(ev)
 
     def _tool_claims_key(self, ev) -> bool:
@@ -13431,8 +13440,12 @@ class Viewport(QOpenGLWidget):
             # "*3" / "3*": the array multiplier ("x" works too).
             self._set_value_buffer(self._value_buffer + text)
             return True
-        if arrays and text.lower() == "x" and self._current_token_tail():
-            # "3x" — only after a digit: bare X stays the Text tool shortcut.
+        if arrays and text.lower() == "x" and (
+                self._current_token_tail()
+                or (not self._value_buffer and self._array_pending())):
+            # "3x" — after a digit; bare X stays the Text tool shortcut,
+            # except right after a copy, where "x5" is the array written
+            # multiplier first (#542), as common a habit as "5x".
             self._set_value_buffer(self._value_buffer + text)
             return True
         if (text.lower() == "p" and self._current_token_tail()
@@ -13574,6 +13587,12 @@ class Viewport(QOpenGLWidget):
         if len(nums) in (2, 3):
             return tuple(nums)
         return None
+
+    def _array_pending(self) -> bool:
+        """Whether the active tool just made a copy that «x5» would turn
+        into an array (#542)."""
+        pending = getattr(self.active_tool, "array_pending", None)
+        return bool(pending(self)) if callable(pending) else False
 
     def _current_token_tail(self) -> str:
         """The portion of the buffer after the last ``;`` or space."""

@@ -15,6 +15,11 @@ follow [SemVer](https://semver.org).
   selección en el visor 3D sigue en naranja.
 
 ### Corregido
+- **«x5» tras copiar hace la matriz, igual que «5x»** (#542): después de
+  copiar con Mover o Rotar + Ctrl, teclear «x5» abría la herramienta Texto,
+  porque la X sola es su atajo. Justo después de una copia, mientras «3x» o
+  «/3» harían una matriz, la X va a la casilla de valores; en cualquier otro
+  momento sigue abriendo Texto.
 - **El Asistente IA vuelve a funcionar con OpenAI** (#517, @jb-dev-github):
   los modelos nuevos de OpenAI rechazaban cada pedido con «HTTP 400:
   Unsupported parameter: 'max_tokens'». Con OpenAI se manda ahora
