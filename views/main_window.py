@@ -2459,6 +2459,15 @@ class MainWindow(QMainWindow):
             action.setEnabled(False)
             ext_menu.insertAction(anchor, action)
 
+        # The user's keys for the extensions' entries (#595). The window put
+        # the remembered keys on its actions while it was being built, and
+        # since #440 the extensions come after it shows: their entries did
+        # not exist yet, so a key given to one lasted until the restart.
+        # Their own keys are noted first as their factory keys («Reset»).
+        from views import shortcuts as _shortcuts
+        _shortcuts.remember_defaults(self)
+        _shortcuts.apply_user_shortcuts(self)
+
         if self._defer_extensions and set(self.findChildren(QToolBar)) - bars_before:
             st = QSettings()
             state = st.value("ui/window_state")
