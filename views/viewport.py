@@ -7699,9 +7699,22 @@ class Viewport(QOpenGLWidget):
         if not ok:
             return None, None
         p_near = inv.map(QVector3D(ndc_x, ndc_y, -1.0))
-        p_far = inv.map(QVector3D(ndc_x, ndc_y, 1.0))
-        direction = p_far - p_near
-        if direction.length() < 1e-9:
+
+        def finite(v):
+            return all(map(math.isfinite, (v.x(), v.y(), v.z())))
+        # The far plane gives the most exact direction, far from the near
+        # point. But a camera a few centimetres from a part (#583) has its
+        # near plane 0.4 mm out and the far one kilometres away: past
+        # float32 the depth term rounds to exactly -1, the far plane goes
+        # to infinity, and the ray came out NaN — and with it every snap
+        # built on the cursor. Then a point just short of it serves.
+        direction = None
+        for depth in (1.0, 0.999, 0.9, 0.0):
+            d = inv.map(QVector3D(ndc_x, ndc_y, depth)) - p_near
+            if finite(d) and d.length() >= 1e-9:
+                direction = d
+                break
+        if direction is None or not finite(p_near):
             return None, None
         return p_near, direction.normalized()
 
