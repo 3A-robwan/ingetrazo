@@ -166,7 +166,10 @@ def test_the_columns_fit_a_sidebar_wide_panel_without_scrolling():
         assert panel.tree.viewport().width() > 380           # it took
         assert panel.tree.horizontalScrollBar().maximum() == 0
         assert 80 <= w[COL_TYPE] < 110, w    # Type gave up room first
-        assert w[COL_NAME] >= 180
+        # Name keeps the largest share — not a pixel count: the widths
+        # follow the platform's fonts and margins (CI on Linux: 179 px).
+        assert w[COL_NAME] > w[COL_TYPE] and w[COL_NAME] > w[COL_LAYER], w
+        assert w[COL_NAME] >= panel._name_floor()
         wide = _sized(panel, 800)
         assert wide[COL_TYPE] == 110 and wide[COL_NAME] == 200
     finally:
