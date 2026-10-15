@@ -163,7 +163,9 @@ def test_a_circles_rim_follows_the_cursor_across_the_face():
         # A point of the face whose PIXEL sits on the screen image of the
         # world +Z line through the centre — the gesture that made the
         # screen magnet answer the face's own normal.
-        alvo = _cursor_on_the_blue_line(vp, centro, reach=0.3)
+        # Half the reach: at 0.3 the point lands ~1.42 m out, on the cube's
+        # corner in some window sizes, and the rim snaps to the corner.
+        alvo = _cursor_on_the_blue_line(vp, centro, reach=0.15)
         assert alvo is not None
         px, py = _pixel(vp, alvo)
         visto = _picked_plane(vp, px, py)

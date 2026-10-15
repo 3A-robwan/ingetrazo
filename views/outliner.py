@@ -2552,10 +2552,26 @@ class OutlinerPanel(QWidget):
                 break
             if floor is None:
                 floor = self._name_floor()
+            # Qt never draws a section narrower than the style's minimum:
+            # a floor below it is room counted that never comes.
+            floor = max(floor, head.minimumSectionSize())
             if c in widths:
                 give = min(over, max(0, widths[c] - floor))
                 widths[c] -= give
                 over -= give
+        # Still over: the floors above assume the eye and the padlock take
+        # 26 px, and a style whose narrowest section is wider (38 px with
+        # Fusion here) leaves 13 px of scroll bar with every column on —
+        # the short columns go down to 40 px, still a readable «…».
+        if over > 0:
+            least = max(head.minimumSectionSize(), 40)
+            for c in (COL_COPIES, COL_TYPE, COL_LAYER, COL_MATERIAL, COL_IFC):
+                if over <= 0:
+                    break
+                if c in widths:
+                    give = min(over, max(0, widths[c] - least))
+                    widths[c] -= give
+                    over -= give
         # The last one too: the header stretches it over any room left,
         # but never below the width it was given.
         for c, width in widths.items():
