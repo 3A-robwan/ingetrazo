@@ -5377,8 +5377,9 @@ class MainWindow(QMainWindow):
         the undo history and without dirtying the document. Left out when
         Preferences say so (#221: parts for a 3D printer start on an empty
         sheet)."""
-        from PySide6.QtCore import QSettings
-        if str(QSettings().value("new_document/scale_figure", "1")) == "0":
+        from core import scale_figure
+        figure = scale_figure.chosen()
+        if figure is None:
             # Still a clean new document: nothing to ask about on close.
             self._saved_version = self.viewport.scene.version
             return
@@ -5386,14 +5387,16 @@ class MainWindow(QMainWindow):
         # and 60 cm forward (toward the viewer) of the origin.
         from PySide6.QtGui import QVector3D
         at = QVector3D(-0.65, -0.60, 0.0)
-        # The engineer since 26-09 (Marco: «el personaje Sumari no me gusta
-        # mucho, ¿ponemos el del ingeniero?»); Sumari stays in the library.
-        group = self._make_billboard_person("ingeniero.png", height=1.70,
-                                            name=tr("Engineer"), position=at)
+        # The Engineer by default since 26-09 (Marco: «el personaje Sumari no
+        # me gusta mucho, ¿ponemos el del ingeniero?»); Preferences choose
+        # another person or the user's own picture (#655).
+        group = self._make_billboard_person(figure.image, figure.height,
+                                            figure.name, position=at)
         if group is None:
             group = self._make_billboard_person(position=at)
         if group is None:
             return
+        scale_figure.mark(group)
         scene = self.viewport.scene
         scene.groups.append(group)
         scene.version += 1
@@ -5402,11 +5405,15 @@ class MainWindow(QMainWindow):
     def _make_billboard_person(self, image: str = "person_billboard.png",
                                height: float = 1.75,
                                name: str | None = None, position=None):
-        """A face-me scale figure (arch-viz cutout)."""
+        """A face-me scale figure (arch-viz cutout). ``image``: a file of
+        resources/components, or a full path (the user's own picture)."""
+        from pathlib import Path
         from PySide6.QtGui import QImage
         from core.group import make_billboard_group
         from core.paths import app_root
-        path = app_root() / "resources" / "components" / image
+        path = Path(image)
+        if not path.is_absolute():
+            path = app_root() / "resources" / "components" / image
         if not path.exists():
             return None
         img = QImage(str(path))

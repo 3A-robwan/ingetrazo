@@ -2883,5 +2883,16 @@
  "Yellow": "黄色",
  "Colour of the details of the icons and of the toolbar buttons under the mouse. «Same as the system» uses the desktop's accent colour. The selection in the 3D view stays orange. Applies at once.": "图标细节以及鼠标悬停时工具栏按钮的颜色。“与系统相同”使用桌面的强调色。3D 视图中的选择仍为橙色。立即生效。",
  "Export STL": "导出 STL",
- "Unit of the STL file (3D printing programs expect millimetres)": "STL 文件的单位（3D 打印软件默认使用毫米）"
+ "Unit of the STL file (3D printing programs expect millimetres)": "STL 文件的单位（3D 打印软件默认使用毫米）",
+ "Scale figure:": "比例人物：",
+ "My own picture…": "我自己的图片…",
+ "Choose picture…": "选择图片…",
+ "The height this person stands": "此人的身高",
+ "Choose the picture of your scale figure": "选择你的比例人物图片",
+ "Images": "图片",
+ "All files": "所有文件",
+ "Scale figure": "比例人物",
+ "That file is not a picture IngeTrazo can read.": "IngeTrazo 无法读取该文件中的图片。",
+ "This picture has no transparent background, so it will show as a rectangle. A PNG cut out around the person looks best.": "此图片没有透明背景，因此会显示为一个矩形。最好使用沿人物轮廓抠图的 PNG。",
+ "The picture could not be copied; the previous figure is kept.": "无法复制图片；保留之前的人物。"
 }

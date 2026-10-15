@@ -2885,5 +2885,16 @@
  "Yellow": "Kuning",
  "Colour of the details of the icons and of the toolbar buttons under the mouse. «Same as the system» uses the desktop's accent colour. The selection in the 3D view stays orange. Applies at once.": "Warna detail ikon dan tombol bilah alat di bawah tetikus. «Sama dengan sistem» memakai warna aksen desktop. Pilihan di tampilan 3D tetap oranye. Langsung diterapkan.",
  "Export STL": "Ekspor STL",
- "Unit of the STL file (3D printing programs expect millimetres)": "Satuan berkas STL (program cetak 3D mengharapkan milimeter)"
+ "Unit of the STL file (3D printing programs expect millimetres)": "Satuan berkas STL (program cetak 3D mengharapkan milimeter)",
+ "Scale figure:": "Figur skala:",
+ "My own picture…": "Gambar saya sendiri…",
+ "Choose picture…": "Pilih gambar…",
+ "The height this person stands": "Tinggi orang ini",
+ "Choose the picture of your scale figure": "Pilih gambar figur skala Anda",
+ "Images": "Gambar",
+ "All files": "Semua berkas",
+ "Scale figure": "Figur skala",
+ "That file is not a picture IngeTrazo can read.": "Berkas itu bukan gambar yang dapat dibaca IngeTrazo.",
+ "This picture has no transparent background, so it will show as a rectangle. A PNG cut out around the person looks best.": "Gambar ini tidak berlatar transparan, jadi akan tampil sebagai persegi panjang. PNG yang dipotong mengikuti bentuk orang adalah yang terbaik.",
+ "The picture could not be copied; the previous figure is kept.": "Gambar tidak dapat disalin; figur sebelumnya dipertahankan."
 }
