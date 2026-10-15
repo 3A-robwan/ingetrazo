@@ -150,8 +150,21 @@ def test_the_window_opens_another_file_without_the_old_planes(tmp_path):
         assert win._act_show_splanes.isChecked()
         assert win._act_show_scuts.isChecked()
         browser = getattr(win, "project_browser", None)
-        if browser is not None and browser.outliner._sec_root is not None:
-            assert browser.outliner._sec_root.childCount() == 0
+        if browser is not None:
+            # On screen, the Outliner refreshes 300 ms after the last change
+            # (on purpose: one refresh per burst of edits); hidden, when it
+            # is shown. Wait for it as a person would see it.
+            from PySide6.QtTest import QTest
+            ol = browser.outliner
+            if ol.isVisible():
+                for _ in range(40):
+                    if ol._sec_root is None or ol._sec_root.childCount() == 0:
+                        break
+                    QTest.qWait(50)
+            else:
+                ol.refresh()
+            if ol._sec_root is not None:
+                assert ol._sec_root.childCount() == 0
         vp = win.viewport
         if getattr(vp, "_gl", None) is None or not vp.isValid():
             return                       # no GL here: the data checks stand
