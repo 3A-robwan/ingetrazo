@@ -202,3 +202,47 @@ def test_a_new_extension_asking_to_start_hidden_does_so_on_a_used_profile(
     assert late.isHidden()                            # installed later: hidden
     assert not win.georef_tray.isHidden()             # the choice still rules
     _close(win)
+
+
+def test_restore_default_panels_gives_the_tray_its_first_run_width(
+        settings_file):
+    """The width a first run has — the factory layout's — is the one
+    Restore default panels puts back after the tray was dragged wider."""
+    from views.main_window import MainWindow
+    win = MainWindow()
+    win.resize(1400, 900)
+    _shown(win)
+    assert win.tray.width() == MainWindow.FACTORY_TRAY_WIDTH
+    win.resizeDocks([win.tray], [700], Qt.Horizontal)
+    for _ in range(5):
+        _app.processEvents()
+    assert win.tray.width() > 600
+    win.restore_default_trays()
+    for _ in range(5):
+        _app.processEvents()
+    assert win.tray.width() == MainWindow.FACTORY_TRAY_WIDTH
+    _close(win)
+
+
+def test_a_tray_left_wide_last_time_still_restores_to_the_factory_width(
+        settings_file):
+    """The report: the layout is saved on closing, so a tray left 600 px
+    wide opens 600 px wide; restoring to «the width it opened with» then
+    changed nothing. Restore default panels gives the factory width."""
+    from views.main_window import MainWindow
+    win = MainWindow()
+    win.resize(1400, 900)
+    _shown(win)
+    win.resizeDocks([win.tray], [600], Qt.Horizontal)
+    for _ in range(5):
+        _app.processEvents()
+    _close(win)                                      # saves the layout
+    win = MainWindow()
+    win.resize(1400, 900)
+    _shown(win)
+    assert abs(win.tray.width() - 600) <= 2          # opened wide
+    win.restore_default_trays()
+    for _ in range(5):
+        _app.processEvents()
+    assert win.tray.width() == MainWindow.FACTORY_TRAY_WIDTH
+    _close(win)

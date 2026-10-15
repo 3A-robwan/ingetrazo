@@ -1665,11 +1665,18 @@ class MainWindow(QMainWindow):
         for first, nxt in zip(order, order[1:]):
             self.tabifyDockWidget(first, nxt)
 
+    #: The side tray's width on a first run — the one the factory layout
+    #: (resources/ui/default_layout.state) gives it; Restore default
+    #: panels puts it back (tests/test_sidebar_trays.py checks they agree).
+    FACTORY_TRAY_WIDTH = 439
+
     def restore_default_trays(self) -> None:
         """Window ▸ Panels ▸ Restore default panels: the factory layout of
         the side tray back — Properties and the Browser open, the
-        rest closed and listed here — and the choice forgotten, so it
-        stands as a first run's would."""
+        rest closed and listed here, the tray as wide as on a first run,
+        the Browser's columns in their factory order, fitted to it — and
+        the choice
+        forgotten, so it stands as a first run's would."""
         from PySide6.QtCore import QTimer
         st = QSettings()
         st.remove("ui/hidden_trays")
@@ -1685,7 +1692,16 @@ class MainWindow(QMainWindow):
                 act.setChecked(True)
                 act.blockSignals(False)
         self._left_was = []
+        # Inside the Browser too: its columns in the factory order.
+        self.project_browser.outliner.reset_columns()
         self.tray.raise_()
+        # And the side tray's width: the factory one. Not the width the
+        # window opened with — the layout is saved on closing, so a tray
+        # left wide opened wide, and «restoring» to that changed nothing.
+        width = self.FACTORY_TRAY_WIDTH
+        self.resizeDocks([self.tray], [width], Qt.Horizontal)
+        QTimer.singleShot(0, self, lambda: self.resizeDocks(
+            [self.tray], [width], Qt.Horizontal))
         QTimer.singleShot(0, self, self._style_dock_tabs)
         QTimer.singleShot(0, self, self._place_sidebar_handle)
 
@@ -3008,6 +3024,27 @@ class MainWindow(QMainWindow):
         self._refresh_vcb()
         self._update_status_hint()
 
+    def _can_make_here(self) -> bool:
+        """Make Group, Make Component and Explode work inside an open
+        group — what they make goes into it (#490, #561) — but not inside
+        a component, whose parts are its shared definition."""
+        from core.outliner import editing_inside_component
+        if editing_inside_component(self.viewport.scene):
+            self.viewport.flash_status(tr(
+                "Components keep their parts: Make Unique first to "
+                "change what is inside one"), 4000)
+            return False
+        return True
+
+    def _execute_make(self, cmd) -> None:
+        """Run a Make Group / Make Component / Explode command where the
+        user is: at the model, or into the open group."""
+        ctx = self.viewport.scene.edit_group
+        if ctx is not None:
+            from core.history import GroupInContextCommand
+            cmd = GroupInContextCommand(cmd, ctx)
+        self.viewport.history.execute(cmd)
+
     @_repeatable("Make Group")
     def _on_make_group(self) -> None:
         """Make Group (G) over the selection.
@@ -3016,12 +3053,7 @@ class MainWindow(QMainWindow):
         five seconds, or an empty selection that returns in silence, reads to
         the user as "I pressed Create group and it does not create" — which
         is exactly how this was reported."""
-        if self.viewport.scene.edit_group is not None:
-            # Grouping INSIDE a group would have to land in that group's
-            # children, not at the root where MakeGroupCommand puts it.
-            self.viewport.flash_status(tr(
-                "Leave the group first (Esc) — grouping inside a group is "
-                "not wired up yet"), 4000)
+        if not self._can_make_here():
             return
         sel = self.viewport.scene.selection
         faces = [f for f in sel if isinstance(f, Face)]
@@ -3043,7 +3075,7 @@ class MainWindow(QMainWindow):
             # the classic behaviour. What used to happen here was a dialog offering
             # to merge or explode, because opening a container baked it.
             from core.history import MakeNestedGroupCommand
-            self.viewport.history.execute(
+            self._execute_make(
                 MakeNestedGroupCommand(faces, edges, groups))
             self.viewport.flash_status(tr(
                 "Grouped {n} group(s){extra} — double-click to go inside",
@@ -3056,25 +3088,28 @@ class MainWindow(QMainWindow):
             self.viewport.flash_status(tr(
                 "Select the geometry to group first"), 4000)
             return
-        self.viewport.history.execute(MakeGroupCommand(faces, edges))
+        self._execute_make(MakeGroupCommand(faces, edges))
         self.viewport.update()
 
     @_repeatable("Make Component")
     def _on_make_component(self) -> None:
         """Make Component (G): the selection becomes a shared
         DEFINITION placed as an instance — every copy shares it."""
-        if self.viewport.scene.edit_group is not None:
-            self.viewport.flash_status(tr(
-                "Leave the group first (Esc) — nested groups aren't "
-                "supported yet"))
+        if not self._can_make_here():
             return
         sel = self.viewport.scene.selection
         faces = [f for f in sel if isinstance(f, Face)]
         edges = [e for e in sel if isinstance(e, Edge)]
         groups = [g for g in sel if isinstance(g, Group)
                   and not getattr(g, "billboard", False)]
-        count = sum(1 for g in self.viewport.scene.groups
-                    if g.is_component()) + 1
+        # The first «Component #n» no object wears yet: counting the copies
+        # at the top skipped numbers and could hand out a name in use
+        # (#620, @ibsgroupdubai-netizen).
+        from core.kept_components import names_in_use
+        taken = names_in_use(self.viewport.scene)
+        count = 1
+        while tr("Component #{n}", n=count) in taken:
+            count += 1
         if len(groups) > 1 or (groups and (faces or edges)):
             # Several groups, or groups and loose geometry: ONE component
             # holding them, each still a group inside (Marco, 24-09, with
@@ -3086,7 +3121,7 @@ class MainWindow(QMainWindow):
                 text=tr("Component #{n}", n=count))
             if not ok:
                 return
-            self.viewport.history.execute(MakeComponentOfCommand(
+            self._execute_make(MakeComponentOfCommand(
                 faces, edges, groups,
                 name=name.strip() or tr("Component #{n}", n=count)))
             self.viewport.update()
@@ -3109,7 +3144,7 @@ class MainWindow(QMainWindow):
                 text=g.name or tr("Component"))
             if not ok:
                 return
-            self.viewport.history.execute(
+            self._execute_make(
                 GroupToComponentCommand(g, name.strip() or None))
             self.viewport.update()
             self.statusBar().showMessage(tr(
@@ -3124,7 +3159,7 @@ class MainWindow(QMainWindow):
             text=tr("Component #{n}", n=count))
         if not ok:
             return
-        self.viewport.history.execute(MakeGroupCommand(
+        self._execute_make(MakeGroupCommand(
             faces, edges, component=True,
             name=name.strip() or tr("Component #{n}", n=count)))
         self.viewport.update()
@@ -3136,7 +3171,7 @@ class MainWindow(QMainWindow):
         from core.history import MakeUniqueCommand
         for g in [g for g in self.viewport.scene.selection
                   if isinstance(g, Group) and g.is_component()]:
-            self.viewport.history.execute(MakeUniqueCommand(g))
+            self.viewport.history.execute(MakeUniqueCommand(g, rename=True))
         self.viewport.update()
 
     def _replacement_choices(self, sel) -> list:
@@ -3451,14 +3486,13 @@ class MainWindow(QMainWindow):
 
     @_repeatable("Explode Group")
     def _on_explode_group(self) -> None:
-        if self.viewport.scene.edit_group is not None:
-            self.viewport.flash_status(tr(
-                "Leave the group first (Esc) — nested groups aren't "
-                "supported yet"))
+        # Inside an open group what comes out stays in it, one level up
+        # from where it was — not out at the model (as Make Group).
+        if not self._can_make_here():
             return
         groups = [g for g in self.viewport.scene.selection if isinstance(g, Group)]
         for g in groups:
-            self.viewport.history.execute(ExplodeGroupCommand(g))
+            self._execute_make(ExplodeGroupCommand(g))
         if groups:
             self.viewport.update()
 
@@ -5293,6 +5327,9 @@ class MainWindow(QMainWindow):
         finally:
             self.viewport.setUpdatesEnabled(True)
         dlg.close()
+        # Painting was off while it loaded: turning it back on does not ask
+        # for a frame, and the view stayed black until the first click.
+        self.viewport.update()
         self.viewport.inference.reset()
         self._apply_camera_home()
         self._current_path = path
