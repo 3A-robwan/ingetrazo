@@ -2891,5 +2891,16 @@
  "Yellow": "Amarelo",
  "Colour of the details of the icons and of the toolbar buttons under the mouse. «Same as the system» uses the desktop's accent colour. The selection in the 3D view stays orange. Applies at once.": "Cor dos detalhes dos ícones e dos botões das barras sob o mouse. «Igual ao sistema» usa a cor de destaque da área de trabalho. A seleção na vista 3D continua laranja. Aplica-se na hora.",
  "Export STL": "Exportar STL",
- "Unit of the STL file (3D printing programs expect millimetres)": "Unidade do arquivo STL (os programas de impressão 3D esperam milímetros)"
+ "Unit of the STL file (3D printing programs expect millimetres)": "Unidade do arquivo STL (os programas de impressão 3D esperam milímetros)",
+ "Scale figure:": "Figura de escala:",
+ "My own picture…": "Minha própria imagem…",
+ "Choose picture…": "Escolher imagem…",
+ "The height this person stands": "A altura desta pessoa",
+ "Choose the picture of your scale figure": "Escolha a imagem da sua figura de escala",
+ "Images": "Imagens",
+ "All files": "Todos os arquivos",
+ "Scale figure": "Figura de escala",
+ "That file is not a picture IngeTrazo can read.": "Esse arquivo não é uma imagem que o IngeTrazo consiga ler.",
+ "This picture has no transparent background, so it will show as a rectangle. A PNG cut out around the person looks best.": "Esta imagem não tem fundo transparente, então aparecerá como um retângulo. O ideal é um PNG recortado ao redor da pessoa.",
+ "The picture could not be copied; the previous figure is kept.": "Não foi possível copiar a imagem; a figura anterior foi mantida."
 }
