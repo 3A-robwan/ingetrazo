@@ -1167,13 +1167,16 @@ class ComponentsPanel(QWidget):
     def _components_in_model(self) -> list:
         """``[(name, faces, [groups], template)]`` per distinct prototype,
         most copies first. Instances share their prototype mesh, so identity
-        groups them — no geometry is walked. ``template`` is the definition
+        groups them — no geometry is walked. Copies nested inside groups
+        count too: one put into a group from the Browser used to drop off
+        the list (#599, @chakkreetiya). ``template`` is the definition
         kept in the file (``None`` when it is not kept); a kept one with no
         copy placed is a row too, with an empty list."""
         from core.kept_components import kept_template
+        from core.purge import iter_groups
         scene = self._window.viewport.scene
         by_proto: dict = {}
-        for g in scene.groups:
+        for g in iter_groups(scene.groups):
             if not g.is_component() or getattr(g, "billboard", False):
                 continue
             by_proto.setdefault(id(g.mesh), []).append(g)
@@ -1320,13 +1323,40 @@ class ComponentsPanel(QWidget):
         menu.exec(self._in_model.viewport().mapToGlobal(pos))
 
     def _select_groups(self, groups) -> None:
-        scene = self._window.viewport.scene
+        """Select the copies. The view selects inside ONE open group, so
+        when they sit in several, the group holding most of them opens (the
+        one already open wins a tie, then the first in the model) and those
+        are selected; the status bar says how many are left elsewhere."""
+        from core import outliner
+        from views.outliner import open_to
+        vp = self._window.viewport
+        scene = vp.scene
+        by_path: dict = {}
+        for g in groups:
+            path = outliner.path_to(scene.groups, g)
+            if path is not None:
+                by_path.setdefault(tuple(id(p) for p in path),
+                                   (path, []))[1].append(g)
+        if not by_path:
+            return
+        here = tuple(id(p) for p in outliner.open_path(scene))
+        path, picks = max(by_path.values(), key=lambda pg: (
+            len(pg[1]), tuple(id(p) for p in pg[0]) == here))
+        if not open_to(vp, path):
+            vp.flash_status(tr(
+                "A group around it is hidden or locked: show or unlock "
+                "it to select inside"), 3500)
+            return
+        others = len(groups) - len(picks)
+        picks = [g for g in picks if scene.entity_selectable(g)]
         scene.selection.clear()
-        scene.selection.update(groups)
+        scene.selection.update(picks)
         scene.bump_view()
-        self._window.viewport.update()
+        vp.update()
         self._window.statusBar().showMessage(
-            tr("{n} entities selected", n=len(groups)), 2500)
+            tr("{n} entities selected", n=len(picks)) if not others
+            else tr("{n} copies selected; {m} more are inside other groups",
+                    n=len(picks), m=others), 4000)
 
 
 class PartsPanel(QWidget):
@@ -1658,6 +1688,8 @@ class PartsPanel(QWidget):
         parts = [p for p in parts if p is not None and not p.hidden] or [part]
         if scene.edit_group is not cont:
             vp.begin_group_edit(cont)
+            if scene.edit_group is not cont:
+                return                      # locked: it did not open
         scene.selection.clear()
         scene.selection.update(parts)
         # Clicked here, so already in view: the refresh this triggers must

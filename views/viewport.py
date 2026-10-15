@@ -416,6 +416,17 @@ EDIT_REST_MODES = ("normal", "fade", "hide")
 #: as the subject.
 EDIT_REST_FADE = 0.75
 
+
+def edit_fade_color(background) -> tuple:
+    """What the rest of the model fades TOWARDS while a group is edited: a
+    grey half way between the background and a neutral mid grey. Fading
+    to the background itself left white faces on a light background
+    looking the same as before — nothing said you were inside a group
+    («quiero que lo demás quede gris», 14-10). Towards this grey the rest
+    reads grey on a light background and dim on a dark one, and what is
+    being edited keeps its colours."""
+    return tuple(0.5 * float(c) + 0.5 * 0.55 for c in list(background)[:3])
+
 #: X-ray: how opaque each translucent face layer is. Layers stack, so a face
 #: seen through another reads darker and an opening (no face) stays clear.
 XRAY_FACE_OPACITY = 0.6
@@ -1596,10 +1607,11 @@ class Viewport(QOpenGLWidget):
                   and getattr(self, "_edit_split_f", None) is not None)
         split_f = self._edit_split_f if fading else None
         split_e = self._edit_split_e if fading else None
-        if fading:
-            bg = style.background
+        if self.scene.edit_group is not None:
+            # One colour for every faded pass (loose, grouped, instanced).
             self._program.setUniformValue(
-                self._loc_fade_color, QVector3D(bg[0], bg[1], bg[2]))
+                self._loc_fade_color, QVector3D(*edit_fade_color(
+                    style.background)))
         spans = getattr(self, "_face_spans", None)
         if spans:
             face_spans, culled_fv = self._visible_spans(spans, planes, split_f)
@@ -2497,9 +2509,13 @@ class Viewport(QOpenGLWidget):
             # cache on every drag frame (81 ms a frame instead of 56).
             serial = (getattr(m, "_mut_serial", None)
                       if m is not None and m is not loose else None)
+            # ``locked`` too: the pick block lists a group as selectable or
+            # not, and a padlock that did not re-key it left the group
+            # movable and openable from the view.
             parts.append((id(g), id(m), serial,
                           tuple(xf.data()) if xf is not None else None,
                           g.layer, bool(g.billboard), bool(g.hidden),
+                          bool(getattr(g, "locked", False)),
                           _material_sig(getattr(g, "material", None))))
             for c in (g.children or ()):
                 walk(c)
@@ -11711,7 +11727,15 @@ class Viewport(QOpenGLWidget):
         """Enter a group for editing (double-click-into-group). A
         component instance opens on a world copy of its definition; the
         session's commands are remembered so leaving can fold them into ONE
-        undoable share-back."""
+        undoable share-back.
+
+        A locked group (the Browser's padlock), or one inside a locked
+        group, does not open — whichever road asks: a double-click, the
+        right-click's Edit Group or a part clicked in the Parts tab."""
+        from core.outliner import locked_on_path
+        if locked_on_path(self.scene.groups, group):
+            self.flash_status(tr("Unlock it first"), 3000)
+            return
         parent = self.scene.edit_group
         in_definition = (parent is not None
                          and group in (getattr(parent, "children", None) or ())

@@ -3323,10 +3323,17 @@ class ReshareInstanceCommand(Command):
 
 class MakeUniqueCommand(Command):
     """Make Unique: bake a component instance into its OWN mesh
-    so edits stop touching the siblings' shared definition."""
+    so edits stop touching the siblings' shared definition.
 
-    def __init__(self, group) -> None:
+    ``rename``: the command Make Unique also gives it a name of its own
+    when another object in the model wears the same one — «Silla» becomes
+    «Silla #2» (#620). Opening a copied group, which makes it unique on the
+    way in, leaves the name alone."""
+
+    def __init__(self, group, rename: bool = False) -> None:
         self.group = group
+        self._rename = rename
+        self._name = None
         self._proto = None
         self._xform = None
         self._children = None
@@ -3339,6 +3346,12 @@ class MakeUniqueCommand(Command):
         self._children = self.group.children
         self._axes = self.group.axes
         self._component = self.group.component
+        self._name = self.group.name
+        if self._rename and self.group.name:
+            from core.kept_components import names_in_use, numbered_name
+            taken = names_in_use(scene, skip=self.group)
+            if self.group.name in taken:
+                self.group.name = numbered_name(self.group.name, taken)
         self.group.make_unique()
         scene.version += 1
 
@@ -3348,6 +3361,7 @@ class MakeUniqueCommand(Command):
         self.group.children = self._children or []
         self.group.axes = self._axes
         self.group.component = self._component
+        self.group.name = self._name
         scene.version += 1
 
 
@@ -3637,6 +3651,63 @@ class MakeNestedGroupCommand(Command):
         elif self.container in scene.groups:
             scene.groups.remove(self.container)
         scene.selection.clear()
+        scene.version += 1
+
+
+class GroupInContextCommand(Command):
+    """Make Group, Make Component or Explode while a group is open: what
+    it makes goes INTO the open group, as whatever you create while editing
+    a group belongs to it (#490, #561 — «making a new group directly while
+    you are inside another one is the part still missing»), and what
+    Explode lets out stays in it.
+
+    ``inner`` is the usual command (:class:`MakeGroupCommand`,
+    :class:`MakeNestedGroupCommand`, :class:`MakeComponentOfCommand`,
+    :class:`ExplodeGroupCommand`), run
+    with the open group's children standing in for the model's top level:
+    those commands take groups from and add groups to ``scene.groups``, and
+    inside a group the siblings are its children. Entering a container
+    already pushed its matrix down into them, so their coordinates are the
+    world's, the same the tools draw in. The open group gets the identity
+    matrix a group holding groups always has (``Group.adopt``), as a group.
+
+    Callers refuse it inside a component (``outliner.editing_inside_component``):
+    components keep their parts, as the Browser's drag and drop says."""
+
+    def __init__(self, inner, context) -> None:
+        self.inner = inner
+        self.context = context
+        self._state = None
+
+    @property
+    def group(self):
+        return getattr(self.inner, "group", None) or getattr(
+            self.inner, "container", None)
+
+    def _run(self, scene, step) -> None:
+        ctx = self.context
+        if ctx.children is None:
+            ctx.children = []
+        top = scene.groups
+        scene.groups = ctx.children
+        try:
+            step(scene)
+        finally:
+            scene.groups = top
+
+    def do(self, scene) -> None:
+        from PySide6.QtGui import QMatrix4x4
+        ctx = self.context
+        self._state = (ctx.xform, ctx.component)
+        self._run(scene, self.inner.do)
+        if ctx.children and ctx.xform is None:
+            ctx.xform = QMatrix4x4()
+            ctx.component = False
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        self._run(scene, self.inner.undo)
+        self.context.xform, self.context.component = self._state
         scene.version += 1
 
 
