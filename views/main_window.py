@@ -751,9 +751,11 @@ class MainWindow(QMainWindow):
         self._act_eyedropper = QAction(
             tool_icon("eyedropper"), tr("Sample material"), self)
         self._act_eyedropper.setCheckable(True)
-        self._act_eyedropper.setToolTip(tr(
-            "Sample material — click a face to pick up its paint or texture "
-            "(or hold Alt with the Paint tool)"))
+        from views.shortcuts import set_tooltip
+        self._act_eyedropper.setStatusTip(tr(
+            "Click a face to pick up its paint or texture "
+            "(or hold Alt with the Paint tool)."))
+        set_tooltip(self._act_eyedropper, tr("Sample material"))
         self._act_eyedropper.toggled.connect(self._on_toggle_eyedropper)
         main_tb.addAction(self._act_eyedropper)
         self._icon_actions.append((self._act_eyedropper, "eyedropper"))
@@ -809,17 +811,18 @@ class MainWindow(QMainWindow):
         self.toolbars["view"] = view_tb
         self._nav_actions: dict[str, QAction] = {}
         for key, label, short, tip in [
-            ("orbit", "Orbit", "O", "Orbit (O) — left-drag to rotate the view"),
-            ("pan", "Pan", "H", "Pan (H) — left-drag to slide the view"),
-            ("zoom", "Zoom", "Z", "Zoom (Z) — drag up/down to zoom in/out"),
+            ("orbit", "Orbit", "O", "Left-drag to rotate the view."),
+            ("pan", "Pan", "H", "Left-drag to slide the view."),
+            ("zoom", "Zoom", "Z", "Drag up or down to zoom in or out."),
             ("zoom_window", "Zoom Window", "",
-             "Zoom Window — drag a box to zoom to that region"),
+             "Drag a box to zoom to that region."),
         ]:
             action = QAction(tool_icon(key), tr(label), self)
             action.setCheckable(True)
             if short:
                 action.setShortcut(QKeySequence(short))
-            action.setToolTip(tr(tip))
+            action.setStatusTip(tr(tip))
+            set_tooltip(action, tr(label))  # names the keys, as tools do
             action.triggered.connect(lambda _c, k=key: self._activate_nav(k))
             self._tool_group.addAction(action)
             view_tb.addAction(action)
