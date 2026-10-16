@@ -2840,6 +2840,8 @@
  "Restore default tabs": "恢复默认标签页",
  "The tabs on the left of the page: drag any tab there, or back to the right.": "页面左侧的标签页：可将任意标签页拖到这里，或拖回右侧。",
  "Properties and the Browser open, the other panels closed, all on the right in the factory order.": "属性和浏览器打开，其他面板关闭，全部按出厂顺序放在右侧。",
+ "Restore default toolbars": "恢复默认工具栏",
+ "Every toolbar back in its factory place and order, the hidden ones shown again. The panels stay as they are.": "每个工具栏回到出厂位置和顺序，隐藏的重新显示。面板保持不变。",
  "Installed by hand, outside the extension manager.": "手动安装，不在扩展管理器管理范围内。",
  "Replace with the catalog version": "替换为目录中的版本",
  "Installed by hand · not in the catalog": "手动安装 · 不在目录中",

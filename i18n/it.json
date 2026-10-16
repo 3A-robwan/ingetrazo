@@ -2859,6 +2859,8 @@
  "Restore default tabs": "Ripristina le schede",
  "The tabs on the left of the page: drag any tab there, or back to the right.": "Le schede a sinistra della pagina: trascina lì qualsiasi scheda, o di nuovo a destra.",
  "Properties and the Browser open, the other panels closed, all on the right in the factory order.": "Proprietà e il Browser aperti, gli altri pannelli chiusi, tutti a destra nell'ordine predefinito.",
+ "Restore default toolbars": "Ripristina le barre degli strumenti",
+ "Every toolbar back in its factory place and order, the hidden ones shown again. The panels stay as they are.": "Ogni barra degli strumenti al suo posto e nel suo ordine predefinito, quelle nascoste di nuovo visibili. I pannelli restano come sono.",
  "Import photogrammetric mesh": "Importa mesh fotogrammetrica",
  "ODM textured model (*.obj);;All files (*)": "Modello texturizzato ODM (*.obj);;Tutti i file (*)",
  "glTF binary (*.glb)": "glTF binario (*.glb)",
