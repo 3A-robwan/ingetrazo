@@ -263,19 +263,35 @@ class OffsetTool(Tool):
         # in two at 40 cm). Outward: the biggest region is the ring and the
         # original is its single hole.
         attrs = dict(getattr(self.base_face, "attrs", None) or {})
+        # The face's own holes go back with it (#537): a ring on top of
+        # four walls came back as a full square over the room otherwise.
+        own_holes = [list(h) for h in
+                     (getattr(self.base_face, "holes", None) or [])]
         if self.distance > 0:
             outer = self._loop
             inners = [loop for loop, _holes in regions]
+            placed = _place_holes(own_holes, inners, self._normal)
+            if placed is None:
+                viewport.flash_status(tr(
+                    "{d} runs into a hole of this face — try a smaller "
+                    "offset", d=fmt_len(abs(self.distance))), 5000)
+                self._reset()
+                viewport.update()
+                return
+            inner_holes, strip_holes = placed
         else:
             outer = max((loop for loop, _holes in regions),
                         key=lambda lp: _loop_extent(lp))
             inners = [self._loop]
+            inner_holes, strip_holes = [own_holes], []
         commands = [DeleteFaceCommand(self.base_face),
                     AddFaceCommand(list(outer), auto=False,
-                                   holes=[list(lp) for lp in inners],
+                                   holes=[list(lp) for lp in inners]
+                                   + strip_holes,
                                    attrs=dict(attrs))]
-        for loop in inners:
+        for loop, holes in zip(inners, inner_holes):
             commands.append(AddFaceCommand(list(loop), auto=False,
+                                           holes=holes or None,
                                            attrs=dict(attrs)))
         # Curve ids only when the offset kept the source's shape one-to-one:
         # with the boundary re-arranged there is no run to mirror.
@@ -448,6 +464,67 @@ def _run_from_edge(edge: Edge):
     back, _ = walk(edge.v0, edge)
     return list(reversed(back)) + [QVector3D(edge.v0.position),
                                    QVector3D(edge.v1.position)] + fwd, False
+
+
+def _place_holes(holes: list, regions: list, normal: QVector3D):
+    """Where each of a face's ``holes`` goes after an inward offset:
+    ``(per_region, strip)`` — the holes inside each of ``regions`` (in
+    order), and those left in the strip between the outline and the
+    regions. ``None`` when a hole crosses or touches a region's outline:
+    the offset reaches into the hole, and no face drawn from these loops
+    would be right (#537)."""
+    from core.arrangement import _point_in_polygon, plane_basis
+    u, w = plane_basis(normal)
+    origin = regions[0][0] if regions else QVector3D()
+
+    def flat(loop):
+        return [(QVector3D.dotProduct(p - origin, u),
+                 QVector3D.dotProduct(p - origin, w)) for p in loop]
+
+    flat_regions = [flat(r) for r in regions]
+    per_region = [[] for _ in regions]
+    strip = []
+    for hole in holes:
+        fh = flat(hole)
+        if any(_outlines_meet(fh, fr) for fr in flat_regions):
+            return None
+        # Outlines that do not meet are nested or apart: one vertex says
+        # which. A region inside the hole means the offset went past it.
+        for i, fr in enumerate(flat_regions):
+            if _point_in_polygon(fh[0], fr):
+                per_region[i].append(list(hole))
+                break
+            if _point_in_polygon(fr[0], fh):
+                return None
+        else:
+            strip.append(list(hole))
+    return per_region, strip
+
+
+def _outlines_meet(a: list, b: list, eps: float = 1e-6) -> bool:
+    """Whether two closed 2D outlines cross, touch or overlap anywhere."""
+    def orient(p, q, r):
+        v = (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+        return 0 if abs(v) < eps else (1 if v > 0 else -1)
+
+    def on_seg(p, q, r):
+        return (min(p[0], r[0]) - eps <= q[0] <= max(p[0], r[0]) + eps
+                and min(p[1], r[1]) - eps <= q[1] <= max(p[1], r[1]) + eps)
+
+    for i in range(len(a)):
+        p1, p2 = a[i], a[(i + 1) % len(a)]
+        for j in range(len(b)):
+            q1, q2 = b[j], b[(j + 1) % len(b)]
+            o1, o2 = orient(p1, p2, q1), orient(p1, p2, q2)
+            o3, o4 = orient(q1, q2, p1), orient(q1, q2, p2)
+            if o1 != o2 and o3 != o4:
+                return True
+            if (o1 == 0 and on_seg(p1, q1, p2)
+                    or o2 == 0 and on_seg(p1, q2, p2)
+                    or o3 == 0 and on_seg(q1, p1, q2)
+                    or o4 == 0 and on_seg(q1, p2, q2)):
+                return True
+    return False
 
 
 def _loop_extent(loop) -> float:

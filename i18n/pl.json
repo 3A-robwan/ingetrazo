@@ -2939,5 +2939,6 @@
  "Before": "Przed",
  "After": "Po",
  "Rename (F2): several selected rows at once — a name and a number, find and replace, a prefix or a suffix; one row in place; nothing selected: every row the filter shows": "Zmień nazwę (F2): kilka zaznaczonych wierszy naraz — nazwa i numer, znajdź i zamień, prefiks lub sufiks; jeden wiersz w miejscu; bez zaznaczenia: wszystkie wiersze widoczne w filtrze",
- "Click a swatch to apply it": "Kliknij próbkę, aby ją zastosować"
+ "Click a swatch to apply it": "Kliknij próbkę, aby ją zastosować",
+ "{d} runs into a hole of this face — try a smaller offset": "{d} wchodzi w otwór tej ściany — spróbuj mniejszego odsunięcia"
 }

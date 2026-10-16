@@ -2952,5 +2952,6 @@
  "Kink": "Knick",
  "Another edge": "Andere Kante",
  "Soft, hidden or layer": "Glättung, Ausblendung oder Ebene",
- "Curve": "Kurve"
+ "Curve": "Kurve",
+ "{d} runs into a hole of this face — try a smaller offset": "{d} reicht in eine Öffnung dieser Fläche – versuchen Sie einen kleineren Versatz"
 }
