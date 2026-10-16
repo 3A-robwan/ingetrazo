@@ -68,7 +68,9 @@ class _TitleStrip(QWidget):
         lay.addWidget(self.label, 1)
         btn = self.close_button = QToolButton(self)
         btn.setObjectName("float_close_button")
-        btn.setText("✕")
+        # «×» (Latin-1), not «✕» (Dingbats): every font has it, and a
+        # character no font has sends Qt hunting for one (#658).
+        btn.setText("×")
         btn.setToolTip(tr("Close this toolbar"))
         btn.setAutoRaise(True)
         btn.setFocusPolicy(Qt.NoFocus)
