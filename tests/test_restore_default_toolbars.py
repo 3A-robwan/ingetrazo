@@ -108,6 +108,29 @@ def test_restore_leaves_the_side_panels_as_they_are(win):
     assert win.dockWidgetArea(win.project_browser) == Qt.LeftDockWidgetArea
 
 
+def _tabs(win):
+    """Each row of side-panel tabs: their order and the one in front (once:
+    Qt may leave a spent bar behind with the same tabs)."""
+    from PySide6.QtWidgets import QTabBar
+    return sorted({
+        (tuple(bar.tabText(i) for i in range(bar.count())),
+         bar.tabText(bar.currentIndex()))
+        for bar in win.findChildren(QTabBar)
+        if bar.parent() is win and bar.isVisibleTo(win) and bar.count()})
+
+
+def test_restore_keeps_the_order_of_the_panel_tabs_and_the_one_in_front(win):
+    """The tabs came back reordered — Properties last, another in front
+    (2026-10-16: «al restablecer … se mueve de lugar»)."""
+    _settle()
+    tabs = _tabs(win)
+    assert tabs, "no row of panel tabs to compare"
+    _scramble(win)
+    win.restore_default_toolbars()
+    _settle()
+    assert _tabs(win) == tabs
+
+
 def test_the_right_click_menu_over_a_toolbar_offers_it(win):
     menu = win.createPopupMenu()
     acts = [a for a in menu.actions() if not a.isSeparator()]

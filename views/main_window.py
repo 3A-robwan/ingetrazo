@@ -494,6 +494,7 @@ class MainWindow(QMainWindow):
             self.addToolBar(Qt.TopToolBarArea, tb)
             tb.show()
         docks = {d: d.objectName() for d in self.findChildren(QDockWidget)}
+        rows = self._dock_tab_rows(docks)
         for d, name in docks.items():
             d.setObjectName(f"_keep_{name}")
         try:
@@ -501,7 +502,28 @@ class MainWindow(QMainWindow):
         finally:
             for d, name in docks.items():
                 d.setObjectName(name)
+        # Even unnamed, the docks are laid out again: their tabs come back
+        # reordered, another in front. Put each row of tabs back as it was.
+        for row, front in rows:
+            for d in row[1:]:
+                self.tabifyDockWidget(row[0], d)
+            front.raise_()
         QTimer.singleShot(0, self, self._pack_toolbars)
+
+    def _dock_tab_rows(self, docks) -> list:
+        """Each row of tabbed docks on screen, in tab order, and the dock
+        in front."""
+        from PySide6.QtWidgets import QTabBar
+        by_title = {d.windowTitle(): d for d in docks if d.isVisible()}
+        rows = []
+        for bar in self.findChildren(QTabBar):
+            if bar.parent() is not self or not bar.isVisible():
+                continue
+            row = [by_title.get(bar.tabText(i)) for i in range(bar.count())]
+            front = by_title.get(bar.tabText(bar.currentIndex()))
+            if len(row) > 1 and None not in row and front is not None:
+                rows.append((row, front))
+        return rows
 
     def createPopupMenu(self):  # noqa: N802 — Qt override
         """Right-click over a toolbar: Qt's list of toolbars and panels,
