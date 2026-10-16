@@ -1566,8 +1566,10 @@ class MainWindow(QMainWindow):
         window_menu.addAction(clean_action)
         self._act_clean_screen = clean_action
         # LibreOffice's Ctrl+F5: the whole sidebar (the three trays) folds
-        # away and comes back; the strip at the right edge stays.
+        # away and comes back; the strip at the right edge stays. Ctrl+F6
+        # does the same on the left, next to it so the key can be found.
         window_menu.addAction(self._act_sidebar)
+        window_menu.addAction(self._act_left_sidebar)
 
         window_menu.addSeparator()
         # Ctrl+U: the units panel straight away (the Preferences page).
