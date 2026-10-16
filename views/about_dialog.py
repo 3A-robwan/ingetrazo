@@ -211,6 +211,38 @@ class _Credits(QWidget):
         self._fade.raise_()
 
 
+def system_info(version: str, gl_line: str = "") -> str:
+    """The lines a bug report needs (#476), as plain text to paste in an
+    issue: program, system, Python, Qt, OpenGL, screen and language.
+
+    Always in English, whatever the interface language, so whoever reads
+    the report can read it too. Nothing personal: no user name, no paths."""
+    import platform
+    import sys
+
+    import PySide6
+    from PySide6.QtCore import qVersion
+    from PySide6.QtWidgets import QApplication
+
+    from core.i18n import current_language
+
+    build = "packaged" if getattr(sys, "frozen", False) else "from source"
+    lines = [f"IngeTrazo {version} ({build})",
+             f"OS: {platform.platform()} ({platform.machine()})",
+             f"Python: {platform.python_version()}",
+             f"Qt: {qVersion()}, PySide6: {PySide6.__version__}"]
+    if gl_line:
+        lines.append(f"OpenGL: {gl_line}")
+    app = QApplication.instance()
+    screen = app.primaryScreen() if app is not None else None
+    if screen is not None:
+        size = screen.size()
+        lines.append(f"Screen: {size.width()}x{size.height()} "
+                     f"@ {screen.devicePixelRatio():g}x")
+    lines.append(f"Language: {current_language()}")
+    return "\n".join(lines)
+
+
 class AboutDialog(QDialog):
     def __init__(self, parent, version: str, gl_line: str = "") -> None:
         super().__init__(parent)
@@ -256,4 +288,19 @@ class AboutDialog(QDialog):
              "github.com/ingelibre/ingetrazo</a></small>")
         buttons = QDialogButtonBox(QDialogButtonBox.Ok, self)
         buttons.accepted.connect(self.accept)
+        # What to paste in a bug report, one click away (#476).
+        self._info = system_info(version, gl_line)
+        self.copy_button = buttons.addButton(
+            tr("Copy to clipboard"), QDialogButtonBox.ActionRole)
+        self.copy_button.setToolTip(self._info)
+        self.copy_button.clicked.connect(self.copy_info)
         col.addWidget(buttons)
+
+    def copy_info(self) -> None:
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(self._info)
+        self.copy_button.setText(tr("Copied"))
+        # Tied to the button: closing the dialog first cancels the reset.
+        QTimer.singleShot(
+            1500, self.copy_button,
+            lambda: self.copy_button.setText(tr("Copy to clipboard")))
