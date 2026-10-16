@@ -1660,8 +1660,9 @@ class MainWindow(QMainWindow):
         order = self._default_tray_order()
         order += [d for d in getattr(self, "_extension_docks", ())
                   if d not in order]
-        for d in order:
-            self.addDockWidget(Qt.RightDockWidgetArea, d)
+        # Each one straight into the tabs: docked one under the other first,
+        # their heights added up past the window, which grew to hold them.
+        self.addDockWidget(Qt.RightDockWidgetArea, order[0])
         for first, nxt in zip(order, order[1:]):
             self.tabifyDockWidget(first, nxt)
 

@@ -246,3 +246,22 @@ def test_a_tray_left_wide_last_time_still_restores_to_the_factory_width(
         _app.processEvents()
     assert win.tray.width() == MainWindow.FACTORY_TRAY_WIDTH
     _close(win)
+
+
+def test_restore_default_panels_keeps_the_window_s_height(settings_file):
+    """Every tray was docked one under the other before being tabbed: their
+    heights added up past the window, which grew to hold them — maximized,
+    its foot went off the screen and the sidebar's handle, centred on the
+    view, slid down with it (2026-10-16: «el botón se desplaza hacia abajo
+    al restablecer paneles»)."""
+    from views.main_window import MainWindow
+    win = MainWindow()
+    win.resize(1400, 800)
+    _shown(win)
+    height, handle = win.height(), win._sidebar_handle.y()
+    win.restore_default_trays()
+    for _ in range(5):
+        _app.processEvents()
+    assert win.height() == height
+    assert abs(win._sidebar_handle.y() - handle) <= 2
+    _close(win)
