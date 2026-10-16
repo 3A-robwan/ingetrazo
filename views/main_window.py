@@ -235,6 +235,10 @@ class MainWindow(QMainWindow):
         # (see load_extensions). Set first — the menu bar is built below.
         self._defer_extensions = bool(defer_extensions)
         self.resize(1280, 800)
+        # Every toolbar — ours, a later one, a plugin's — floats as a
+        # small window with its name and a × to close it.
+        from views.floating_toolbar import watch_toolbars
+        watch_toolbars(self)
 
         self._tools = {
             "select": SelectTool(),
