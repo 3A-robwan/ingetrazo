@@ -160,6 +160,22 @@ def test_the_close_button_hides_the_bar_and_unticks_its_menu_entry(bare):
     assert not _close_button(tb).isVisibleTo(tb)
 
 
+def test_a_closed_floating_bar_docked_again_loses_the_strip(bare):
+    """Closed while floating, then put back in a dock — Window ▸ Restore
+    default toolbars does it — the bar came back docked still wearing the
+    strip: hidden, Qt docks it without saying topLevelChanged."""
+    win, tb = bare
+    _float(win, tb)
+    _close_button(tb).click()
+    win.removeToolBar(tb)
+    win.addToolBar(Qt.TopToolBarArea, tb)
+    tb.show()
+    _app.processEvents()
+    assert not tb.isFloating()
+    assert _title_rect(tb).isEmpty()
+    assert tb.contentsMargins().top() == 0
+
+
 def _drag(target: QWidget, start: QPoint, end: QPoint, steps: int = 30):
     """Press at ``start`` (global) on ``target``, move to ``end``, release:
     each event goes to whoever has the mouse now — Qt's toolbar drag grabs

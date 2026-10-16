@@ -148,6 +148,11 @@ class _FloatingTitle(QObject):
             self._shift()
 
     def eventFilter(self, obj, e) -> bool:
+        # A hidden bar put back in a dock (Restore default toolbars after
+        # its × closed it) docks without topLevelChanged: ask again.
+        if (e.type() in (QEvent.Show, QEvent.ParentChange)
+                and bool(self.height) != self.tb.isFloating()):
+            self._on_floating(self.tb.isFloating())
         # The layout runs right after this filter: move the buttons once
         # it is done (before the bar is painted — repaints queue last).
         if self.height and not self._pending and e.type() in (
