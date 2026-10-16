@@ -112,6 +112,9 @@ _STYLE_TIPS = {
 }
 _SAVE_TIP = ("Save the document — the model and every sheet — to its .igz "
              "file.")
+_RESET_TOOLBARS_TIP = ("Every toolbar back in its factory place and order, "
+                       "the hidden ones shown again. The panels stay as "
+                       "they are.")
 _TEXT3D_TIP = ("Build a text as an extruded solid, in the font and height "
                "you choose.")
 
@@ -464,6 +467,83 @@ class MainWindow(QMainWindow):
                     self.addToolBarBreak(area)
                 self.addToolBar(area, tb)
                 tb.setVisible(shown)
+
+    def restore_default_toolbars(self) -> None:
+        """Window ▸ Restore default toolbars (and the right-click menu over
+        a toolbar): every toolbar back where the factory layout has it —
+        area, row, order — and shown. The panels are not touched:
+        ``restoreState`` lays out every dock the blob names, so the docks
+        go by another name meanwhile and the blob finds none of them.
+
+        First the window's own bars go back to where a new window builds
+        them, along the top in build order: a bar younger than the blob
+        (Solid Tools) is not in it, and that is its factory place. A
+        plugin's toolbar stays where it is."""
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QDockWidget
+        from core.paths import app_root
+        factory = app_root() / "resources" / "ui" / "default_layout.state"
+        if not factory.is_file():
+            return
+        own = list(self.toolbars.values())
+        panels_tb = self.findChild(QToolBar, "panels_toolbar")
+        if panels_tb is not None:
+            own.append(panels_tb)
+        for tb in own:
+            self.removeToolBar(tb)
+            self.addToolBar(Qt.TopToolBarArea, tb)
+            tb.show()
+        docks = {d: d.objectName() for d in self.findChildren(QDockWidget)}
+        rows = self._dock_tab_rows(docks)
+        size = self.size()
+        for d, name in docks.items():
+            d.setObjectName(f"_keep_{name}")
+        try:
+            self.restoreState(factory.read_bytes())
+        finally:
+            for d, name in docks.items():
+                d.setObjectName(name)
+        # Even unnamed, the docks are laid out again: their tabs come back
+        # reordered, another in front. Put each row of tabs back as it was.
+        for row, front in rows:
+            for d in row[1:]:
+                self.tabifyDockWidget(row[0], d)
+            front.raise_()
+        # Meanwhile they were docked one under the other: their heights
+        # added up past the window, which grew to hold them and slid the
+        # sidebar's handle down with the view. Back in their tabs, the
+        # window goes back to its size.
+        if self.size() != size:
+            self.layout().activate()
+            self.resize(size)
+        QTimer.singleShot(0, self, self._pack_toolbars)
+
+    def _dock_tab_rows(self, docks) -> list:
+        """Each row of tabbed docks on screen, in tab order, and the dock
+        in front."""
+        from PySide6.QtWidgets import QTabBar
+        by_title = {d.windowTitle(): d for d in docks if d.isVisible()}
+        rows = []
+        for bar in self.findChildren(QTabBar):
+            if bar.parent() is not self or not bar.isVisible():
+                continue
+            row = [by_title.get(bar.tabText(i)) for i in range(bar.count())]
+            front = by_title.get(bar.tabText(bar.currentIndex()))
+            if len(row) > 1 and None not in row and front is not None:
+                rows.append((row, front))
+        return rows
+
+    def createPopupMenu(self):  # noqa: N802 — Qt override
+        """Right-click over a toolbar: Qt's list of toolbars and panels,
+        and under it the way back to the factory toolbars."""
+        menu = super().createPopupMenu()
+        if menu is None:
+            menu = QMenu(self)
+        act = getattr(self, "_act_reset_toolbars", None)
+        if act is not None:
+            menu.addSeparator()
+            menu.addAction(act)
+        return menu
 
     def _place_new_toolbars(self, st) -> None:
         """A toolbar born after a profile saved its layout is unknown to
@@ -1452,6 +1532,12 @@ class MainWindow(QMainWindow):
             lambda m=panels_menu: self._fill_panels_menu(m))
         window_menu.addMenu(panels_menu)
         self._panels_menu = panels_menu
+        # The same entry closes the right-click menu over a toolbar.
+        self._act_reset_toolbars = window_menu.addAction(
+            tr("Restore default toolbars"))
+        self._act_reset_toolbars.setStatusTip(tr(_RESET_TOOLBARS_TIP))
+        self._act_reset_toolbars.triggered.connect(
+            self.restore_default_toolbars)
 
         toggle_profile = self.profile_dock.toggleViewAction()
         toggle_profile.setText(tr("Terrain profile"))

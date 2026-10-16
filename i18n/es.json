@@ -2730,6 +2730,8 @@
  "The tabs on the left of the page: drag any tab there, or back to the right.": "Las pestañas a la izquierda de la página: arrastra ahí cualquier pestaña, o de vuelta a la derecha.",
  "Browser": "Navegador",
  "Properties and the Browser open, the other panels closed, all on the right in the factory order.": "Propiedades y el Navegador abiertos, los demás paneles cerrados, todos a la derecha en el orden de fábrica.",
+ "Restore default toolbars": "Restablecer barras de herramientas",
+ "Every toolbar back in its factory place and order, the hidden ones shown again. The panels stay as they are.": "Cada barra de herramientas de vuelta en su lugar y orden de fábrica, y las ocultas a la vista otra vez. Los paneles se quedan como están.",
  "{n} attempts in a row failed — stopping here. Rephrase the request or type \"continue\" to let it try again.": "{n} intentos seguidos fallaron — me detengo aquí. Reformula el pedido o escribe \"continúa\" para que lo intente otra vez.",
  "The local server is loading the model — the first answer takes longer.": "El servidor local está cargando el modelo — la primera respuesta tarda más.",
  "{model} is a small model and often fails at writing code. A code model works much better, e.g. {suggested} (ollama pull {suggested}).": "{model} es un modelo pequeño y suele fallar al escribir código. Un modelo de código funciona mucho mejor, p. ej. {suggested} (ollama pull {suggested}).",

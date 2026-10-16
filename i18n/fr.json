@@ -2858,6 +2858,8 @@
  "Restore default tabs": "Rétablir les onglets par défaut",
  "The tabs on the left of the page: drag any tab there, or back to the right.": "Les onglets à gauche de la page : faites-y glisser n'importe quel onglet, ou ramenez-le à droite.",
  "Properties and the Browser open, the other panels closed, all on the right in the factory order.": "Propriétés et le Navigateur ouverts, les autres panneaux fermés, tous à droite dans l'ordre d'origine.",
+ "Restore default toolbars": "Rétablir les barres d'outils par défaut",
+ "Every toolbar back in its factory place and order, the hidden ones shown again. The panels stay as they are.": "Chaque barre d'outils à sa place et dans son ordre d'origine, les masquées de nouveau affichées. Les panneaux restent tels quels.",
  "Import photogrammetric mesh": "Importer un maillage photogrammétrique",
  "ODM textured model (*.obj);;All files (*)": "Modèle texturé ODM (*.obj);;Tous les fichiers (*)",
  "glTF binary (*.glb)": "glTF binaire (*.glb)",

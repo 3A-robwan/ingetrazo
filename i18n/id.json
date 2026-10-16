@@ -2861,6 +2861,8 @@
  "Restore default tabs": "Pulihkan tab bawaan",
  "The tabs on the left of the page: drag any tab there, or back to the right.": "Tab di sebelah kiri halaman: seret tab apa pun ke sana, atau kembali ke kanan.",
  "Properties and the Browser open, the other panels closed, all on the right in the factory order.": "Properti dan Penjelajah terbuka, panel lainnya tertutup, semuanya di kanan dalam urutan bawaan.",
+ "Restore default toolbars": "Pulihkan bilah alat bawaan",
+ "Every toolbar back in its factory place and order, the hidden ones shown again. The panels stay as they are.": "Setiap bilah alat kembali ke tempat dan urutan bawaannya, yang tersembunyi ditampilkan lagi. Panel tetap seperti adanya.",
  "Import photogrammetric mesh": "Impor mesh fotogrametri",
  "ODM textured model (*.obj);;All files (*)": "Model bertekstur ODM (*.obj);;Semua berkas (*)",
  "glTF binary (*.glb)": "glTF biner (*.glb)",
