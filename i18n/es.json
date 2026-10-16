@@ -2953,5 +2953,6 @@
  "Zoom Window": "Ventana de zoom",
  "Drag up or down to zoom in or out.": "Arrastra hacia arriba o abajo para acercar o alejar.",
  "Drag a box to zoom to that region.": "Arrastra un recuadro para ampliar esa zona.",
- "{d} runs into a hole of this face — try a smaller offset": "{d} se mete en un hueco de esta cara: prueba una equidistancia menor"
+ "{d} runs into a hole of this face — try a smaller offset": "{d} se mete en un hueco de esta cara: prueba una equidistancia menor",
+ "Click a face and move.": "Clic en una cara y mueve."
 }

@@ -2951,5 +2951,6 @@
  "After": "Dopo",
  "Rename (F2): several selected rows at once — a name and a number, find and replace, a prefix or a suffix; one row in place; nothing selected: every row the filter shows": "Rinomina (F2): più righe selezionate insieme — nome e numero, trova e sostituisci, prefisso o suffisso; una riga nella sua cella; senza selezione: tutte le righe mostrate dal filtro",
  "Click a swatch to apply it": "Fai clic su un campione per applicarlo",
- "{d} runs into a hole of this face — try a smaller offset": "{d} entra in un foro di questa faccia: prova un offset più piccolo"
+ "{d} runs into a hole of this face — try a smaller offset": "{d} entra in un foro di questa faccia: prova un offset più piccolo",
+ "Click a face and move.": "Fai clic su una faccia e muovi."
 }

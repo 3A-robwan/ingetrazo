@@ -2953,5 +2953,6 @@
  "After": "Sesudah",
  "Rename (F2): several selected rows at once — a name and a number, find and replace, a prefix or a suffix; one row in place; nothing selected: every row the filter shows": "Ganti nama (F2): beberapa baris terpilih sekaligus — nama dan nomor, cari dan ganti, awalan atau akhiran; satu baris di tempat; tanpa pilihan: semua baris yang ditampilkan filter",
  "Click a swatch to apply it": "Klik contoh untuk menerapkannya",
- "{d} runs into a hole of this face — try a smaller offset": "{d} masuk ke lubang pada muka ini — coba offset yang lebih kecil"
+ "{d} runs into a hole of this face — try a smaller offset": "{d} masuk ke lubang pada muka ini — coba offset yang lebih kecil",
+ "Click a face and move.": "Klik sebuah bidang lalu gerakkan."
 }
