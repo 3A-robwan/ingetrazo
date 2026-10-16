@@ -495,6 +495,7 @@ class MainWindow(QMainWindow):
             tb.show()
         docks = {d: d.objectName() for d in self.findChildren(QDockWidget)}
         rows = self._dock_tab_rows(docks)
+        size = self.size()
         for d, name in docks.items():
             d.setObjectName(f"_keep_{name}")
         try:
@@ -508,6 +509,13 @@ class MainWindow(QMainWindow):
             for d in row[1:]:
                 self.tabifyDockWidget(row[0], d)
             front.raise_()
+        # Meanwhile they were docked one under the other: their heights
+        # added up past the window, which grew to hold them and slid the
+        # sidebar's handle down with the view. Back in their tabs, the
+        # window goes back to its size.
+        if self.size() != size:
+            self.layout().activate()
+            self.resize(size)
         QTimer.singleShot(0, self, self._pack_toolbars)
 
     def _dock_tab_rows(self, docks) -> list:

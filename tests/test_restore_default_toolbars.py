@@ -131,6 +131,38 @@ def test_restore_keeps_the_order_of_the_panel_tabs_and_the_one_in_front(win):
     assert _tabs(win) == tabs
 
 
+def test_restore_keeps_the_window_s_height_and_the_sidebar_handle(win,
+                                                                 monkeypatch):
+    """The factory blob finds none of the docks, so Qt lays them out again
+    one under the other — with a saved layout whose right side is split in
+    two, it did: tall panels added up past the window, which grew, and the
+    sidebar's handle slid down with the view (2026-10-16: «el botón
+    mostrar ocultar barra … ha bajado»). Stack them here the same way."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QDockWidget
+    tabbed = [d for d in win.findChildren(QDockWidget)
+              if d.isVisible() and win.tabifiedDockWidgets(d)]
+    assert len(tabbed) > 1, "no row of panel tabs to stack"
+    for d in tabbed:
+        d.widget().setMinimumHeight(450)
+    restore = win.restoreState
+
+    def stacking(state):
+        done = restore(state)
+        for d in tabbed:
+            win.addDockWidget(Qt.RightDockWidgetArea, d, Qt.Vertical)
+        return done
+    monkeypatch.setattr(win, "restoreState", stacking)
+    _settle()
+    height = win.height()
+    win.restore_default_toolbars()
+    _settle()
+    assert win.height() == height
+    centre = win.viewport.mapTo(win, QPoint(0, win.viewport.height() // 2))
+    handle = win._sidebar_handle
+    assert abs(handle.y() + handle.height() // 2 - centre.y()) <= 2
+
+
 def test_the_right_click_menu_over_a_toolbar_offers_it(win):
     menu = win.createPopupMenu()
     acts = [a for a in menu.actions() if not a.isSeparator()]
