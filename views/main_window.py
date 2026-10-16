@@ -1968,8 +1968,12 @@ class MainWindow(QMainWindow):
 
     def eventFilter(self, obj, event):  # noqa: N802 — Qt override
         from PySide6.QtCore import QEvent
+        # ZOrderChange: a tab dragged along a tray's bar restacks the
+        # window's children, the view comes out above the handles and its
+        # OpenGL hides the half of them that lies over it.
         if obj is getattr(self, "viewport", None) and event.type() in (
-                QEvent.Resize, QEvent.Move, QEvent.Show):
+                QEvent.Resize, QEvent.Move, QEvent.Show,
+                QEvent.ZOrderChange):
             self._place_clean_screen_exit()
             self._place_sidebar_handle()
         if self._side_dock_event(obj, event):

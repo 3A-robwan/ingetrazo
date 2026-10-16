@@ -265,3 +265,30 @@ def test_restore_default_panels_keeps_the_window_s_height(settings_file):
     assert win.height() == height
     assert abs(win._sidebar_handle.y() - handle) <= 2
     _close(win)
+
+
+def _over_the_view(win, handle):
+    """``handle`` stacked above the viewport (later among the window's
+    children): the viewport draws with OpenGL and hides what lies under."""
+    kids = [c for c in win.children() if c.isWidgetType()]
+    return kids.index(handle) > kids.index(win.viewport)
+
+
+def test_reordering_the_panel_tabs_leaves_the_sidebar_handle_on_top(
+        settings_file):
+    """Dragging a tab along the bar restacks the window's children and the
+    viewport came out above the handle: half of it hidden under the view
+    (2026-10-16: «al mover los paneles de orden … queda medio oculto»)."""
+    from views.main_window import MainWindow
+    win = MainWindow()
+    win.resize(1400, 800)
+    _shown(win)
+    assert _over_the_view(win, win._sidebar_handle)
+    bar = next(tb for tb in win._dock_tab_bars()
+               if tb.isVisible() and tb.count() > 1 and tb.y() >= 0)
+    bar.moveTab(0, 1)
+    for _ in range(5):
+        _app.processEvents()
+    assert _over_the_view(win, win._sidebar_handle)
+    assert _over_the_view(win, win._left_handle)
+    _close(win)
