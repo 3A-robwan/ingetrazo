@@ -13606,9 +13606,20 @@ class Viewport(QOpenGLWidget):
             # typed length must drop the lock exactly like the second click.
             history = getattr(self, "history", None)
             _before = len(history.undo_stack) if history is not None else 0
+            typed = self._value_buffer
             self.active_tool.on_value(self, value)
             _drew = history is not None and len(history.undo_stack) > _before
             self._set_value_buffer("")
+            # The box falls back to the live reading, which only refreshes on
+            # a mouse move: it went on showing the preview from BEFORE the
+            # Enter, as if the typed size had been ignored (#607). What was
+            # drawn is what was typed, read as the canvas showed it. Nothing
+            # drawn: the preview the box shows is still the live one.
+            if _drew:
+                unitless = getattr(self.active_tool, "value_is_unitless", None)
+                self.measurementChanged.emit(
+                    typed if callable(unitless) and unitless()
+                    else _typed_value_text(typed))
             self._release_axis_lock_after_operation(committed=_drew)
             return True
 
