@@ -251,6 +251,7 @@
  "Sidebar": "Barre latérale",
  "Show or hide the sidebar (Ctrl+F5)": "Afficher ou masquer la barre latérale (Ctrl+F5)",
  "More tools of this bar": "Plus d'outils de cette barre",
+ "Close this toolbar": "Fermer cette barre d'outils",
  "Back to the workspace (Ctrl+0)": "Retour à l'espace de travail (Ctrl+0)",
  "Clear": "Effacer",
  "Clear imported texture cache…": "Vider le cache des textures importées…",
