@@ -218,7 +218,6 @@ def system_info(version: str, gl_line: str = "") -> str:
     Always in English, whatever the interface language, so whoever reads
     the report can read it too. Nothing personal: no user name, no paths."""
     import platform
-    import sys
 
     import PySide6
     from PySide6.QtCore import qVersion
@@ -226,9 +225,8 @@ def system_info(version: str, gl_line: str = "") -> str:
 
     from core.i18n import current_language
 
-    build = "packaged" if getattr(sys, "frozen", False) else "from source"
-    lines = [f"IngeTrazo {version} ({build})",
-             f"OS: {platform.platform()} ({platform.machine()})",
+    lines = [f"IngeTrazo {version} ({_build()})",
+             f"OS: {_os_name()} ({platform.machine()})",
              f"Python: {platform.python_version()}",
              f"Qt: {qVersion()}, PySide6: {PySide6.__version__}"]
     if gl_line:
@@ -241,6 +239,36 @@ def system_info(version: str, gl_line: str = "") -> str:
                      f"@ {screen.devicePixelRatio():g}x")
     lines.append(f"Language: {current_language()}")
     return "\n".join(lines)
+
+
+def _build() -> str:
+    """How this copy runs: a Flatpak or an AppImage say so — a Flatpak is
+    not frozen, and read «from source» in reports."""
+    import os
+    import sys
+    if os.environ.get("FLATPAK_ID"):
+        return "Flatpak"
+    if os.environ.get("APPIMAGE"):
+        return "AppImage"
+    return "packaged" if getattr(sys, "frozen", False) else "from source"
+
+
+def _os_name() -> str:
+    """The system, in words no locale translates. ``platform.platform()``
+    asks ``uname -p``, which answers in the user's language: a Spanish
+    Linux reported «…-x86_64-desconocido-with-glibc2.43»."""
+    import platform
+    system = platform.system()
+    if system == "Darwin":
+        return f"macOS {platform.mac_ver()[0]}"
+    if system == "Windows":
+        return f"Windows {platform.release()} ({platform.version()})"
+    name = f"{system} {platform.release()}"
+    try:
+        pretty = platform.freedesktop_os_release().get("PRETTY_NAME")
+    except OSError:
+        pretty = None
+    return f"{name}, {pretty}" if pretty else name
 
 
 class AboutDialog(QDialog):
