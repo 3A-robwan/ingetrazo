@@ -116,3 +116,80 @@ def test_pushing_an_offset_ring_raises_walls_with_thickness():
     walls = [f for f in m.faces
              if sorted({round(v.z(), 1) for v in f.vertices}) == [0.0, 3.0]]
     assert len(walls) == 8
+
+
+def test_offset_value_label_and_vcb():
+    from tools.offset import OffsetTool
+    from tools.base import ToolContext
+    from PySide6.QtCore import QPointF, Qt
+
+    class _MockVP:
+        def __init__(self, scene, history):
+            self.scene, self.history = scene, history
+        def set_hover(self, *a): pass
+        def update(self): pass
+        def _pixel_to_ray(self, sx, sy):
+            return QVector3D(sx, sy, 10), QVector3D(0, 0, -1)
+
+    scene = Scene()
+    hist = History(scene)
+    face = scene.mesh.add_face([V(0, 0), V(4, 0), V(4, 4), V(0, 4)])
+    vp = _MockVP(scene, hist)
+
+    tool = OffsetTool()
+    assert tool.value_label() is None
+
+    # Hover and click on face to start offset
+    tool.hovered_face = face
+    ctx = ToolContext(viewport=vp, world=V(2, 0), screen=QPointF(2, 0),
+                      modifiers=Qt.NoModifier, snap=None)
+    tool.on_click(ctx)
+    assert tool.dragging is True
+
+    # Hover at inward position
+    ctx_drag = ToolContext(viewport=vp, world=V(2, 0.5), screen=QPointF(2, 0.5),
+                           modifiers=Qt.NoModifier, snap=None)
+    tool.on_hover(ctx_drag)
+    assert abs(tool.distance - 0.5) < 1e-4
+
+    # value_label returns (text, midpoint)
+    vl = tool.value_label()
+    assert vl is not None
+    text, mid = vl
+    assert "0.50" in text or "0,50" in text or "500" in text
+    assert mid is not None
+
+    # on_value during dragging
+    assert tool.on_value(vp, 1.0) is True
+    assert tool.dragging is False
+    assert len(scene.mesh.faces) == 2
+
+    # Verify inner face at 1.0 offset (2x2 area = 4)
+    inner = next(f for f in scene.mesh.faces if not f.holes)
+    assert abs(inner.area() - 4.0) < 1e-4
+
+    # Hot retype: adjust offset after commit by typing 0.5
+    assert tool.on_value(vp, 0.5) is True
+    inner = next(f for f in scene.mesh.faces if not f.holes)
+    assert abs(inner.area() - 9.0) < 1e-4
+
+    # Hot retype window closes if another command is executed
+    hist.execute(CompoundCommand([]))
+    assert tool.on_value(vp, 0.8) is False
+
+
+def test_offset_viewport_measurement_text():
+    from views.viewport import Viewport
+    from tools.offset import OffsetTool
+    vp = Viewport.__new__(Viewport)
+    tool = OffsetTool()
+    vp.active_tool = tool
+    assert vp._measurement_text() == ""
+    tool.dragging = True
+    tool._ref_point = V(0, 0, 0)
+    tool._ref_inward = V(0, 1, 0)
+    tool.distance = 0.25
+    assert vp._measurement_text() != ""
+    assert "0.25" in vp._measurement_text() or "0,25" in vp._measurement_text()
+
+
