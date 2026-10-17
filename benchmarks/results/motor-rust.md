@@ -41,3 +41,8 @@ una vez con `INGETRAZO_RUST=0` y otra con `=1`. Segundos.
 | deshacer | 98,9 | — |
 
 (El banco se quedaba colgado al cerrar en el diálogo «¿descartar cambios?»: arreglado.)
+
+## Pendiente fuera del motor Rust (camino Python)
+
+- **Aplicar los cruces de Intersecar con todo seleccionado** (#541): 2 000 cruces 4,2 s, 8 000 cruces 112 s (crece mucho más que lineal: `_cycle_adjacency` rehace la adyacencia de las aristas cercanas por cada segmento) y además **falla**: «degenerate edge: endpoints weld to one vertex» y se deshace el paso entero, aunque los segmentos ya pasan el filtro `_WELD_LENGTH` del menú (los extremos se sueldan después de partir otras aristas). Igual con los dos motores.
+- `Face.normal()` se recalcula ~1 M veces en 4 empujes sobre el terreno de plaza: memorizarla por escaneo ganaría mucho en los dos motores (cambio del camino Python: no en la 0.5.9).
