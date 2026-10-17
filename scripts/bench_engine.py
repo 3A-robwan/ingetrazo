@@ -106,13 +106,14 @@ def op_hlr_iso(ctx):
 
 
 def op_intersect_find(ctx):
-    """Intersect Faces ▸ With Model on the biggest group: the crossings."""
-    from core.intersect import WITH_MODEL, segments_for
+    """Intersect Faces ▸ With Selection, everything selected (#541): the
+    crossings."""
+    from core.intersect import WITH_SELECTION, segments_for
     scene = ctx["scene"]
-    g = _biggest_group(scene)
     scene.selection.clear()
-    scene.selection.add(g)
-    ctx["segs"] = segments_for(scene, WITH_MODEL)
+    scene.selection.update(scene.mesh.faces)
+    scene.selection.update(scene.groups)
+    ctx["segs"] = segments_for(scene, WITH_SELECTION)
 
 
 def op_intersect_apply(ctx):

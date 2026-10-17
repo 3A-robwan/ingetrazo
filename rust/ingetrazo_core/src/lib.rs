@@ -10,12 +10,14 @@
 use numpy::{PyArray1, PyArray2, PyReadonlyArray2, PyReadonlyArray3, PyReadonlyArray1};
 use pyo3::prelude::*;
 
+mod boxes;
 mod hlr;
 
 #[pymodule]
 fn ingetrazo_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_class::<HlrOccluders>()?;
+    m.add_function(wrap_pyfunction!(touching_boxes, m)?)?;
     Ok(())
 }
 
@@ -101,4 +103,29 @@ impl HlrOccluders {
         let out = py.detach(|| inner.profile_flags(&probes, delta, ptol));
         Ok(PyArray1::from_vec(py, out))
     }
+}
+
+fn rows3(a: &numpy::ndarray::ArrayView2<'_, f64>) -> Vec<[f64; 3]> {
+    (0..a.shape()[0]).map(|i| [a[[i, 0]], a[[i, 1]], a[[i, 2]]]).collect()
+}
+
+/// core.intersect._touching for all rows at once: the index pairs ``(i,
+/// j)`` whose boxes touch (within ``eps``), sorted by i then j; ``same``:
+/// j > i only. ``lo_*``/``hi_*``: (N,3) box corners.
+#[pyfunction]
+fn touching_boxes<'py>(
+    py: Python<'py>,
+    lo_a: PyReadonlyArray2<'_, f64>,
+    hi_a: PyReadonlyArray2<'_, f64>,
+    lo_b: PyReadonlyArray2<'_, f64>,
+    hi_b: PyReadonlyArray2<'_, f64>,
+    same: bool,
+    eps: f64,
+) -> PyResult<(Bound<'py, PyArray1<i64>>, Bound<'py, PyArray1<i64>>)> {
+    let a: Vec<boxes::Box3> = rows3(&lo_a.as_array()).into_iter()
+        .zip(rows3(&hi_a.as_array())).collect();
+    let b: Vec<boxes::Box3> = rows3(&lo_b.as_array()).into_iter()
+        .zip(rows3(&hi_b.as_array())).collect();
+    let (ii, jj) = py.detach(|| boxes::touching(&a, &b, same, eps));
+    Ok((PyArray1::from_vec(py, ii), PyArray1::from_vec(py, jj)))
 }
