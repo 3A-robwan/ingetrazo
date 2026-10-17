@@ -149,10 +149,99 @@ def op_triangulate(ctx):
                 f.triangulate()
 
 
+class _StubVP:
+    """What PushPullTool._commit needs of a viewport (tests/test_fuzz_engine)."""
+
+    def __init__(self, scene, history):
+        self.scene, self.history = scene, history
+
+    def update(self):
+        pass
+
+    def set_hover(self, entity):
+        pass
+
+    def set_suppressed_faces(self, faces):
+        pass
+
+    def flash_status(self, text, msec=2500):
+        pass
+
+
+def push_faces(scene, n=12, seed=3, after=None):
+    """Push/pull ``n`` faces of the biggest group (seeded): the faces
+    facing up/sideways of its largest meshes, ±0.3 m alternately, each one
+    commit as the tool does it. Returns a signature of the result."""
+    import random
+
+    from core.group import iter_placements
+    from core.history import History
+    from tools.pushpull import PushPullTool
+    rng = random.Random(seed)
+    hist = History(scene)
+    g = _biggest_group(scene)
+    groups = sorted({id(m): m for m, _ in iter_placements(g)}.values(),
+                    key=lambda m: -len(m.mesh.faces))[:4]
+    done = 0
+    for k in range(n):
+        grp = groups[k % len(groups)]
+        faces = [f for f in grp.mesh.faces
+                 if not f.interior and f.area() > 0.05]
+        if not faces:
+            continue
+        face = rng.choice(faces)
+        tool = PushPullTool()
+        tool.base_face = face
+        tool.dragging = True
+        tool._group = grp
+        target = tool._target_scene(scene)
+        tool._anchor = face.centroid()
+        tool._normal = face.normal()
+        tool._attached, tool._prism_cap = tool._classify_base(target)
+        tool._cap_positions = tool._cap_loop_positions(face)
+        tool._keep_base = False
+        tool._compute_inward_limit(target)
+        tool.extrusion = 0.3 if k % 2 == 0 else -0.1
+        tool._clamp_extrusion()
+        if abs(tool.extrusion) < 1e-6:
+            tool._reset()
+            continue
+        tool._commit(_StubVP(scene, hist))
+        done += 1
+        if after is not None:
+            after(k, grp, face)
+    return done, [mesh_signature(grp.mesh) for grp in groups]
+
+
+def _loop_key(points) -> tuple:
+    """A loop's points rounded, started at its smallest point: the same
+    face reads the same whichever vertex its loop happens to start on
+    (that start is not stable between runs of the same edit)."""
+    pts = [tuple(round(c, 6) for c in p.toTuple()) for p in points]
+    if not pts:
+        return ()
+    k = pts.index(min(pts))
+    return tuple(pts[k:] + pts[:k])
+
+
+def mesh_signature(m) -> tuple:
+    """Faces (outer loop, holes, interior mark) and counts of a mesh, in an
+    order that does not depend on how the run built them."""
+    faces = sorted((_loop_key(f.vertices),
+                    tuple(sorted(_loop_key(h) for h in f.holes)),
+                    bool(f.interior)) for f in m.faces)
+    return (len(m.faces), len(m.edges), faces)
+
+
+def op_pushpull(ctx):
+    ctx["pushes"], ctx["push_sig"] = push_faces(ctx["scene"])
+
+
 OPS = [("open", op_open), ("save", op_save), ("stl", op_stl),
        ("obj", op_obj), ("collect", op_collect), ("hlr_top", op_hlr_top),
        ("hlr_iso", op_hlr_iso), ("triangulate", op_triangulate),
        ("orient", op_orient), ("intersect_find", op_intersect_find),
+       ("pushpull", op_pushpull),
        ("intersect_apply", op_intersect_apply)]
 
 
@@ -193,6 +282,8 @@ def main() -> int:
             row["error"] = err
         if name == "intersect_find":
             row["crossings"] = len(ctx.get("segs", []))
+        if name == "pushpull":
+            row["pushes"] = ctx.get("pushes", 0)
         if name == "intersect_apply":
             row["applied"] = ctx.get("applied", 0)
         if prof:
@@ -208,6 +299,7 @@ def main() -> int:
             row["top"] = rows
         res["ops"][name] = row
         extra = "".join(f"  {k}={row[k]}" for k in ("crossings", "applied",
+                                                    "pushes",
                                                     "error") if k in row)
         print(f"{name:>16}: {dt:9.2f} s{extra}")
         for r in row.get("top", [])[:5]:
