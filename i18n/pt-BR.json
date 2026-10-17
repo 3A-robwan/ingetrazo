@@ -661,6 +661,7 @@
  "Explode the imported group first, then simplify the mesh": "Exploda o grupo importado primeiro e depois simplifique a malha",
  "There is no mesh to simplify": "Não há malha para simplificar",
  "Simplify Mesh failed": "Falha ao simplificar a malha",
+ "Intersect Faces failed": "Falha ao intersecar as faces",
  "Simplified mesh: removed {count} faces": "Malha simplificada: {count} faces removidas",
  "No faces could be simplified": "Nenhuma face pôde ser simplificada",
  "STL mesh (*.stl)…": "Malha STL (*.stl)…",

@@ -2422,6 +2422,7 @@
  "Explode the imported group first, then simplify the mesh": "Bongkar grup hasil impor terlebih dahulu, lalu sederhanakan mesh",
  "There is no mesh to simplify": "Tidak ada mesh yang dapat disederhanakan",
  "Simplify Mesh failed": "Sederhanakan Mesh gagal",
+ "Intersect Faces failed": "Iriskan Bidang gagal",
  "Simplified mesh: removed {count} faces": "Mesh disederhanakan: {count} bidang dihapus",
  "No faces could be simplified": "Tidak ada bidang yang dapat disederhanakan",
  "STL mesh (*.stl)…": "Mesh STL (*.stl)…",

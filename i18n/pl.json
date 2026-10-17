@@ -663,6 +663,7 @@
  "Explode the imported group first, then simplify the mesh": "Najpierw rozbij zaimportowaną grupę, a następnie uprość siatkę",
  "There is no mesh to simplify": "Nie ma siatki do uproszczenia",
  "Simplify Mesh failed": "Upraszczanie siatki nie powiodło się",
+ "Intersect Faces failed": "Przecinanie ścian nie powiodło się",
  "Simplified mesh: removed {count} faces": "Uproszczono siatkę: usunięte ściany: {count}",
  "No faces could be simplified": "Nie udało się uprościć żadnych ścian",
  "STL mesh (*.stl)…": "Siatka STL (*.stl)…",

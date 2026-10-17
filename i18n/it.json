@@ -2273,6 +2273,7 @@
  "Explode the imported group first, then simplify the mesh": "Prima esplodi il gruppo importato, poi semplifica la mesh",
  "There is no mesh to simplify": "Non c'è nessuna mesh da semplificare",
  "Simplify Mesh failed": "Semplificazione della mesh non riuscita",
+ "Intersect Faces failed": "Intersezione delle facce non riuscita",
  "Simplified mesh: removed {count} faces": "Mesh semplificata: rimosse {count} facce",
  "No faces could be simplified": "Nessuna faccia è stata semplificata",
  "STL mesh (*.stl)…": "Mesh STL (*.stl)…",

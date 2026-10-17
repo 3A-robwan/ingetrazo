@@ -663,6 +663,7 @@
  "Explode the imported group first, then simplify the mesh": "Éclatez d'abord le groupe importé, puis simplifiez le maillage",
  "There is no mesh to simplify": "Il n'y a aucun maillage à simplifier",
  "Simplify Mesh failed": "Échec de la simplification du maillage",
+ "Intersect Faces failed": "Échec de l'intersection des faces",
  "Simplified mesh: removed {count} faces": "Maillage simplifié : {count} faces supprimées",
  "No faces could be simplified": "Aucune face n'a pu être simplifiée",
  "STL mesh (*.stl)…": "Maillage STL (*.stl)…",

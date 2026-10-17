@@ -663,6 +663,7 @@
  "Explode the imported group first, then simplify the mesh": "请先炸开导入的组，再简化网格",
  "There is no mesh to simplify": "没有可简化的网格",
  "Simplify Mesh failed": "简化网格失败",
+ "Intersect Faces failed": "相交面失败",
  "Simplified mesh: removed {count} faces": "网格已简化：移除了 {count} 个面",
  "No faces could be simplified": "没有可简化的面",
  "STL mesh (*.stl)…": "STL 网格 (*.stl)…",

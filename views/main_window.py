@@ -115,6 +115,8 @@ _SAVE_TIP = ("Save the document — the model and every sheet — to its .igz "
 _RESET_TOOLBARS_TIP = ("Every toolbar back in its factory place and order, "
                        "the hidden ones shown again. The panels stay as "
                        "they are.")
+# The mesh welds points closer than this (core/mesh.py, 4 decimals).
+_WELD_LENGTH = 1e-4
 _TEXT3D_TIP = ("Build a text as an extruded solid, in the font and height "
                "you choose.")
 
@@ -3549,12 +3551,21 @@ class MainWindow(QMainWindow):
         if not scene.selection:
             self.viewport.flash_status(tr("Select faces or groups first"))
             return
-        segs = segments_for(scene, mode)
+        # A crossing shorter than the weld tolerance is a point: its two
+        # ends weld into one vertex, and that degenerate edge refused the
+        # whole step -- a sphere through a cube left nothing while the
+        # status said «178 intersection edges added» (tutorial hunt 2, A12).
+        segs = [(a, b) for a, b in segments_for(scene, mode)
+                if (b - a).length() >= _WELD_LENGTH]
         if not segs:
             self.viewport.flash_status(tr("No faces cross the selection"))
             return
-        self.viewport.history.execute(
-            build_add_edges(scene, segs, detect_faces=True))
+        history = self.viewport.history
+        history.execute(build_add_edges(scene, segs, detect_faces=True))
+        if history.last_error:
+            QMessageBox.warning(self, tr("Intersect Faces failed"),
+                                history.last_error)
+            return
         self.viewport.flash_status(
             tr("{n} intersection edges added", n=len(segs)), 3000)
 

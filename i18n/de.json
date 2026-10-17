@@ -663,6 +663,7 @@
  "Explode the imported group first, then simplify the mesh": "Löse zuerst die importierte Gruppe auf und vereinfache dann das Netz",
  "There is no mesh to simplify": "Es gibt kein Netz zum Vereinfachen",
  "Simplify Mesh failed": "Netzvereinfachung fehlgeschlagen",
+ "Intersect Faces failed": "Verschneiden der Flächen fehlgeschlagen",
  "Simplified mesh: removed {count} faces": "Netz vereinfacht: {count} Flächen entfernt",
  "No faces could be simplified": "Keine Flächen konnten vereinfacht werden",
  "STL mesh (*.stl)…": "STL-Netz (*.stl)…",
