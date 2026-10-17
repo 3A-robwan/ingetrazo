@@ -101,3 +101,10 @@ def test_a_sliver_triangle_contains_nothing():
     a, b, s = V(0, 0, 0), V(0.003, 0, 0), V(0.0015, 1e-9, 0)
     assert not _point_in_tri(V(4, 6, 0), a, b, s)
     assert _point_in_tri(V(0.3, 0.2, 0), V(0, 0, 0), V(1, 0, 0), V(0, 1, 0))
+
+
+def test_redrawing_the_whole_top_fills_the_hole_as_in_538():
+    sc, h, c = _holed_box(1, 0.5, 0.1)
+    RectangleTool()._commit_rect(_Viewport(sc, h), [
+        V(0, 0, .5), V(1, 0, .5), V(1, 1, .5), V(0, 1, .5)])
+    assert _capped(sc, c, 0.5)

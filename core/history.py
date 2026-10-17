@@ -21,6 +21,7 @@ from __future__ import annotations
 import os as _os
 import time as _time_mod
 from abc import ABC, abstractmethod
+from collections import Counter
 from pathlib import Path as _Path
 from typing import Iterable, Optional
 
@@ -4539,11 +4540,21 @@ class RebuildPlaneFacesCommand(Command):
         # The openings the plane's faces already have, and the outlines a
         # face was drawn exactly along. A region that is one of those
         # openings stays open unless a face traces it (capping a hole on
-        # purpose): a rectangle or an offset drawn AROUND a through hole
-        # covered it and the fresh face filled the hole (tutorial hunt 2,
-        # A15).
-        openings = {ring(h) for f in plane_faces for h in f.holes}
-        traced = {ring(f.vertices) for f in plane_faces}
+        # purpose) or traces the whole face around it (redrawing that face
+        # fills it, #538): a rectangle or an offset drawn AROUND a through
+        # hole covered it and the fresh face filled the hole (tutorial hunt
+        # 2, A15).
+        outlines = Counter(ring(f.vertices) for f in plane_faces)
+        openings: dict = {}
+        for f in plane_faces:
+            for h in f.holes:
+                openings.setdefault(ring(h), set()).add(ring(f.vertices))
+
+        def stays_open(outer) -> bool:
+            owners = openings.get(ring(outer))
+            if owners is None or outlines[ring(outer)]:
+                return False
+            return not any(outlines[o] > 1 for o in owners)
 
         def covering(outer, holes):
             tris = triangulate(outer, holes, self.normal)
@@ -4564,8 +4575,7 @@ class RebuildPlaneFacesCommand(Command):
 
         keep = []
         for outer, holes in regions:
-            if not holes and ring(outer) in openings \
-                    and ring(outer) not in traced:
+            if not holes and stays_open(outer):
                 continue                      # an existing opening
             cov = covering(outer, holes or [])
             if cov is None:
