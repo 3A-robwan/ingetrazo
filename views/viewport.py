@@ -376,8 +376,17 @@ def _ray_aabb(o, d, lo, hi, reach=float("inf")) -> bool:
 _chunk_uid = itertools.count(1)
 
 
-#: The state-tracking instanced faces pass (tests draw both ways).
-_LEAN_INSTANCED = True
+#: The recorded, state-tracking instanced passes: ``None`` follows the
+#: experimental engine (on with it, off without — they change how the GPU
+#: is fed, and drivers differ); True/False force them (tests draw both).
+_LEAN_INSTANCED = None
+
+
+def _lean_instanced() -> bool:
+    if _LEAN_INSTANCED is not None:
+        return _LEAN_INSTANCED
+    from core import _native
+    return _native.native is not None
 #: Span lists this long are culled with NumPy (_visible_spans_np).
 _SPAN_VECTOR_MIN = 64
 #: Recorded instanced passes replayed by the native engine when it is on.
@@ -3331,7 +3340,7 @@ class Viewport(QOpenGLWidget):
             self._program.setUniformValue1f(self._loc_opacity,
                                             XRAY_FACE_OPACITY)
             self._gl.glDepthMask(GL_FALSE)
-        if mode in ("shaded", "textures") and _LEAN_INSTANCED:
+        if mode in ("shaded", "textures") and _lean_instanced():
             self._draw_instanced_faces_lean(by_proto, mode, extra)
             by_proto = {}
         for mesh, paint, groups, mirrored in by_proto.values():
@@ -3552,7 +3561,7 @@ class Viewport(QOpenGLWidget):
         if not by_proto:
             return
         extra = self.context().extraFunctions()
-        if _LEAN_INSTANCED:
+        if _lean_instanced():
             self._draw_instanced_edges_lean(by_proto, extra)
             return
         for mesh, paint, groups, mirrored in by_proto.values():
@@ -6185,6 +6194,14 @@ class Viewport(QOpenGLWidget):
         self._hover_faces_vbo.release()
         return len(data) // 3
 
+    def _sil_inputs(self, key, cam) -> tuple:
+        """Everything the outline pass reads: the scene (``key``), the
+        camera, the placements, the groups previewed and the edit context."""
+        sc = self.scene
+        return (key, cam, self._placements_epoch(),
+                getattr(self, "_preview_epoch", 0),
+                id(sc.edit_group), getattr(self, "_edit_rest_mode", None))
+
     def _upload_silhouette_edges(self) -> int:
         """Upload the *profile* edges into the silhouette VBO and return the
         vertex count. A soft (hidden) edge is drawn when it lies on the
@@ -6215,6 +6232,14 @@ class Viewport(QOpenGLWidget):
         self._sil_cam = cam
         if moving:
             self._sil_cam_t = now
+        # Nothing an outline depends on moved since the VBO was filled —
+        # the scene (version), the camera, the groups being previewed — so
+        # the VBO holds this very outline: no need to wait out the throttle
+        # and derive it again. A drag beside a plant of 21 406 placements
+        # re-derived them (~340 ms) on every move of the pointer (#158).
+        same_view = self._sil_inputs(key, cam)
+        if last is not None and len(last) > 3 and last[3] == same_view:
+            return last[2]
         # «Stopped» means 600 ms without a camera change: a run of wheel
         # notches is a string of short pauses, and re-deriving after each
         # one blocked the next notch (live profile, #158).
@@ -6347,7 +6372,7 @@ class Viewport(QOpenGLWidget):
             self._silhouette_vbo.allocate(24)
         self._silhouette_vbo.release()
         count = len(raw) // 12
-        self._sil_last = (key, now, count)
+        self._sil_last = (key, now, count, self._sil_inputs(key, cam))
         self._sil_cost = _time.monotonic() - now
         return count
 
@@ -10964,16 +10989,32 @@ class Viewport(QOpenGLWidget):
         """The sweep midpoint of every open curve chain of ``mesh`` (in the
         mesh's own space)."""
         from core.snap import fit_circle
+        from core.lazy_mesh import plan_of
+        plan = plan_of(mesh)
         by_curve: dict = {}
-        for e in mesh.edges:
-            cid = getattr(e, "curve", None)
-            if cid is not None:
-                by_curve.setdefault(cid, []).append(e)
+        if plan is not None:
+            # A lazy mesh: its curves from the planned edges, the same
+            # chains in the same order, nothing built.
+            ab = plan.edges.tolist()
+            for i, cid in enumerate(plan.curve):
+                if cid is not None:
+                    by_curve.setdefault(cid, []).append(ab[i])
+        else:
+            for e in mesh.edges:
+                cid = getattr(e, "curve", None)
+                if cid is not None:
+                    by_curve.setdefault(cid, []).append(e)
         mids = []
         for edges in by_curve.values():
             degree: dict = {}
             pos: dict = {}
             for e in edges:
+                if plan is not None:
+                    for v in e:
+                        degree[v] = degree.get(v, 0) + 1
+                        if v not in pos:
+                            pos[v] = QVector3D(*plan.pos[v])
+                    continue
                 for v in (e.v0, e.v1):
                     degree[id(v)] = degree.get(id(v), 0) + 1
                     pos[id(v)] = v.position
