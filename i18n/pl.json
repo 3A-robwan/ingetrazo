@@ -387,6 +387,7 @@
  "Delete template": "Usuń szablon",
  "Delete the images extracted from imported .skp files.": "Usuń obrazy wyodrębnione z zaimportowanych plików .skp.",
  "Delete the selected scene": "Usuń wybraną scenę",
+ "Delete the selected scenes": "Usuń wybrane sceny",
  "Delete {count} image(s) ({mb:.1f} MB) from:\n{path}\n\nSaved .igz documents carry their own copy and rebuild it when opened. Faces textured by a .skp import that was never saved lose their texture until you import the .skp again.": "Usunąć obrazy (liczba: {count}, {mb:.1f} MB) z:\n{path}\n\nZapisane dokumenty .igz zawierają własną kopię i odtwarzają ją przy otwieraniu. Ściany z teksturami z importu .skp, którego nigdy nie zapisano, utracą tekstury do ponownego zaimportowania pliku .skp.",
  "Depth (Y)": "Głębokość (Y)",
  "Design": "Projekt",

@@ -3825,8 +3825,17 @@ class ScenesPanel(QWidget):
         hint.setStyleSheet("color: gray;")
         lay.addWidget(hint)
         self.list = QListWidget()
+        # Ctrl/Shift+click picks several scenes; − or Delete removes them
+        # all in one undo step (#280).
+        self.list.setSelectionMode(QListWidget.ExtendedSelection)
         self.list.itemDoubleClicked.connect(self._on_activate)
         self.list.itemChanged.connect(self._on_item_changed)
+        from PySide6.QtGui import QAction, QKeySequence
+        delete = QAction(self.list)
+        delete.setShortcut(QKeySequence.Delete)
+        delete.setShortcutContext(Qt.WidgetShortcut)
+        delete.triggered.connect(self._on_delete)
+        self.list.addAction(delete)
         lay.addWidget(self.list)
         row = QHBoxLayout()
         add_btn = QPushButton(tr("+ Scene"))
@@ -3836,7 +3845,7 @@ class ScenesPanel(QWidget):
         upd_btn.setToolTip(tr("Update the selected scene from the current view"))
         upd_btn.clicked.connect(self._on_update)
         del_btn = QPushButton(tr("−"))
-        del_btn.setToolTip(tr("Delete the selected scene"))
+        del_btn.setToolTip(tr("Delete the selected scenes"))
         del_btn.clicked.connect(self._on_delete)
         row = FlowLayout(spacing=4)          # wraps in a narrow tray (see Layers)
         row.addWidget(add_btn)
@@ -3931,13 +3940,15 @@ class ScenesPanel(QWidget):
             tr("Scene '{name}' updated", name=view.name), 2000)
 
     def _on_delete(self) -> None:
-        item = self.list.currentItem()
-        view = item.data(Qt.UserRole) if item is not None else None
-        if view is None:
+        views = [it.data(Qt.UserRole) for it in self.list.selectedItems()]
+        if not views:
+            item = self.list.currentItem()
+            views = [item.data(Qt.UserRole)] if item is not None else []
+        views = [v for v in views if v is not None]
+        if not views:
             return
-        scene = self._scene()
-        if view in scene.saved_views:
-            scene.saved_views.remove(view)
+        from core.history import DeleteScenesCommand
+        self._window.viewport.history.execute(DeleteScenesCommand(views))
         self.refresh()
         self._touch()
 

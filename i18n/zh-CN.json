@@ -387,6 +387,7 @@
  "Delete template": "删除模板",
  "Delete the images extracted from imported .skp files.": "删除从导入的 .skp 文件中提取的图像。",
  "Delete the selected scene": "删除选定的场景",
+ "Delete the selected scenes": "删除选定的场景",
  "Delete {count} image(s) ({mb:.1f} MB) from:\n{path}\n\nSaved .igz documents carry their own copy and rebuild it when opened. Faces textured by a .skp import that was never saved lose their texture until you import the .skp again.": "从以下位置删除 {count} 张图像 ({mb:.1f} MB):\n{path}\n\n保存的 .igz 文档自带副本，打开时会自动重建。由从未保存的 .skp 导入纹理的面在您再次导入 .skp 之前会丢失纹理。",
  "Depth (Y)": "深度 (Y)",
  "Design": "设计",

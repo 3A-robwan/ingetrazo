@@ -387,6 +387,7 @@
  "Delete template": "Hapus templat",
  "Delete the images extracted from imported .skp files.": "Hapus gambar yang diekstrak dari berkas .skp yang diimpor.",
  "Delete the selected scene": "Hapus scene yang dipilih",
+ "Delete the selected scenes": "Hapus scene yang dipilih",
  "Delete {count} image(s) ({mb:.1f} MB) from:\n{path}\n\nSaved .igz documents carry their own copy and rebuild it when opened. Faces textured by a .skp import that was never saved lose their texture until you import the .skp again.": "Hapus {count} gambar ({mb:.1f} MB) dari:\n{path}\n\nDokumen .igz yang tersimpan membawa salinannya sendiri dan membangunnya kembali saat dibuka. Bidang yang bertekstur dari impor .skp yang belum pernah disimpan akan kehilangan teksturnya sampai Anda mengimpor ulang .skp tersebut.",
  "Depth (Y)": "Kedalaman (Y)",
  "Design": "Desain",

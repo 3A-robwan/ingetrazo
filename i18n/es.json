@@ -387,6 +387,7 @@
  "Delete template": "Eliminar plantilla",
  "Delete the images extracted from imported .skp files.": "Borra las imágenes extraídas de los archivos .skp importados.",
  "Delete the selected scene": "Eliminar la escena seleccionada",
+ "Delete the selected scenes": "Eliminar las escenas seleccionadas",
  "Delete {count} image(s) ({mb:.1f} MB) from:\n{path}\n\nSaved .igz documents carry their own copy and rebuild it when opened. Faces textured by a .skp import that was never saved lose their texture until you import the .skp again.": "¿Borrar {count} imagen(es) ({mb:.1f} MB) de:\n{path}\n\nLos documentos .igz guardados llevan su propia copia y la reconstruyen al abrirlos. Las caras texturadas por un import .skp que nunca se guardó pierden su textura hasta volver a importar el .skp.",
  "Depth (Y)": "Fondo (Y)",
  "Design": "Diseño",

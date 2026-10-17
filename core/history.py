@@ -1637,6 +1637,27 @@ class CreatePlanCommand(Command):
         scene.version += 1
 
 
+class DeleteScenesCommand(Command):
+    """Delete saved scenes, several at once (#280); undo puts each back in
+    its place in the list."""
+
+    def __init__(self, views) -> None:
+        self.views = list(views)
+        self._at: list = []
+
+    def do(self, scene) -> None:
+        self._at = [(scene.saved_views.index(v), v) for v in self.views
+                    if v in scene.saved_views]
+        for _i, v in self._at:
+            scene.saved_views.remove(v)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        for i, v in sorted(self._at, key=lambda t: t[0]):
+            scene.saved_views.insert(i, v)
+        scene.version += 1
+
+
 class MoveSectionPlanesCommand(Command):
     """Translate section planes (the Move tool)."""
 
