@@ -234,11 +234,14 @@ def _self_check() -> int:
 
     # The optional native kernels (rust/ingetrazo_core): without them the
     # Python code runs, so a missing module is not a fault — except in a
-    # build that promises them, which sets INGETRAZO_REQUIRE_RUST.
-    from core._native import engine, native
+    # build that promises them, which sets INGETRAZO_REQUIRE_RUST. The
+    # engine is off by default (Preferences), so the check asks whether
+    # the module is there and loads, not whether it is on.
+    from core._native import available, engine
+    mod = available()
     print(f"  engine         : {engine()}"
-          + (f" (ingetrazo_core {native.__version__})" if native else ""))
-    if native is None and os.environ.get("INGETRAZO_REQUIRE_RUST") == "1":
+          + (f" (Rust {mod.__version__} available)" if mod else ""))
+    if mod is None and os.environ.get("INGETRAZO_REQUIRE_RUST") == "1":
         problems.append("native engine")
 
     # ``ingetrazo --mcp`` runs scripts/ingetrazo_mcp.py by path, and that
