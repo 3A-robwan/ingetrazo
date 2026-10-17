@@ -1075,8 +1075,14 @@ class Mesh:
         old = _key(v.position)
         v.position = v.position + delta
         new = _key(v.position)
-        if old != new:
-            self._rekey(v, old, new)
+        if old == new:
+            return
+        reg = self._registry
+        if not self._displaced and reg.get(old) is v and new not in reg:
+            del reg[old]               # the common case, kept inline
+            reg[new] = v
+            return
+        self._rekey(v, old, new)
 
     def place_vertex(self, v: Vertex, position: QVector3D) -> None:
         """Put a vertex AT ``position`` -- :meth:`move_vertex` with an
@@ -1088,8 +1094,14 @@ class Mesh:
         old = _key(v.position)
         v.position = QVector3D(position)
         new = _key(v.position)
-        if old != new:
-            self._rekey(v, old, new)
+        if old == new:
+            return
+        reg = self._registry
+        if not self._displaced and reg.get(old) is v and new not in reg:
+            del reg[old]               # the common case, kept inline
+            reg[new] = v
+            return
+        self._rekey(v, old, new)
 
     def _rekey(self, v: Vertex, old: tuple, new: tuple) -> None:
         """File a moved vertex under its new key.
