@@ -68,15 +68,18 @@ class OffsetTool(Tool):
         #: (select the edges, then Offset): the first click
         #: starts the offset instead of picking.
         self._armed: bool = False
+        self._last: dict | None = None      # hot retype of the last offset
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
         self._reset()
+        self._last = None
         self._arm_from_selection(viewport)
 
     def on_deactivate(self, viewport) -> None:
         viewport.set_hover(None)
         self._reset()
+        self._last = None
         viewport.update()
 
     # ---- Spatial input ------------------------------------------------------
@@ -102,6 +105,7 @@ class OffsetTool(Tool):
     def on_click(self, ctx: ToolContext) -> None:
         viewport = ctx.viewport
         if not self.dragging:
+            self._last = None
             if self._armed:
                 self._armed = False          # the run is already in _loop
             elif self.hovered_face is not None:
@@ -130,18 +134,48 @@ class OffsetTool(Tool):
     def on_value(self, viewport, value) -> bool:
         if isinstance(value, tuple):
             return False
-        if not self.dragging or not self._loop or value <= 0.0:
+        if value == 0.0:
             return False
-        # Keep the side the user is dragging toward; default to inward.
-        sign = -1.0 if self.distance < 0.0 else 1.0
-        self.distance = sign * value
+        if self.dragging and self._loop:
+            # Keep the side the user is dragging toward; default to inward.
+            sign = -1.0 if self.distance < 0.0 else 1.0
+            self.distance = sign * value
+            self._commit(viewport)
+            return True
+        # Hot retype: adjust the offset just made by typing into the VCB.
+        last = self._last
+        if last is None:
+            return False
+        stack = getattr(viewport.history, "undo_stack", None)
+        if not stack or stack[-1] is not last["cmd"]:
+            self._last = None
+            return False
+        viewport.history.undo()
+        self.base_face = last["base_face"]
+        self._loop = last["loop"]
+        self._normal = last["normal"]
+        self._chain = last["chain"]
+        self._closed = last["closed"]
+        self._ref_point = last["ref_point"]
+        self._ref_inward = last["ref_inward"]
+        self.distance = last["sign"] * value
+        self.dragging = True
         self._commit(viewport)
         return True
 
     def on_cancel(self, viewport) -> None:
         viewport.set_hover(None)
         self._reset()
+        self._last = None
         viewport.update()
+
+    def value_label(self):
+        """Floating distance readout while dragging (and the VCB readout)."""
+        if not self.dragging or self._ref_point is None:
+            return None
+        inward = self._ref_inward if self._ref_inward is not None else QVector3D(0, 0, 0)
+        mid = self._ref_point + inward * (self.distance * 0.5)
+        return (fmt_len(abs(self.distance)), mid)
 
     # ---- Visual preview -----------------------------------------------------
     def rubber_band_lines(self):
@@ -301,7 +335,20 @@ class OffsetTool(Tool):
         # Snapshot undo: Delete/Add compose fine forward, but the hole edges
         # the ring creates don't reverse cleanly command-by-command (they
         # leaked on undo). One snapshot reverses exactly.
-        viewport.history.execute(SnapshotCompound(commands))
+        cmd = SnapshotCompound(commands)
+        viewport.history.execute(cmd)
+        sign = -1.0 if self.distance < 0 else 1.0
+        self._last = {
+            "cmd": cmd,
+            "base_face": self.base_face,
+            "loop": list(self._loop),
+            "normal": self._normal,
+            "chain": False,
+            "closed": True,
+            "ref_point": self._ref_point,
+            "ref_inward": self._ref_inward,
+            "sign": sign,
+        }
         self._reset()
         viewport.update()
 
@@ -319,15 +366,28 @@ class OffsetTool(Tool):
             return
         cam = getattr(viewport, "camera", None)
         eye = cam.eye() if cam is not None and hasattr(cam, "eye") else None
-        viewport.history.execute(
-            build_add_edges(viewport.scene, _segments(off, self._closed),
-                            eye=eye))
+        cmd = build_add_edges(viewport.scene, _segments(off, self._closed),
+                                eye=eye)
+        viewport.history.execute(cmd)
+        sign = -1.0 if self.distance < 0 else 1.0
+        self._last = {
+            "cmd": cmd,
+            "base_face": None,
+            "loop": list(self._loop),
+            "normal": self._normal,
+            "chain": True,
+            "closed": self._closed,
+            "ref_point": self._ref_point,
+            "ref_inward": self._ref_inward,
+            "sign": sign,
+        }
         self._reset()
         viewport.update()
 
     def _refuse(self, viewport) -> None:
         """Nothing survives the offset — say the limit instead of going quiet.
         A 20 cm kerb takes no 10 cm inward offset: 0.20 - 2 x 0.10 is zero."""
+        self._last = None
         sign = -1.0 if self.distance < 0 else 1.0
         room = max_offset_distance(self._loop, self._normal, sign)
         side = tr("inward") if sign > 0 else tr("outward")
