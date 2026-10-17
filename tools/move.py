@@ -279,11 +279,6 @@ class MoveTool(Tool):
     def on_deactivate(self, viewport) -> None:
         if self._grip_rot is not None:
             self._grip_rot.on_cancel(viewport)
-        # The tool is one instance for the session: a grip turn left set
-        # here came back with the next M, the protractor up and every click
-        # going to it (#480).
-        self._grip_rot = None
-        self._grip_rot_done = None
         self._clear_grips()
         self._end_freeze(viewport)
         self._revert_preview(viewport)
