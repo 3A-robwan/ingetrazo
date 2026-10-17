@@ -266,3 +266,11 @@ def plan_of(mesh) -> Plan | None:
             s["meta"].get("edge_layers") or [], s["rings"], s["sizes"],
             s["counts"])
     return hit
+
+
+def entity_count(mesh) -> int:
+    """``len(mesh.faces) + len(mesh.edges)``, a lazy mesh left unbuilt."""
+    plan = plan_of(mesh)
+    if plan is not None:
+        return plan.nfaces + len(plan.edges)
+    return len(mesh.faces) + len(mesh.edges)

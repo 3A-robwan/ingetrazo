@@ -186,3 +186,72 @@ def test_face_attrs_first_wear_without_building(binary, monkeypatch,
         got = list(M.face_attrs(ml))
         assert type(ml) is M.DeferredMesh
         assert got == firsts(f.attrs for f in me.faces)
+
+
+def _painted_scene(seed, tmp_path):
+    """A random scene with every attribute the writer keeps: paint,
+    textures, layers, IFC, two sides, hidden faces and edges, curves,
+    edge layers, holes (some nested)."""
+    from PySide6.QtGui import QImage
+    rng = random.Random(seed)
+    scene = _random_scene(rng)
+    png = tmp_path / "w.png"
+    img = QImage(4, 4, QImage.Format_RGB32)
+    img.fill(0x336699)
+    img.save(str(png))
+    for m in _meshes(scene):
+        for f in m.faces:
+            r = rng.random()
+            if r < 0.15:
+                f.attrs["texture"] = {"path": str(png), "sw": 1.5,
+                                      "sh": 0.5}
+            elif r < 0.25:
+                f.attrs.update({"layer": "Muros", "mat": "Ladrillo",
+                                "ifc": {"class": "IfcWall"}})
+            elif r < 0.3:
+                f.attrs["back"] = {"color": [0.2, 0.2, 0.9]}
+            elif r < 0.35:
+                f.attrs["opacity"] = 0.4
+            elif r < 0.4:
+                f.attrs["hidden"] = True
+        for i, e in enumerate(m.edges):
+            if rng.random() < 0.2:
+                e.curve = 40 + i % 3
+            if rng.random() < 0.2:
+                e.layer = rng.choice(["Ejes", "Cotas"])
+    try:   # a face whose second hole sits inside the first (dropped)
+        scene.groups[-1].mesh.add_face(
+            [V(40, 0, 0), V(50, 0, 0), V(50, 10, 0), V(40, 10, 0)],
+            [[V(42, 2, 0), V(48, 2, 0), V(48, 8, 0), V(42, 8, 0)],
+             [V(44, 4, 0), V(46, 4, 0), V(46, 6, 0), V(44, 6, 0)],
+             [V(40.5, 0.5, 0), V(41, 0.5, 0), V(41, 1, 0)]])
+    except ValueError:
+        pass
+    # The bulk path keeps every ring it is given: a nested hole reaches
+    # the document only through it, and the writers drop it.
+    import numpy as np
+    ring = [(60, 0), (70, 0), (70, 10), (60, 10), (62, 2), (68, 2), (68, 8),
+            (62, 8), (64, 4), (66, 4), (66, 6), (64, 6)]
+    scene.groups[-1].mesh.add_faces_bulk(
+        np.array([(x, y, 0.0) for x, y in ring]), [4, 4, 4], [3])
+    return scene
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_saving_a_lazy_document_is_byte_identical(binary, monkeypatch,
+                                                  tmp_path, seed):
+    path = tmp_path / "doc.igz"
+    import core.topology
+    with monkeypatch.context() as mp:
+        # A document that kept a nested hole (an older or foreign writer):
+        # rewriting it drops the hole, both ways.
+        mp.setattr(core.topology, "_maximal_holes", lambda holes: holes)
+        igz.save_scene(_painted_scene(seed, tmp_path), path)
+    eager = _open(monkeypatch, path, False)
+    lazy = _open(monkeypatch, path, True)
+    a, b = tmp_path / "eager.igz", tmp_path / "lazy.igz"
+    igz.save_scene(eager, a)
+    igz.save_scene(lazy, b)
+    assert all(type(m) is M.DeferredMesh for m in _meshes(lazy)), \
+        "saving builds nothing"
+    assert a.read_bytes() == b.read_bytes()

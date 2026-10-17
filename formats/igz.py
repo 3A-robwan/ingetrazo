@@ -48,6 +48,7 @@ only up to format 2 refuse it with a message instead of opening it empty.
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 import math
 from pathlib import Path
 
@@ -301,6 +302,13 @@ def _mesh_json(mesh, geom_sink=None) -> dict:
     """The mesh block. With a ``geom_sink`` (a large document) a big mesh
     goes to a binary block in the sink and the JSON keeps only its
     reference and face-attribute table (format 3)."""
+    from core.lazy_mesh import plan_of
+    plan = plan_of(mesh)
+    if plan is not None and geom_sink is not None and _bulk_sized(
+            len(plan.edges), plan.nfaces):
+        # A lazy mesh (experimental engine): written from its arrays, the
+        # same bytes, without building it.
+        return {"geom": _pack_plan(mesh, plan, geom_sink)}
     if geom_sink is not None and _bulk_sized(len(mesh.edges),
                                              len(mesh.faces)):
         return {"geom": _pack_geometry(mesh, geom_sink)}
@@ -412,7 +420,12 @@ def _pack_geometry(mesh, sink: dict) -> dict:
         arrays["edge_curve"] = curves
     if layers is not None:
         arrays["edge_layer"] = layers
+    return _write_geometry(arrays, table, layer_table, sink)
 
+
+def _write_geometry(arrays, table, layer_table, sink: dict) -> dict:
+    """The blob of a format-3 block into ``sink``; its JSON side."""
+    import numpy as np
     # One raw blob, each array at an 8-byte-aligned offset: no pickles, no
     # per-save timestamps (an .npz carries them), so two saves of the same
     # model stay byte-identical.
@@ -434,6 +447,102 @@ def _pack_geometry(mesh, sink: dict) -> dict:
     if layer_table:
         meta["edge_layers"] = layer_table
     return meta
+
+
+def _pack_plan(mesh, plan, sink: dict) -> dict:
+    """:func:`_pack_geometry` of the mesh a deferred ``mesh`` would build
+    (``plan``, core.lazy_mesh), from its arrays: the same point numbering,
+    rings, attribute and layer tables, flags — the same bytes."""
+    import numpy as np
+    from core.topology import _maximal_holes
+
+    src = mesh.__dict__["_deferred_source"]
+    corners_v = plan.corners
+    sizes = plan.ring_sizes
+    counts = plan.ring_counts
+    # Faces with more than one hole drop the nested ones, as the object
+    # writer does (by their positions).
+    if len(counts) and (counts > 2).any():
+        rs = np.concatenate([[0], np.cumsum(sizes)])
+        fr = np.concatenate([[0], np.cumsum(counts)])
+        keep_ring = np.ones(len(sizes), dtype=bool)
+        for f in np.flatnonzero(counts > 2).tolist():
+            hk = list(range(int(fr[f]) + 1, int(fr[f + 1])))
+            pos = [[QVector3D(*plan.pos[i]) for i in
+                    corners_v[int(rs[k]):int(rs[k + 1])].tolist()]
+                   for k in hk]
+            kept = {id(x) for x in _maximal_holes(pos)}
+            for k, p in zip(hk, pos):
+                keep_ring[k] = id(p) in kept
+        if not keep_ring.all():
+            corners_v = corners_v[np.repeat(keep_ring, sizes)]
+            ring_face = np.repeat(np.arange(len(counts)), counts)
+            counts = np.bincount(ring_face[keep_ring],
+                                 minlength=len(counts))
+            sizes = sizes[keep_ring]
+    corners = np.concatenate([plan.edges.reshape(-1), corners_v]) \
+        if len(plan.edges) else corners_v
+    _u, first, inverse = np.unique(corners, return_index=True,
+                                   return_inverse=True)
+    order = np.argsort(first, kind="stable")
+    rank = np.empty_like(order)
+    rank[order] = np.arange(len(order))
+    index = rank[inverse.reshape(-1)].astype(np.int32)
+    pos = plan.pos[corners[first[order]]].astype(np.float32).reshape(-1, 3)
+    if not np.isfinite(pos).all():
+        raise NonFiniteDocumentError("geometry")
+    # The attribute table, renumbered in the order faces first use it.
+    raw = src["meta"].get("face_attrs") or []
+    fa_src = np.asarray(src["face_attr"], dtype=np.int64)
+    table: list = []
+    table_index: dict = {}
+    remap: dict = {}
+    if len(fa_src):
+        u, firsts = np.unique(fa_src, return_index=True)
+        for k in u[np.argsort(firsts, kind="stable")].tolist():
+            attrs = _face_attrs_from_json(raw[k]) if k >= 0 else None
+            js = _face_attrs_json(SimpleNamespace(attrs=attrs)) \
+                if attrs else None
+            if js:
+                key = json.dumps(js, sort_keys=True, separators=(",", ":"))
+                t = table_index.get(key)
+                if t is None:
+                    t = table_index[key] = len(table)
+                    table.append(js)
+                remap[k] = t
+            else:
+                remap[k] = -1
+    keys = np.array(sorted(remap), dtype=np.int64)
+    vals = np.array([remap[k] for k in keys.tolist()], dtype=np.int32)
+    face_attr = vals[np.searchsorted(keys, fa_src)] if len(fa_src) else \
+        np.zeros(0, dtype=np.int32)
+    ne = len(plan.edges)
+    arrays = {
+        "pos": pos,
+        "edges": index[:2 * ne].reshape(-1, 2),
+        "rings": index[2 * ne:],
+        "ring_sizes": np.asarray(sizes, dtype=np.int32),
+        "ring_counts": np.asarray(counts, dtype=np.int32),
+        "face_attr": face_attr.astype(np.int32),
+    }
+    flags = (plan.soft.astype(np.uint8) | (plan.hidden.astype(np.uint8) << 1))
+    arrays["edge_flags"] = flags
+    if any(c is not None for c in plan.curve):
+        arrays["edge_curve"] = np.array(
+            [-1 if c is None else c for c in plan.curve], dtype=np.int64)
+    layer_table: list = []
+    if any(l is not None for l in plan.layer):
+        layer_index: dict = {}
+        layers = np.full(ne, -1, dtype=np.int32)
+        for i, l in enumerate(plan.layer):
+            if l is not None:
+                k = layer_index.get(l)
+                if k is None:
+                    k = layer_index[l] = len(layer_table)
+                    layer_table.append(l)
+                layers[i] = k
+        arrays["edge_layer"] = layers
+    return _write_geometry(arrays, table, layer_table, sink)
 
 
 def save_scene(scene, path: Path) -> dict:
@@ -684,8 +793,9 @@ def _live_element_count(scene) -> int:
     """Faces + edges the document will hold: the loose mesh, and every
     distinct mesh of the groups (a component prototype is written once,
     however many times it is placed). Only list lengths."""
+    from core.lazy_mesh import entity_count
     mesh = scene.mesh if hasattr(scene, "mesh") else scene
-    total = len(mesh.faces) + len(mesh.edges)
+    total = entity_count(mesh)
     seen: set = set()
     stack = (list(getattr(scene, "groups", None) or ())
              + list(getattr(scene, "kept_components", None) or ()))
@@ -694,7 +804,7 @@ def _live_element_count(scene) -> int:
         m = getattr(g, "mesh", None)
         if m is not None and id(m) not in seen:
             seen.add(id(m))
-            total += len(m.faces) + len(m.edges)
+            total += entity_count(m)
         stack.extend(getattr(g, "children", None) or ())
     return total
 
