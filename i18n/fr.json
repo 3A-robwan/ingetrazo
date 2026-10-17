@@ -2888,7 +2888,6 @@
  "Export STL": "Exporter en STL",
  "Unit of the STL file (3D printing programs expect millimetres)": "Unité du fichier STL (les logiciels d'impression 3D attendent des millimètres)",
  "Engine": "Moteur",
- "This is a TEST version of IngeTrazo with the new native engine (engine in use: {engine}). It keeps its own settings and extensions, apart from the stable IngeTrazo, which it does not touch. Keep a copy of the files you open here, and please report anything odd with the label beta-rust.": "Ceci est une version de TEST d'IngeTrazo avec le nouveau moteur natif (moteur utilisé : {engine}). Elle a ses propres réglages et extensions, à part de l'IngeTrazo stable, qu'elle ne modifie pas. Gardez une copie des fichiers que vous ouvrez ici et signalez tout comportement étrange avec l'étiquette beta-rust.",
  "Scale figure:": "Silhouette d’échelle :",
  "My own picture…": "Ma propre image…",
  "Choose picture…": "Choisir une image…",
@@ -2963,5 +2962,9 @@
  "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» n’a été vérifiée par aucun mainteneur d’IngeTrazo.\n\nLes extensions sont du code Python : une fois installée, elle s’exécute avec vos droits et peut lire ou modifier vos fichiers. Ne l’installez que si vous faites confiance à son auteur ({author}).",
  "Explode Curve": "Éclater la courbe",
  "No curve selected.": "Aucune courbe sélectionnée.",
- "{n} curves exploded into segments": "{n} courbes éclatées en segments"
+ "{n} curves exploded into segments": "{n} courbes éclatées en segments",
+ "Rust engine (experimental)": "Moteur Rust (expérimental)",
+ "This build of IngeTrazo does not carry the Rust engine.": "Cette version d'IngeTrazo ne contient pas le moteur Rust.",
+ "Computes the heavy parts (hidden lines of the sheets and more) with the new native engine, much faster on big models. It is a test: keep a copy of your files and report anything odd with the label rust-engine. Takes effect at the next start.": "Calcule les parties lourdes (lignes cachées des planches et plus) avec le nouveau moteur natif, bien plus rapide sur les gros modèles. C'est un essai : gardez une copie de vos fichiers et signalez toute anomalie avec l'étiquette rust-engine. Prend effet au prochain démarrage.",
+ "Restart IngeTrazo to switch the engine.": "Redémarrez IngeTrazo pour changer de moteur."
 }

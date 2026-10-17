@@ -2888,7 +2888,6 @@
  "Export STL": "Exportar STL",
  "Unit of the STL file (3D printing programs expect millimetres)": "Unidad del archivo STL (los programas de impresión 3D esperan milímetros)",
  "Engine": "Motor",
- "This is a TEST version of IngeTrazo with the new native engine (engine in use: {engine}). It keeps its own settings and extensions, apart from the stable IngeTrazo, which it does not touch. Keep a copy of the files you open here, and please report anything odd with the label beta-rust.": "Esta es una versión de PRUEBA de IngeTrazo con el nuevo motor nativo (motor en uso: {engine}). Tiene su propia configuración y sus propias extensiones, aparte del IngeTrazo estable, que no toca. Guarda una copia de los archivos que abras aquí y, por favor, reporta cualquier cosa rara con la etiqueta beta-rust.",
  "Scale figure:": "Figura de escala:",
  "My own picture…": "Mi propia imagen…",
  "Choose picture…": "Elegir imagen…",
@@ -2963,5 +2962,9 @@
  "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "Nadie que mantiene IngeTrazo ha revisado «{name}».\n\nLas extensiones son código Python: una vez instalada, se ejecuta con tus permisos y puede leer o modificar tus archivos. Instálala solo si confías en su autor ({author}).",
  "Explode Curve": "Explotar curva",
  "No curve selected.": "No hay ninguna curva seleccionada.",
- "{n} curves exploded into segments": "{n} curvas convertidas en segmentos"
+ "{n} curves exploded into segments": "{n} curvas convertidas en segmentos",
+ "Rust engine (experimental)": "Motor Rust (experimental)",
+ "This build of IngeTrazo does not carry the Rust engine.": "Esta versión de IngeTrazo no trae el motor Rust.",
+ "Computes the heavy parts (hidden lines of the sheets and more) with the new native engine, much faster on big models. It is a test: keep a copy of your files and report anything odd with the label rust-engine. Takes effect at the next start.": "Calcula las partes pesadas (líneas ocultas de las láminas y más) con el motor nativo nuevo, mucho más rápido en modelos grandes. Es una prueba: guarda una copia de tus archivos y reporta cualquier cosa rara con la etiqueta rust-engine. Se aplica al volver a abrir el programa.",
+ "Restart IngeTrazo to switch the engine.": "Reinicia IngeTrazo para cambiar de motor."
 }

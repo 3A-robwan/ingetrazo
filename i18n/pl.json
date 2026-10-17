@@ -2896,7 +2896,6 @@
  "Export STL": "Eksportuj STL",
  "Unit of the STL file (3D printing programs expect millimetres)": "Jednostka pliku STL (programy do druku 3D oczekują milimetrów)",
  "Engine": "Silnik",
- "This is a TEST version of IngeTrazo with the new native engine (engine in use: {engine}). It keeps its own settings and extensions, apart from the stable IngeTrazo, which it does not touch. Keep a copy of the files you open here, and please report anything odd with the label beta-rust.": "To jest TESTOWA wersja IngeTrazo z nowym natywnym silnikiem (używany silnik: {engine}). Ma własne ustawienia i rozszerzenia, oddzielone od stabilnego IngeTrazo, którego nie zmienia. Zachowaj kopię plików otwieranych tutaj i zgłaszaj wszystko, co dziwne, z etykietą beta-rust.",
  "Scale figure:": "Postać w skali:",
  "My own picture…": "Mój własny obraz…",
  "Choose picture…": "Wybierz obraz…",
@@ -2971,5 +2970,9 @@
  "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» nie zostało sprawdzone przez opiekunów IngeTrazo.\n\nRozszerzenia to kod Python: po zainstalowaniu działa z twoimi uprawnieniami i może odczytywać lub zmieniać twoje pliki. Zainstaluj je tylko, jeśli ufasz jego autorowi ({author}).",
  "Explode Curve": "Rozbij krzywą",
  "No curve selected.": "Nie zaznaczono żadnej krzywej.",
- "{n} curves exploded into segments": "Krzywe rozbite na segmenty: {n}"
+ "{n} curves exploded into segments": "Krzywe rozbite na segmenty: {n}",
+ "Rust engine (experimental)": "Silnik Rust (eksperymentalny)",
+ "This build of IngeTrazo does not carry the Rust engine.": "Ta wersja IngeTrazo nie zawiera silnika Rust.",
+ "Computes the heavy parts (hidden lines of the sheets and more) with the new native engine, much faster on big models. It is a test: keep a copy of your files and report anything odd with the label rust-engine. Takes effect at the next start.": "Oblicza ciężkie części (ukryte linie arkuszy i nie tylko) nowym natywnym silnikiem, znacznie szybciej przy dużych modelach. To test: zachowaj kopię plików i zgłaszaj wszystko, co dziwne, z etykietą rust-engine. Działa po ponownym uruchomieniu.",
+ "Restart IngeTrazo to switch the engine.": "Uruchom ponownie IngeTrazo, aby zmienić silnik."
 }

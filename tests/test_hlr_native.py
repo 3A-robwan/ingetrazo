@@ -11,6 +11,8 @@ import os
 import random
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# The engine is off by default; this file tests it, so it asks for it.
+os.environ.setdefault("INGETRAZO_RUST", "1")
 
 import numpy as np  # noqa: E402
 import pytest  # noqa: E402

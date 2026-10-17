@@ -302,11 +302,10 @@ class AboutDialog(QDialog):
         # (Marco, 23-09).
         gl = f"<br><small>OpenGL: {gl_line}</small>" if gl_line else ""
         from core._native import engine
-        from core.edition import APP_NAME
-        # Which engine computes the heavy parts (Rust when the native
-        # kernels load) — the first thing a Beta report needs to say.
+        # Which engine computes the heavy parts (Rust when the experimental
+        # native engine is on and loads) — the first thing a report needs.
         gl += f"<br><small>{tr('Engine')}: {engine()}</small>"
-        para(f"<b style='font-size:15px'>{APP_NAME}</b> "
+        para("<b style='font-size:15px'>IngeTrazo</b> "
              f"{tr('Version')} {version}{gl}<br>"
              f"{tr('Free 3D modeler for architecture, engineering and 3D design.')}<br>"
              f"{tr('Created by')} <b>Marco Sumari Tellez</b> — "

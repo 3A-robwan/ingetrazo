@@ -79,8 +79,7 @@ def user_plugins_dir() -> Path:
     else:
         base = Path(os.environ.get("XDG_DATA_HOME")
                     or (Path.home() / ".local" / "share"))
-    from core.edition import SLUG
-    return base / SLUG / "plugins"
+    return base / "ingetrazo" / "plugins"
 
 
 def plugin_dirs() -> list[Path]:

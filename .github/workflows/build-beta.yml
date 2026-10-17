@@ -59,7 +59,7 @@ jobs:
         run: |
           maturin build --release -m rust/ingetrazo_core/Cargo.toml -o "$RUNNER_TEMP/wheels"
           pip install "$RUNNER_TEMP"/wheels/ingetrazo_core-*.whl
-          python -c "import core._native as n; print('engine:', n.engine()); assert n.native is not None"
+          INGETRAZO_RUST=1 python -c "import core._native as n; print('engine:', n.engine()); assert n.native is not None"
 
       - name: Native parity tests
         shell: bash
@@ -85,16 +85,13 @@ jobs:
       - name: PyInstaller
         shell: bash
         run: |
-          # The Beta's own name, settings and folders (core/edition.py)
-          echo beta > resources/edition.txt
           pyinstaller ingetrazo.spec --noconfirm
 
       - name: The package runs the Rust engine
         shell: bash
         run: |
           test -n "$(ls dist/ingetrazo/_internal/ingetrazo_core/*.pyd)"
-          test "$(cat dist/ingetrazo/_internal/resources/edition.txt)" = "beta"
-          ./dist/ingetrazo/ingetrazo.exe --check
+          INGETRAZO_RUST=1 INGETRAZO_REQUIRE_RUST=1 ./dist/ingetrazo/ingetrazo.exe --check
 
       - name: README in the package
         shell: bash
@@ -154,15 +151,15 @@ jobs:
         run: |
           ./venv/bin/maturin build --release -m rust/ingetrazo_core/Cargo.toml -o "$RUNNER_TEMP/wheels"
           ./venv/bin/python -m pip install "$RUNNER_TEMP"/wheels/ingetrazo_core-*.whl
-          ./venv/bin/python -c "import core._native as n; print('engine:', n.engine()); assert n.native is not None"
+          INGETRAZO_RUST=1 ./venv/bin/python -c "import core._native as n; print('engine:', n.engine()); assert n.native is not None"
 
       - name: Fast test suite (Rust engine)
+        env:
+          INGETRAZO_RUST: '1'
         run: ./venv/bin/python scripts/pytest_batches.py -m "not slow" tests
 
       - name: Build the AppImage
         run: |
-          # The Beta's own name, settings and folders (core/edition.py)
-          echo beta > resources/edition.txt
           packaging/build-appimage.sh dist
 
       - name: Smoke test with a display

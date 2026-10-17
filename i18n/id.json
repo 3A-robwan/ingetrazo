@@ -2891,7 +2891,6 @@
  "Export STL": "Ekspor STL",
  "Unit of the STL file (3D printing programs expect millimetres)": "Satuan berkas STL (program cetak 3D mengharapkan milimeter)",
  "Engine": "Mesin",
- "This is a TEST version of IngeTrazo with the new native engine (engine in use: {engine}). It keeps its own settings and extensions, apart from the stable IngeTrazo, which it does not touch. Keep a copy of the files you open here, and please report anything odd with the label beta-rust.": "Ini adalah versi UJI COBA IngeTrazo dengan mesin native baru (mesin yang dipakai: {engine}). Versi ini punya pengaturan dan ekstensi sendiri, terpisah dari IngeTrazo stabil, yang tidak diubah. Simpan salinan file yang Anda buka di sini, dan laporkan hal yang aneh dengan label beta-rust.",
  "Scale figure:": "Figur skala:",
  "My own picture…": "Gambar saya sendiri…",
  "Choose picture…": "Pilih gambar…",
@@ -2966,5 +2965,9 @@
  "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» belum ditinjau oleh pengelola IngeTrazo.\n\nEkstensi adalah kode Python: setelah dipasang, ekstensi berjalan dengan izin Anda dan dapat membaca atau mengubah berkas Anda. Pasang hanya jika Anda memercayai pembuatnya ({author}).",
  "Explode Curve": "Bongkar Kurva",
  "No curve selected.": "Tidak ada kurva yang dipilih.",
- "{n} curves exploded into segments": "{n} kurva dibongkar menjadi segmen"
+ "{n} curves exploded into segments": "{n} kurva dibongkar menjadi segmen",
+ "Rust engine (experimental)": "Mesin Rust (eksperimental)",
+ "This build of IngeTrazo does not carry the Rust engine.": "Versi IngeTrazo ini tidak menyertakan mesin Rust.",
+ "Computes the heavy parts (hidden lines of the sheets and more) with the new native engine, much faster on big models. It is a test: keep a copy of your files and report anything odd with the label rust-engine. Takes effect at the next start.": "Menghitung bagian yang berat (garis tersembunyi pada lembar dan lainnya) dengan mesin native baru, jauh lebih cepat pada model besar. Ini uji coba: simpan salinan berkas Anda dan laporkan hal aneh dengan label rust-engine. Berlaku saat aplikasi dibuka kembali.",
+ "Restart IngeTrazo to switch the engine.": "Mulai ulang IngeTrazo untuk mengganti mesin."
 }

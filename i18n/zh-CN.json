@@ -2889,7 +2889,6 @@
  "Export STL": "导出 STL",
  "Unit of the STL file (3D printing programs expect millimetres)": "STL 文件的单位（3D 打印软件默认使用毫米）",
  "Engine": "引擎",
- "This is a TEST version of IngeTrazo with the new native engine (engine in use: {engine}). It keeps its own settings and extensions, apart from the stable IngeTrazo, which it does not touch. Keep a copy of the files you open here, and please report anything odd with the label beta-rust.": "这是 IngeTrazo 的测试版，使用新的原生引擎（当前引擎：{engine}）。它有自己的设置和扩展，与稳定版 IngeTrazo 分开，不会改动稳定版。请保留在此打开的文件的副本，如发现异常请用 beta-rust 标签报告。",
  "Scale figure:": "比例人物：",
  "My own picture…": "我自己的图片…",
  "Choose picture…": "选择图片…",
@@ -2964,5 +2963,9 @@
  "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» 尚未经过 IngeTrazo 维护者审核。\n\n扩展是 Python 代码：安装后，它会以你的权限运行，并且可以读取或修改你的文件。只有在信任其作者（{author}）时才安装。",
  "Explode Curve": "炸开曲线",
  "No curve selected.": "未选择曲线。",
- "{n} curves exploded into segments": "已将 {n} 条曲线炸开为线段"
+ "{n} curves exploded into segments": "已将 {n} 条曲线炸开为线段",
+ "Rust engine (experimental)": "Rust 引擎（实验性）",
+ "This build of IngeTrazo does not carry the Rust engine.": "此版本的 IngeTrazo 不含 Rust 引擎。",
+ "Computes the heavy parts (hidden lines of the sheets and more) with the new native engine, much faster on big models. It is a test: keep a copy of your files and report anything odd with the label rust-engine. Takes effect at the next start.": "用新的原生引擎计算繁重部分（图纸的隐藏线等），大型模型上快得多。这是测试功能：请保留文件副本，并用 rust-engine 标签报告任何异常。下次启动时生效。",
+ "Restart IngeTrazo to switch the engine.": "重启 IngeTrazo 以切换引擎。"
 }

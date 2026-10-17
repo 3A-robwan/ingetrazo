@@ -2891,7 +2891,6 @@
  "Export STL": "STL exportieren",
  "Unit of the STL file (3D printing programs expect millimetres)": "Einheit der STL-Datei (3D-Druckprogramme erwarten Millimeter)",
  "Engine": "Rechenkern",
- "This is a TEST version of IngeTrazo with the new native engine (engine in use: {engine}). It keeps its own settings and extensions, apart from the stable IngeTrazo, which it does not touch. Keep a copy of the files you open here, and please report anything odd with the label beta-rust.": "Dies ist eine TESTVERSION von IngeTrazo mit dem neuen nativen Rechenkern (aktiv: {engine}). Sie hat eigene Einstellungen und Erweiterungen, getrennt vom stabilen IngeTrazo, das sie nicht verändert. Bewahre eine Kopie der Dateien auf, die du hier öffnest, und melde Auffälliges bitte mit dem Label beta-rust.",
  "Scale figure:": "Maßstabsfigur:",
  "My own picture…": "Eigenes Bild…",
  "Choose picture…": "Bild wählen…",
@@ -2963,5 +2962,9 @@
  "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» wurde von niemandem aus dem IngeTrazo-Team geprüft.\n\nErweiterungen sind Python-Code: Einmal installiert, läuft sie mit deinen Rechten und kann deine Dateien lesen oder ändern. Installiere sie nur, wenn du ihrem Autor vertraust ({author}).",
  "Explode Curve": "Kurve auflösen",
  "No curve selected.": "Keine Kurve ausgewählt.",
- "{n} curves exploded into segments": "{n} Kurven in Segmente aufgelöst"
+ "{n} curves exploded into segments": "{n} Kurven in Segmente aufgelöst",
+ "Rust engine (experimental)": "Rust-Rechenkern (experimentell)",
+ "This build of IngeTrazo does not carry the Rust engine.": "Diese IngeTrazo-Version enthält den Rust-Rechenkern nicht.",
+ "Computes the heavy parts (hidden lines of the sheets and more) with the new native engine, much faster on big models. It is a test: keep a copy of your files and report anything odd with the label rust-engine. Takes effect at the next start.": "Berechnet die aufwendigen Teile (verdeckte Linien der Blätter und mehr) mit dem neuen nativen Rechenkern, bei großen Modellen viel schneller. Es ist ein Test: Bewahre eine Kopie deiner Dateien auf und melde Auffälliges mit dem Label rust-engine. Wirkt beim nächsten Start.",
+ "Restart IngeTrazo to switch the engine.": "Starte IngeTrazo neu, um den Rechenkern zu wechseln."
 }

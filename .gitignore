@@ -79,4 +79,3 @@ CLAUDE.md
 # Synthetic benchmark documents (scripts/bench_models.py regenerates them;
 # city-XL alone is ~580 MB)
 benchmarks/models/
-resources/edition.txt

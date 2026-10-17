@@ -2961,5 +2961,10 @@
  "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» не проверено командой IngeTrazo.\n\nРасширения — это код на Python: после установки оно работает с вашими правами и может читать или изменять ваши файлы. Устанавливайте его, только если доверяете автору ({author}).",
  "Explode Curve": "Разбить кривую",
  "No curve selected.": "Кривая не выбрана.",
- "{n} curves exploded into segments": "Кривых разбито на сегменты: {n}"
+ "{n} curves exploded into segments": "Кривых разбито на сегменты: {n}",
+ "Rust engine (experimental)": "Движок Rust (экспериментальный)",
+ "This build of IngeTrazo does not carry the Rust engine.": "Эта сборка IngeTrazo не содержит движок Rust.",
+ "Computes the heavy parts (hidden lines of the sheets and more) with the new native engine, much faster on big models. It is a test: keep a copy of your files and report anything odd with the label rust-engine. Takes effect at the next start.": "Вычисляет тяжёлые части (скрытые линии листов и не только) новым нативным движком — намного быстрее на больших моделях. Это тест: сохраните копию файлов и сообщайте о странностях с меткой rust-engine. Вступает в силу при следующем запуске.",
+ "Restart IngeTrazo to switch the engine.": "Перезапустите IngeTrazo, чтобы сменить движок.",
+ "Engine": "Движок"
 }

@@ -154,9 +154,8 @@ def apply_platform_preference() -> str | None:
     ``QT_QPA_PLATFORM`` when the choice says so. Returns what was set."""
     from PySide6.QtCore import QCoreApplication
     from core import general_settings
-    from core.edition import APP_NAME
     QCoreApplication.setOrganizationName("IngeTrazo")
-    QCoreApplication.setApplicationName(APP_NAME)
+    QCoreApplication.setApplicationName("IngeTrazo")
     pref = str(general_settings.value("platform", AUTO) or AUTO)
     chosen = choose_platform(pref)
     if chosen:
