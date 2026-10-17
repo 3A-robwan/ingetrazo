@@ -2958,5 +2958,8 @@
  "{d} runs into a hole of this face — try a smaller offset": "{d} попадает в отверстие этой грани — попробуйте меньшее смещение",
  "Click a face and move.": "Кликните грань и двигайте мышь.",
  "Install an unreviewed extension?": "Установить непроверенное расширение?",
- "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» не проверено командой IngeTrazo.\n\nРасширения — это код на Python: после установки оно работает с вашими правами и может читать или изменять ваши файлы. Устанавливайте его, только если доверяете автору ({author})."
+ "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» не проверено командой IngeTrazo.\n\nРасширения — это код на Python: после установки оно работает с вашими правами и может читать или изменять ваши файлы. Устанавливайте его, только если доверяете автору ({author}).",
+ "Explode Curve": "Разбить кривую",
+ "No curve selected.": "Кривая не выбрана.",
+ "{n} curves exploded into segments": "Кривых разбито на сегменты: {n}"
 }

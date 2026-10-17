@@ -2961,5 +2961,8 @@
  "Drag up or down to zoom in or out.": "Seret ke atas atau ke bawah untuk memperbesar atau memperkecil.",
  "Drag a box to zoom to that region.": "Seret kotak untuk memperbesar area tersebut.",
  "Install an unreviewed extension?": "Pasang ekstensi yang belum ditinjau?",
- "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» belum ditinjau oleh pengelola IngeTrazo.\n\nEkstensi adalah kode Python: setelah dipasang, ekstensi berjalan dengan izin Anda dan dapat membaca atau mengubah berkas Anda. Pasang hanya jika Anda memercayai pembuatnya ({author})."
+ "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» belum ditinjau oleh pengelola IngeTrazo.\n\nEkstensi adalah kode Python: setelah dipasang, ekstensi berjalan dengan izin Anda dan dapat membaca atau mengubah berkas Anda. Pasang hanya jika Anda memercayai pembuatnya ({author}).",
+ "Explode Curve": "Bongkar Kurva",
+ "No curve selected.": "Tidak ada kurva yang dipilih.",
+ "{n} curves exploded into segments": "{n} kurva dibongkar menjadi segmen"
 }

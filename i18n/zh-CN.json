@@ -2959,5 +2959,8 @@
  "Drag up or down to zoom in or out.": "上下拖动以放大或缩小。",
  "Drag a box to zoom to that region.": "拖出一个框以缩放到该区域。",
  "Install an unreviewed extension?": "安装未经审核的扩展？",
- "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» 尚未经过 IngeTrazo 维护者审核。\n\n扩展是 Python 代码：安装后，它会以你的权限运行，并且可以读取或修改你的文件。只有在信任其作者（{author}）时才安装。"
+ "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» 尚未经过 IngeTrazo 维护者审核。\n\n扩展是 Python 代码：安装后，它会以你的权限运行，并且可以读取或修改你的文件。只有在信任其作者（{author}）时才安装。",
+ "Explode Curve": "炸开曲线",
+ "No curve selected.": "未选择曲线。",
+ "{n} curves exploded into segments": "已将 {n} 条曲线炸开为线段"
 }

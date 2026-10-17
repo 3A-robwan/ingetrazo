@@ -2959,5 +2959,8 @@
  "Drag up or down to zoom in or out.": "Trascina in alto o in basso per ingrandire o ridurre.",
  "Drag a box to zoom to that region.": "Trascina un riquadro per ingrandire quella zona.",
  "Install an unreviewed extension?": "Installare un’estensione non verificata?",
- "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» non è stata verificata da chi mantiene IngeTrazo.\n\nLe estensioni sono codice Python: una volta installata, viene eseguita con i tuoi permessi e può leggere o modificare i tuoi file. Installala solo se ti fidi del suo autore ({author})."
+ "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» non è stata verificata da chi mantiene IngeTrazo.\n\nLe estensioni sono codice Python: una volta installata, viene eseguita con i tuoi permessi e può leggere o modificare i tuoi file. Installala solo se ti fidi del suo autore ({author}).",
+ "Explode Curve": "Esplodi curva",
+ "No curve selected.": "Nessuna curva selezionata.",
+ "{n} curves exploded into segments": "{n} curve esplose in segmenti"
 }

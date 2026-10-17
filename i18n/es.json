@@ -2958,5 +2958,8 @@
  "{d} runs into a hole of this face — try a smaller offset": "{d} se mete en un hueco de esta cara: prueba una equidistancia menor",
  "Click a face and move.": "Clic en una cara y mueve.",
  "Install an unreviewed extension?": "¿Instalar una extensión sin revisar?",
- "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "Nadie que mantiene IngeTrazo ha revisado «{name}».\n\nLas extensiones son código Python: una vez instalada, se ejecuta con tus permisos y puede leer o modificar tus archivos. Instálala solo si confías en su autor ({author})."
+ "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "Nadie que mantiene IngeTrazo ha revisado «{name}».\n\nLas extensiones son código Python: una vez instalada, se ejecuta con tus permisos y puede leer o modificar tus archivos. Instálala solo si confías en su autor ({author}).",
+ "Explode Curve": "Explotar curva",
+ "No curve selected.": "No hay ninguna curva seleccionada.",
+ "{n} curves exploded into segments": "{n} curvas convertidas en segmentos"
 }

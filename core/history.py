@@ -1637,6 +1637,37 @@ class CreatePlanCommand(Command):
         scene.version += 1
 
 
+class ExplodeCurvesCommand(Command):
+    """Explode Curve: the curves the given edges belong to become plain
+    segments, each one picked on its own. A circle or an arc selects whole
+    because its edges share a curve id; this drops the id, the geometry
+    stays exactly as it is. Undo gives every edge its id back."""
+
+    def __init__(self, edges) -> None:
+        self.edges = list(edges)
+        self._ids: list = []
+        self.curves = 0
+
+    def do(self, scene) -> None:
+        ids = {e.curve for e in self.edges
+               if getattr(e, "curve", None) is not None}
+        self.curves = len(ids)
+        self._ids = [(e, e.curve) for e in scene.mesh.edges
+                     if e.curve in ids]
+        for e, _cid in self._ids:
+            e.curve = None
+        scene.mesh._chunk_dirty = True
+        scene.mesh._mut_serial += 1
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        for e, cid in self._ids:
+            e.curve = cid
+        scene.mesh._chunk_dirty = True
+        scene.mesh._mut_serial += 1
+        scene.version += 1
+
+
 class DeleteScenesCommand(Command):
     """Delete saved scenes, several at once (#280); undo puts each back in
     its place in the list."""

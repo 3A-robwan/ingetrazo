@@ -4096,6 +4096,11 @@ class MainWindow(QMainWindow):
             # Divide: a line or an arc into N equal pieces
             # (issue #63, @pacaeiro: «It's a needed command»).
             menu.addAction(tr("Divide…"), self._on_divide)
+            if any(getattr(e, "curve", None) is not None
+                   for e in loose_edges):
+                # Explode Curve: a circle or an arc back to plain
+                # segments, each picked on its own.
+                menu.addAction(tr("Explode Curve"), self._on_explode_curve)
             if len(loose_edges) > 1:
                 # Join Segments, its inverse: a line drawn in pieces
                 # back to one line.
@@ -4507,6 +4512,22 @@ class MainWindow(QMainWindow):
             tr("Divided into {n} segments", n=n), 3000)
 
     @_repeatable("Join Segments")
+    def _on_explode_curve(self) -> None:
+        """Explode Curve: the selected curves become plain segments, in one
+        undo step; the geometry does not move."""
+        from core.history import ExplodeCurvesCommand
+        scene = self.viewport.scene
+        edges = [e for e in scene.selection if isinstance(e, Edge)
+                 and e in scene.mesh.edges]
+        if not any(getattr(e, "curve", None) is not None for e in edges):
+            self.statusBar().showMessage(tr("No curve selected."), 3000)
+            return
+        cmd = ExplodeCurvesCommand(edges)
+        self.viewport.history.execute(cmd)
+        self.statusBar().showMessage(
+            tr("{n} curves exploded into segments", n=cmd.curves), 3000)
+        self.viewport.update()
+
     def _on_join_segments(self) -> None:
         """Join the selected collinear segments into single lines; with
         no edge selected, every one of the model being edited. First a
