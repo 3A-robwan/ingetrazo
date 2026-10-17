@@ -2631,7 +2631,7 @@ class Viewport(QOpenGLWidget):
 
         loose = sc.mesh
 
-        def walk(g):
+        def part(g):
             m = g.mesh
             xf = g.xform
             # The mesh open for editing IS the loose mesh: its content is
@@ -2643,16 +2643,43 @@ class Viewport(QOpenGLWidget):
             # ``locked`` too: the pick block lists a group as selectable or
             # not, and a padlock that did not re-key it left the group
             # movable and openable from the view.
-            parts.append((id(g), id(m), serial,
-                          tuple(xf.data()) if xf is not None else None,
-                          g.layer, bool(g.billboard), bool(g.hidden),
-                          bool(getattr(g, "locked", False)),
-                          _material_sig(getattr(g, "material", None))))
+            return (id(g), id(m), serial,
+                    tuple(xf.data()) if xf is not None else None,
+                    g.layer, bool(g.billboard), bool(g.hidden),
+                    bool(getattr(g, "locked", False)),
+                    _material_sig(getattr(g, "material", None)))
+
+        pv = getattr(self, "_preview_groups", None) or ()
+        base = getattr(self, "_epoch_frozen_base", None)
+        if (not live and pv and base is not None and base[0] == cheap
+                and base[1] == parts):
+            # A frozen preview (a drag): only the previewed groups can
+            # move, so only their parts are made again — the walk over
+            # every placement ran on every frame (21 406 of them, #158).
+            # The same parts in the same order: the very same epoch.
+            whole = base[2]
+            for i, g in base[3]:
+                whole[i] = part(g)
+            epoch = hash(tuple(whole))
+            self._epoch_memo = ((tick, _cache_ver(self)), epoch)
+            self._epoch_same = None
+            return epoch
+        movers: list = []
+        head = len(parts)
+
+        def walk(g):
+            if id(g) in pv:
+                movers.append((len(parts), g))
+            parts.append(part(g))
             for c in (g.children or ()):
                 walk(c)
         for g in sc.groups:
             walk(g)
         epoch = hash(tuple(parts))
+        # (cheap key, the parts before the walk, every part, the movers'
+        # slots) — what the next frozen frame starts from.
+        self._epoch_frozen_base = ((cheap, parts[:head], list(parts), movers)
+                                   if not live and pv else None)
         self._epoch_memo = ((tick, _cache_ver(self)), epoch)
         self._epoch_same = (cheap, epoch) if live else None
         return epoch
