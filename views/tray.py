@@ -3415,6 +3415,9 @@ class EntityInfoPanel(QWidget):
             tr("{n} entities moved to '{layer}'", n=len(targets), layer=name),
             2500)
 
+    #: Past this many selected entities the totals are left out (#274).
+    TOTALS_UP_TO = 20000
+
     def _describe(self, sel: list) -> str:
         if not sel:
             return tr("Nothing selected")
@@ -3465,7 +3468,19 @@ class EntityInfoPanel(QWidget):
             elif isinstance(e, Group):
                 counts["groups"] += 1
         parts = [f"{n} {tr(k)}" for k, n in counts.items() if n]
-        return f"<b>{tr('Selection')}</b><br>" + ", ".join(parts)
+        text = f"<b>{tr('Selection')}</b><br>" + ", ".join(parts)
+        # The usual totals of a multiple selection: the faces' area and the
+        # edges' length (#274) -- skipped past a size where summing them on
+        # every selection change would slow the panel down.
+        if len(sel) <= self.TOTALS_UP_TO:
+            if counts["faces"]:
+                area = sum(e.area() for e in sel if isinstance(e, Face))
+                text += f"<br>{tr('Area')}: {fmt_area(area)}"
+            if counts["edges"]:
+                length = sum((e.b - e.a).length() for e in sel
+                             if isinstance(e, Edge))
+                text += f"<br>{tr('Length')}: {fmt_len(length)}"
+        return text
 
     def _solid_volume(self, group):
         """Cached per scene version: the panel refreshes on every change and
