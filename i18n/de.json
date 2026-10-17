@@ -1575,7 +1575,7 @@
  "The label of the view: a numbered bubble, the title and the scale over a rule, a vertical bar beside the frame, or a plain centred line. Fields like {escala}, {lamina} and {escena} expand.": "Die Beschriftung der Ansicht: eine nummerierte Blase, Titel und Maßstab über einer Linie, ein senkrechter Balken neben dem Rahmen oder eine einfache zentrierte Zeile. Felder wie {escala}, {lamina} und {escena} werden ersetzt.",
  "Numbered, rule under": "Nummeriert, Linie darunter",
  "Vertical bar": "Senkrechter Balken",
- "Simple line": "Einfache Zeile",
+ "Simple line": "Einfache Linie",
  "Title style": "Titelstil",
  "automatic: the view's name": "automatisch: der Name der Ansicht",
  "none": "keine",
