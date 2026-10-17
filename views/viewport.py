@@ -13699,11 +13699,9 @@ class Viewport(QOpenGLWidget):
                 if not tail or ":" in self._value_buffer:
                     return True
             # Forbid two decimal separators in the current numeric token.
-            # A comma after a decimal POINT is no second separator but the
-            # field break: «0.9,2.1» is a 0.9 × 2.1 rectangle (#598).
             if text in (".", ","):
                 tail = self._current_token_tail()
-                if "," in tail or (text == "." and "." in tail):
+                if "." in tail or "," in tail:
                     return True
             self._set_value_buffer(self._value_buffer + text)
             return True
@@ -13735,9 +13733,6 @@ class Viewport(QOpenGLWidget):
         # A comma followed by a space separates values: a decimal comma
         # never has one after it. «1 3/8", 1 3/16"» is two lengths (#189).
         buffer = re.sub(r",\s+", ";", buffer.strip())
-        # A comma after a number written with a decimal POINT separates
-        # values too: «0.9,2.1» is 0.9 × 2.1, never a number (#598).
-        buffer = re.sub(r"(\d*\.\d*),", r"\1;", buffer)
         if (comma_lists and ";" not in buffer
                 and not any(ch.isspace() for ch in buffer.strip())):
             buffer = buffer.replace(",", " ")
@@ -13813,10 +13808,8 @@ class Viewport(QOpenGLWidget):
         return bool(pending(self)) if callable(pending) else False
 
     def _current_token_tail(self) -> str:
-        """The portion of the buffer after the last ``;`` or space -- or
-        after a comma that follows a decimal point, a field break (#598)."""
-        normalized = re.sub(r"(\d*\.\d*),", r"\1 ",
-                            self._value_buffer.replace(";", " "))
+        """The portion of the buffer after the last ``;`` or space."""
+        normalized = self._value_buffer.replace(";", " ")
         idx = normalized.rfind(" ")
         if idx < 0:
             return self._value_buffer
