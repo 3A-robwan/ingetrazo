@@ -133,3 +133,17 @@ def test_sequential_weld_is_vertex_by_vertex(monkeypatch, engine):
                                  for v in m.vertices]
         assert [id(m.vertices[i]) for i in pid.tolist()] == \
             [id(v) for v in vs]
+
+
+def test_planned_vertices_read_like_the_vertex_list(binary, tmp_path):
+    """What position-only readers (push/pull's level inference) get from a
+    lazy mesh: the built vertex list's positions, in order, nothing built."""
+    path = tmp_path / "doc.igz"
+    igz.save_scene(_random_scene(random.Random(6)), path)
+    scene = Scene()
+    igz.load_into(scene, path)
+    for m in _meshes(scene):
+        pv = lazy_mesh.PlannedVertices(lazy_mesh.plan_of(m).pos)
+        got = [pv[i].position.toTuple() for i in range(len(pv))]
+        assert type(m) is M.DeferredMesh
+        assert got == [v.position.toTuple() for v in m.vertices]

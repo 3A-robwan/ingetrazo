@@ -2541,13 +2541,34 @@ class Viewport(QOpenGLWidget):
         # now, in batches of its own under a clockwise front face
         # (``_front_face``).
         from core.group import effective_material
-        base = self._proto_base_chunk(g.mesh, effective_material(g))
+        paint = effective_material(g)
+        # The answer is the prototype's (and its paint's), which the
+        # placements epoch covers: once per prototype, not per placement
+        # (64 000 calls per rebuild on the plant of #158, ~1.5 s an undo).
+        epoch_of = getattr(self, "_placements_epoch", None)
+        memo = None
+        # Not the mesh open for editing: the epoch leaves its changes out
+        # (they are the per-frame half), and a paint inside could turn it
+        # translucent under the same epoch.
+        if epoch_of is not None and g.mesh is not self.scene.mesh:
+            epoch = epoch_of()
+            memo = getattr(self, "_elig_memo", None)
+            if memo is None or memo[0] != epoch:
+                memo = self._elig_memo = (epoch, {})
+            mkey = (id(g.mesh), _material_sig(paint))
+            hit = memo[1].get(mkey)
+            if hit is not None and hit[0] is g.mesh:
+                return hit[1]
+        base = self._proto_base_chunk(g.mesh, paint)
         # Translucent / back-side / glass content still rides the
         # consolidated passes (they need global draw ordering).
-        return not (base.get("tcol") or base.get("ttex")
-                    or base.get("back_vcol") or base.get("back_tex")
-                    or base.get("back_tcol") or base.get("back_ttex")
-                    or base.get("fvcol"))
+        ok = not (base.get("tcol") or base.get("ttex")
+                  or base.get("back_vcol") or base.get("back_tex")
+                  or base.get("back_tcol") or base.get("back_ttex")
+                  or base.get("fvcol"))
+        if memo is not None:
+            memo[1][mkey] = (g.mesh, ok)
+        return ok
 
     def _proto_base_chunk(self, mesh, paint=None):
         """The prototype's chunk in LOCAL coordinates (the same wrapper

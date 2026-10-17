@@ -204,11 +204,35 @@ def _default_pixmap(size=_SWATCH) -> QPixmap:
     return pm
 
 
+_texture_swatches: dict = {}
+
+
 def _texture_pixmap(path, size=_SWATCH) -> QPixmap | None:
     """A swatch of the image at *path*. Read with the allocation limit off:
     ``QImage(path)`` refuses anything over Qt's 256 MB default, so a big
     texture (a packaging artwork, #460) painted fine — the viewport lifts
-    the limit — but had no swatch at all."""
+    the limit — but had no swatch at all.
+
+    Kept per file (path, size, modification time): «In model» is rebuilt
+    after every edit, and it read each texture image from disk again —
+    ~0.9 s an undo on the plant of #158."""
+    import os
+    try:
+        st = os.stat(path)
+        key = (str(path), size, st.st_mtime_ns, st.st_size)
+    except OSError:
+        key = None
+    if key is not None and key in _texture_swatches:
+        return _texture_swatches[key]
+    pm = _read_texture_pixmap(path, size)
+    if key is not None:
+        if len(_texture_swatches) > 512:
+            _texture_swatches.clear()
+        _texture_swatches[key] = pm
+    return pm
+
+
+def _read_texture_pixmap(path, size) -> QPixmap | None:
     from PySide6.QtGui import QImageReader
     limit = QImageReader.allocationLimit()
     QImageReader.setAllocationLimit(0)

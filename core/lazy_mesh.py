@@ -295,3 +295,27 @@ def entity_count(mesh) -> int:
     if plan is not None:
         return plan.nfaces + len(plan.edges)
     return len(mesh.faces) + len(mesh.edges)
+
+
+class PlannedVertices:
+    """``mesh.vertices`` of a lazy mesh for code that only reads their
+    positions: ``pv[i].position`` is the i-th planned vertex's position (a
+    fresh QVector3D), ``len(pv)`` their count — nothing built."""
+
+    __slots__ = ("pos",)
+
+    class _V:
+        __slots__ = ("position",)
+
+        def __init__(self, p):
+            from PySide6.QtGui import QVector3D
+            self.position = QVector3D(float(p[0]), float(p[1]), float(p[2]))
+
+    def __init__(self, pos):
+        self.pos = pos
+
+    def __len__(self):
+        return len(self.pos)
+
+    def __getitem__(self, i):
+        return PlannedVertices._V(self.pos[int(i)])
