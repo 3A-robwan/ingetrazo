@@ -8023,13 +8023,20 @@ class Viewport(QOpenGLWidget):
         return not (grp is None and callable(moving) and id(face) in moving())
 
     def _hover_face_plane(self, cursor):
-        """World plane of an unselected face under the cursor, or None."""
+        """World plane of the face under the cursor, or None.
+
+        Selected geometry remains a valid plane target for planar drawing
+        tools; other tools must not land on geometry they are moving.
+        """
         face, grp = self.pick_face_placement(cursor[0], cursor[1])
         if face is None:
             return None
         sel = self.scene.selection
         owner = self._owner_of(grp) if grp is not None else None
-        if (owner is not None and owner in sel) or (grp is None and face in sel):
+        from tools.base import PlaneLock
+        if (not isinstance(self.active_tool, PlaneLock)
+                and ((owner is not None and owner in sel)
+                     or (grp is None and face in sel))):
             return None
         if grp is None:
             # A face the drag is bending (one corner on a grabbed vertex)
