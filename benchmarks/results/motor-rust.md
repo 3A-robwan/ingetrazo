@@ -25,3 +25,19 @@ una vez con `INGETRAZO_RUST=0` y otra con `=1`. Segundos.
   todo con todo en plaza **266 → 8,7 s**, los 82 049 segmentos idénticos (mismo proceso, mismo orden).
   `tests/test_intersect_native.py` caza 5/5 sabotajes (eps, lista de cajas grandes, i=j, consulta sin eps en x / y).
   Ojo: entre ejecuciones Python da 82 033–82 049 cruces porque la selección es un `set` (su orden cambia): comparar siempre en el mismo proceso.
+- **Rayos de paridad** (`ParityTris`: BVH propio + el mismo Möller–Trumbore en f64), base de orientar y de la reconstrucción de empujar/tirar:
+  orientar las 892 mallas de plaza **31,3 → 8,0 s** (ya orientadas) y **34,4 → 8,5 s** con el 20 % de caras volteadas al azar (3 752 volteos, 809 tabiques): resultado idéntico cara por cara.
+  `tests/test_parity_native.py` caza 7/7 sabotajes (t mínimo, t detrás, u sin eps, cajas sin margen, máscara, cara excluida). La máscara por cara ya no se copia en Python: se pasa la base y la cara a excluir (`skip`).
+
+## Interacción (plaza, Python, `bench_interaction.py --repeat 1`, ms por evento)
+
+| gesto | mediana | p95 |
+|---|---:|---:|
+| órbita / encuadre / zoom | ~16 | ~23 |
+| pasar con Selección | 17,9 | 29,8 |
+| pasar con Línea (inferencias) | 33,0 | 52,0 |
+| clic seleccionar | 44,9 | 77,5 |
+| mover un edificio | 42,4 | 222,4 |
+| deshacer | 98,9 | — |
+
+(El banco se quedaba colgado al cerrar en el diálogo «¿descartar cambios?»: arreglado.)

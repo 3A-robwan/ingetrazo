@@ -12,12 +12,14 @@ use pyo3::prelude::*;
 
 mod boxes;
 mod hlr;
+mod parity;
 
 #[pymodule]
 fn ingetrazo_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_class::<HlrOccluders>()?;
     m.add_function(wrap_pyfunction!(touching_boxes, m)?)?;
+    m.add_class::<ParityTris>()?;
     Ok(())
 }
 
@@ -128,4 +130,56 @@ fn touching_boxes<'py>(
         .zip(rows3(&hi_b.as_array())).collect();
     let (ii, jj) = py.detach(|| boxes::touching(&a, &b, same, eps));
     Ok((PyArray1::from_vec(py, ii), PyArray1::from_vec(py, jj)))
+}
+
+/// A packed triangle set (core.orient._PackedTris) with a ray index, for
+/// the parity queries of orientation and of the push/pull rebuild.
+#[pyclass(frozen)]
+struct ParityTris {
+    inner: parity::Tris,
+}
+
+#[pymethods]
+impl ParityTris {
+    /// ``a``/``e1``/``e2``: (N,3) vertex A and the two edge vectors;
+    /// ``face_idx``: (N,) the face of each triangle.
+    #[new]
+    fn new(
+        a: PyReadonlyArray2<'_, f64>,
+        e1: PyReadonlyArray2<'_, f64>,
+        e2: PyReadonlyArray2<'_, f64>,
+        face_idx: PyReadonlyArray1<'_, i64>,
+    ) -> PyResult<Self> {
+        let face = face_idx.as_array().to_vec();
+        Ok(Self { inner: parity::Tris::new(rows3(&a.as_array()), rows3(&e1.as_array()),
+                                           rows3(&e2.as_array()), face) })
+    }
+
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Crossings ahead of ``origin`` (3,) along each row of ``dirs`` (R,3),
+    /// over the triangles with ``mask`` True (all when None) that are not of
+    /// face ``skip``. Returns a list of R ints.
+    #[pyo3(signature = (origin, dirs, mask=None, skip=None))]
+    fn crossings(
+        &self,
+        py: Python<'_>,
+        origin: (f64, f64, f64),
+        dirs: PyReadonlyArray2<'_, f64>,
+        mask: Option<PyReadonlyArray1<'_, bool>>,
+        skip: Option<i64>,
+    ) -> PyResult<Vec<i64>> {
+        let d = rows3(&dirs.as_array());
+        let m: Option<Vec<bool>> = mask.map(|m| m.as_array().to_vec());
+        if let Some(ref mm) = m {
+            if mm.len() != self.inner.len() {
+                return Err(pyo3::exceptions::PyValueError::new_err("mask length"));
+            }
+        }
+        let inner = &self.inner;
+        let o = [origin.0, origin.1, origin.2];
+        Ok(py.detach(|| inner.crossings(o, &d, m.as_deref(), skip)))
+    }
 }
