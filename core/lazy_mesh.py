@@ -38,19 +38,34 @@ class Plan:
         return len(self.ring_counts)
 
 
-def weld(pos: np.ndarray):
+def weld(pos: np.ndarray, sequential: bool = False):
     """``(vpos, point_ids)``: what :meth:`Mesh.bulk_weld` returns on an EMPTY
-    mesh, as positions instead of vertices (same order: the vertex list)."""
+    mesh, as positions instead of vertices (same order: the vertex list).
+    ``sequential``: in the order :meth:`Mesh.vertex` called point by point
+    makes them instead — the same vertices, each where its point comes."""
+    vpos, ids, origin = _weld(pos)
+    if sequential and len(vpos):
+        order = np.argsort(origin, kind="stable")
+        rank = np.empty_like(order)
+        rank[order] = np.arange(len(order))
+        vpos, ids = vpos[order], rank[ids]
+    return vpos, ids
+
+
+def _weld(pos: np.ndarray):
+    """``(vpos, point_ids, origin)`` — the weld, and the input point each
+    vertex was made at."""
     pos = np.ascontiguousarray(pos, dtype=np.float32).astype(np.float64)
     if not len(pos):
-        return np.zeros((0, 3)), np.empty(0, dtype=np.int64)
+        return (np.zeros((0, 3)), np.empty(0, dtype=np.int64),
+                np.empty(0, dtype=np.int64))
     import core._native as _native
     if _native.native is not None and hasattr(_native.native,
                                               "weld_points"):
-        vpos, ids = _native.native.weld_points(
+        vpos, ids, origin = _native.native.weld_points(
             pos.astype(np.float32), _mesh._KEY_SCALE,
             (10.0 ** -_mesh._KEY_DECIMALS) ** 2)
-        return vpos.astype(np.float64), ids
+        return vpos.astype(np.float64), ids, origin
     keys = np.round(pos * _mesh._KEY_SCALE).astype(np.int64)
     view = np.ascontiguousarray(keys).view(
         [("x", "<i8"), ("y", "<i8"), ("z", "<i8")]).reshape(-1)
@@ -101,6 +116,8 @@ def weld(pos: np.ndarray):
     ncp = ~cand_pt
     point_ids[ncp] = cell_vid[inverse[ncp]]
     vpos = [pos[first[nc_cells]]]
+    origin = [first[nc_cells]]
+    made: list = []
     cp = np.flatnonzero(cand_pt)
     if len(cp):
         registry: dict = {}
@@ -145,19 +162,23 @@ def weld(pos: np.ndarray):
                 if vid is None:
                     vid = base + len(extra)
                     extra.append(p)
+                    made.append(i)
                     registry[k] = vid
             point_ids[i] = vid
         if extra:
             vpos.append(np.asarray(extra, dtype=np.float32)
                         .astype(np.float64))
-    return np.concatenate(vpos), point_ids
+    if made:
+        origin.append(np.asarray(made, dtype=np.int64))
+    return np.concatenate(vpos), point_ids, np.concatenate(origin)
 
 
 def plan(pos, edges, flags, curves, layers, layer_names, rings, sizes,
-         counts) -> Plan:
+         counts, sequential=False) -> Plan:
     """The built mesh of a format-3 block (already cleared of non-finite
-    points), as :class:`Plan`."""
-    vpos, inverse = weld(pos)
+    points), as :class:`Plan`. ``sequential``: built by the per-entity
+    walk (vertices in the order each one's point comes)."""
+    vpos, inverse = weld(pos, sequential)
     u = len(vpos)
     ia = inverse[edges[:, 0]] if len(edges) else np.empty(0, np.int64)
     ib = inverse[edges[:, 1]] if len(edges) else np.empty(0, np.int64)
@@ -264,7 +285,7 @@ def plan_of(mesh) -> Plan | None:
         hit = d["_deferred_plan"] = plan(
             s["pos"], s["edges"], s["flags"], s["curves"], s["layers"],
             s["meta"].get("edge_layers") or [], s["rings"], s["sizes"],
-            s["counts"])
+            s["counts"], s.get("sequential", False))
     return hit
 
 

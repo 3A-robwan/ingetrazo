@@ -2658,6 +2658,8 @@ class Viewport(QOpenGLWidget):
         from core.group import effective_material
         groups = self._placements()
         n = max(1, len(groups))
+        from views import array_bake
+        array_bake.prefetch(g.mesh for g in groups)
         last = time.monotonic()
         done: set = set()
         for i, g in enumerate(groups):

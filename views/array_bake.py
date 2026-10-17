@@ -64,6 +64,26 @@ def _geometry(mesh, plan):
     return hit
 
 
+def prefetch(meshes) -> None:
+    """Plan and face geometry of every lazy mesh in ``meshes``, side by
+    side: the weld and the kernel let go of the GIL, so the meshes of a
+    big model are worked out in parallel before the bake reads them."""
+    todo = [m for m in {id(m): m for m in meshes}.values() if can_bake(m)
+            and "_deferred_geom" not in m.__dict__]
+    if len(todo) < 2:
+        return
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+
+    def work(m):
+        try:
+            _geometry(m, lazy_mesh.plan_of(m))
+        except Exception:          # noqa: BLE001 — the bake will retry
+            pass
+    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 2)) as ex:
+        list(ex.map(work, todo))
+
+
 def _attrs_table(src):
     """Each face's own attrs dict (a fresh one per face, as Face keeps)
     is one of a few: the document's table, parsed once."""

@@ -28,10 +28,14 @@ pytestmark = pytest.mark.skipif(
 _SKIP = {"uid", "faces", "serial", "mesh", "vkey", "obb", "rev"}
 
 
-@pytest.fixture
-def lazy(monkeypatch):
-    monkeypatch.setattr(igz, "_LARGE_DOCUMENT", 0)
-    monkeypatch.setattr(igz, "_BULK_MIN", 1)
+@pytest.fixture(params=["binary", "json-walk", "json-bulk"])
+def lazy(request, monkeypatch):
+    """Lazy meshes from binary blocks, or from JSON ones read by the
+    per-entity walk or by the bulk pass."""
+    big = request.param == "binary"
+    monkeypatch.setattr(igz, "_LARGE_DOCUMENT", 0 if big else 10 ** 12)
+    monkeypatch.setattr(igz, "_BULK_MIN",
+                        10 ** 12 if request.param == "json-walk" else 1)
     monkeypatch.setattr(_native, "wanted", lambda: True)
     monkeypatch.setattr(_native, "native", _native.available())
 

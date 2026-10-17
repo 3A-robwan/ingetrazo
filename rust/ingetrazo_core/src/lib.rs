@@ -334,18 +334,19 @@ fn face_geometry<'py>(
 /// core.lazy_mesh.weld (Mesh.bulk_weld on an empty mesh): ``pos`` (N,3)
 /// float32 points, ``scale`` the weld cell (10**decimals), ``tol2`` the
 /// probe's squared distance. Returns ``(vertex positions (V,3) float32,
-/// point → vertex (N,))``.
+/// point → vertex (N,), the point each vertex was made at (V,))``.
 #[pyfunction]
 fn weld_points<'py>(
     py: Python<'py>,
     pos: PyReadonlyArray2<'_, f32>,
     scale: f64,
     tol2: f64,
-) -> PyResult<(Bound<'py, PyArray2<f32>>, Bound<'py, PyArray1<i64>>)> {
+) -> PyResult<(Bound<'py, PyArray2<f32>>, Bound<'py, PyArray1<i64>>,
+               Bound<'py, PyArray1<i64>>)> {
     let p = pos.as_array();
     let pts: Vec<[f32; 3]> = (0..p.shape()[0]).map(|i| [p[[i, 0]], p[[i, 1]], p[[i, 2]]]).collect();
-    let (vpos, ids) = py.detach(|| weld::weld(&pts, scale, tol2));
+    let (vpos, ids, origin) = py.detach(|| weld::weld(&pts, scale, tol2));
     let rows: Vec<Vec<f32>> = vpos.iter().map(|v| v.to_vec()).collect();
     let arr = if rows.is_empty() { PyArray2::zeros(py, [0, 3], false) } else { PyArray2::from_vec2(py, &rows)? };
-    Ok((arr, PyArray1::from_vec(py, ids)))
+    Ok((arr, PyArray1::from_vec(py, ids), PyArray1::from_vec(py, origin)))
 }

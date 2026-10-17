@@ -12,9 +12,10 @@ use std::collections::HashMap;
 
 type Cell = (i64, i64, i64);
 
-/// ``(vertex positions as float32, point → vertex)``, vertices in the
-/// order the mesh's vertex list would hold them.
-pub fn weld(pos: &[[f32; 3]], scale: f64, tol2: f64) -> (Vec<[f32; 3]>, Vec<i64>) {
+/// ``(vertex positions as float32, point → vertex, the point each vertex
+/// was made at)``, vertices in the order bulk_weld's vertex list holds
+/// them.
+pub fn weld(pos: &[[f32; 3]], scale: f64, tol2: f64) -> (Vec<[f32; 3]>, Vec<i64>, Vec<i64>) {
     let n = pos.len();
     let mut cell_of: Vec<Cell> = Vec::with_capacity(n);
     let mut index: HashMap<Cell, usize> = HashMap::with_capacity(n);
@@ -54,6 +55,7 @@ pub fn weld(pos: &[[f32; 3]], scale: f64, tol2: f64) -> (Vec<[f32; 3]>, Vec<i64>
     }
     // Lone cells first, in creation order: one vertex each.
     let mut vpos: Vec<[f32; 3]> = Vec::new();
+    let mut origin: Vec<i64> = Vec::new();
     let mut cell_vid = vec![-1i64; nu];
     let mut registry: HashMap<Cell, usize> = HashMap::new();
     for u in 0..nu {
@@ -61,6 +63,7 @@ pub fn weld(pos: &[[f32; 3]], scale: f64, tol2: f64) -> (Vec<[f32; 3]>, Vec<i64>
             cell_vid[u] = vpos.len() as i64;
             registry.insert(cells[u], vpos.len());
             vpos.push(pos[first[u]]);
+            origin.push(first[u] as i64);
         }
     }
     let mut ids = vec![0i64; n];
@@ -105,6 +108,7 @@ pub fn weld(pos: &[[f32; 3]], scale: f64, tol2: f64) -> (Vec<[f32; 3]>, Vec<i64>
                     None => {
                         let v = vpos.len();
                         vpos.push(p);
+                        origin.push(i as i64);
                         registry.insert(k, v);
                         v
                     }
@@ -113,5 +117,5 @@ pub fn weld(pos: &[[f32; 3]], scale: f64, tol2: f64) -> (Vec<[f32; 3]>, Vec<i64>
         };
         ids[i] = vid as i64;
     }
-    (vpos, ids)
+    (vpos, ids, origin)
 }

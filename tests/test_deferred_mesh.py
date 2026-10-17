@@ -255,3 +255,38 @@ def test_saving_a_lazy_document_is_byte_identical(binary, monkeypatch,
     assert all(type(m) is M.DeferredMesh for m in _meshes(lazy)), \
         "saving builds nothing"
     assert a.read_bytes() == b.read_bytes()
+
+
+@pytest.fixture(params=["walk", "bulk"])
+def json_doc(request, monkeypatch):
+    """A document written as JSON (no binary blocks), read back by the
+    per-entity walk or by the bulk JSON pass."""
+    monkeypatch.setattr(igz, "_LARGE_DOCUMENT", 10 ** 12)
+    monkeypatch.setattr(igz, "_BULK_MIN",
+                        10 ** 12 if request.param == "walk" else 1)
+    return request.param
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_json_meshes_defer_and_build_the_same(json_doc, monkeypatch,
+                                              tmp_path, seed):
+    from core import lazy_mesh
+    from tests.test_lazy_mesh_plan import _compare
+    path = tmp_path / "doc.igz"
+    scene = _painted_scene(seed, tmp_path)
+    for i, e in enumerate(scene.groups[-1].mesh.edges[:3]):
+        e.layer = ""                     # kept by the bulk pass only
+    igz.save_scene(scene, path)
+    eager = _open(monkeypatch, path, False)
+    lazy = _open(monkeypatch, path, True)
+    assert all(type(m) is M.DeferredMesh for m in _meshes(lazy))
+    # Saved unbuilt: the same bytes.
+    a, b = tmp_path / "a.igz", tmp_path / "b.igz"
+    igz.save_scene(eager, a)
+    igz.save_scene(lazy, b)
+    assert all(type(m) is M.DeferredMesh for m in _meshes(lazy))
+    assert a.read_bytes() == b.read_bytes()
+    # Planned = built, and built = the eager mesh.
+    for m in _meshes(lazy):
+        _compare(lazy_mesh.plan_of(m), m)
+    assert _canonical(lazy) == _canonical(eager)

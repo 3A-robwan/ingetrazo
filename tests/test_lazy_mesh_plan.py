@@ -111,3 +111,25 @@ def test_duplicate_and_shut_edges(binary, tmp_path):
     s2 = Scene()
     igz.load_into(s2, path)
     _compare(lazy_mesh.plan_of(s2.mesh), s2.mesh)
+
+
+@pytest.mark.parametrize("engine", ["numpy", "rust"])
+def test_sequential_weld_is_vertex_by_vertex(monkeypatch, engine):
+    """weld(sequential=True): the vertices Mesh.vertex makes point by point
+    — the per-entity reader's order — on points crowded at cell borders."""
+    mod = _native.available()
+    if engine == "rust" and mod is None:
+        pytest.skip("native module not built")
+    monkeypatch.setattr(_native, "native", mod if engine == "rust" else None)
+    rng = random.Random(8)
+    for _ in range(30):
+        pts = np.array([[rng.randrange(-3, 3) * 0.5 + rng.choice(
+            [0, 4.9e-5, 5.1e-5, -5e-5, 1e-6, 9.9e-5]) for _ in range(3)]
+            for _ in range(rng.randrange(1, 300))])
+        m = M.Mesh()
+        vs = [m.vertex(V(*p)) for p in pts.tolist()]
+        vpos, pid = lazy_mesh.weld(pts, sequential=True)
+        assert vpos.tolist() == [list(v.position.toTuple())
+                                 for v in m.vertices]
+        assert [id(m.vertices[i]) for i in pid.tolist()] == \
+            [id(v) for v in vs]
