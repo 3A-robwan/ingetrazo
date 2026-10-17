@@ -1238,10 +1238,27 @@ class ComponentsPanel(QWidget):
             self._in_model.addItem(item)
         if self._in_model.count() == 0:
             self._in_model.addItem(QListWidgetItem(tr("No components yet")))
+        self._mark_selected_row()
         self._in_model_filter.setVisible(
             self._in_model.count() >= self.FILTER_FROM
             or bool(self._in_model_filter.text()))
         self._apply_in_model_filter()
+
+    def _mark_selected_row(self) -> None:
+        """Light the row whose instances are what the model has selected.
+
+        A click on a row selects its instances, the selection bumps the
+        scene, and the refresh that follows rebuilt the list -- the row lit
+        for a fraction of a second and went dark (#636). Read from the
+        selection, the highlight also goes when the selection does."""
+        selected = {id(e) for e in self._window.viewport.scene.selection}
+        for i in range(self._in_model.count()):
+            item = self._in_model.item(i)
+            groups = item.data(Qt.UserRole) or []
+            if selected and {id(g) for g in groups} == selected:
+                self._in_model.setCurrentItem(item)
+                return
+        self._in_model.setCurrentItem(None)
 
     def _apply_in_model_filter(self, _text=None) -> None:
         """Hide the rows whose name does not hold the filter text (any
