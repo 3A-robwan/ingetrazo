@@ -115,3 +115,32 @@ def test_typing_typographic_inches_in_the_rectangle():
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+def test_a_comma_after_a_decimal_point_separates_the_values():  # #598
+    assert _parse("0.9,2.1", lists=True) == pytest.approx((0.9, 2.1))
+    assert _parse("0.9,2.1") == pytest.approx((0.9, 2.1))
+    assert _parse("1.5,2,5") == pytest.approx((1.5, 2.5))
+
+
+def test_typing_0_9_comma_2_1_in_the_rectangle_draws_0_9_by_2_1():  # #598
+    from views.main_window import MainWindow
+
+    win = MainWindow()
+    try:
+        vp = win.viewport
+        win._activate_tool("rectangle")
+        tool = vp.active_tool
+        tool.start_point = QVector3D(0, 0, 0)
+        tool.hover_point = QVector3D(1, 1, 0)
+        got = []
+        real = tool.on_value
+        tool.on_value = lambda v, value: (got.append(value), real(v, value))[1]
+        vp.setFocus()
+        QTest.keyClicks(vp, "0.9,2.1")
+        assert vp._value_buffer == "0.9,2.1"
+        QTest.keyClick(vp, Qt.Key_Return)
+        assert got and got[-1] == pytest.approx((0.9, 2.1))
+    finally:
+        win._saved_version = win.viewport.scene.version
+        win.close()
