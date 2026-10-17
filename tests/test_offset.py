@@ -156,7 +156,8 @@ def test_offset_value_label_and_vcb():
     vl = tool.value_label()
     assert vl is not None
     text, mid = vl
-    assert "0.50" in text or "0,50" in text or "500" in text
+    from core.units import fmt_len
+    assert text == fmt_len(abs(tool.distance))
     assert mid is not None
 
     # on_value during dragging
@@ -189,8 +190,10 @@ def test_offset_viewport_measurement_text():
     tool._ref_point = V(0, 0, 0)
     tool._ref_inward = V(0, 1, 0)
     tool.distance = 0.25
-    assert vp._measurement_text() != ""
-    assert "0.25" in vp._measurement_text() or "0,25" in vp._measurement_text()
+    # In the document's own unit and precision, whatever an earlier test
+    # left them at: the box shows what fmt_len shows.
+    from core.units import fmt_len
+    assert vp._measurement_text() == fmt_len(0.25)
 
 
 
