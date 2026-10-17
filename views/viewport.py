@@ -387,6 +387,9 @@ def _lean_instanced() -> bool:
         return _LEAN_INSTANCED
     from core import _native
     return _native.native is not None
+#: Lazy placements are filtered by core._native's spatial index before
+#: being baked for a pick (the experimental engine; tests compare both).
+_INSTANCE_FILTER = False
 #: Span lists this long are culled with NumPy (_visible_spans_np).
 _SPAN_VECTOR_MIN = 64
 #: Recorded instanced passes replayed by the native engine when it is on.
@@ -9781,6 +9784,59 @@ class Viewport(QOpenGLWidget):
         self._pick_lazy_memo = (key, table)
         return table
 
+    def _pick_instance_set(self, table):
+        """core._native's InstanceSet over the lazy placements of ``table``
+        (see _pick_lazy_table), or ``None`` without the experimental
+        engine. A prototype's index (a BVH of its pick triangles, its hard
+        edges, from its local bake) is kept while its bake is."""
+        if not _INSTANCE_FILTER:
+            return None
+        from core import _native
+        mod = _native.native
+        if mod is None or not hasattr(mod, "InstanceSet"):
+            return None
+        memo = getattr(self, "_inst_set_memo", None)
+        if memo is not None and memo[0] is table:
+            return memo[1]
+        import numpy as np
+        from core.group import effective_material
+        groups = table[0]
+        cache = getattr(self, "_inst_proto_cache", None) or {}
+        keep: dict = {}
+        by_mesh: dict = {}
+        protos: list = []
+        proto_of = np.empty(len(groups), dtype=np.int64)
+        mats = np.empty((len(groups), 16), dtype=np.float64)
+        for i, g in enumerate(groups):
+            k = by_mesh.get(id(g.mesh))
+            if k is None:
+                # Every placement of a mesh has the same triangles and hard
+                # edges, whatever its paint: one bake (the first one's).
+                base = self._proto_base_chunk(g.mesh, effective_material(g))
+                ckey = (base.get("uid"), base.get("rev"))
+                ip = cache.get(ckey)
+                if ip is None:
+                    z = np.zeros((0, 3))
+                    v0 = base.get("v0")
+                    edges = (np.frombuffer(base["edges"], dtype=np.float32)
+                             .reshape(-1, 6).astype(np.float64)
+                             if base.get("edges") else np.zeros((0, 6)))
+                    ip = mod.InstanceProto(
+                        np.ascontiguousarray(v0) if v0 is not None else z,
+                        np.ascontiguousarray(base["e1"]) if v0 is not None
+                        else z,
+                        np.ascontiguousarray(base["e2"]) if v0 is not None
+                        else z, edges)
+                keep[ckey] = ip
+                k = by_mesh[id(g.mesh)] = len(protos)
+                protos.append(ip)
+            proto_of[i] = k
+            mats[i] = g.xform.data()
+        self._inst_proto_cache = keep
+        iset = mod.InstanceSet(protos, proto_of, mats)
+        self._inst_set_memo = (table, iset)
+        return iset
+
     def _pick_materialize(self, near) -> None:
         """Bake into the pick index the lazy placements a query needs:
         ``near`` = ``None`` (around the cursor), ``("px", x, y)`` (around a
@@ -9842,6 +9898,14 @@ class Viewport(QOpenGLWidget):
                         np.array([seen[1].x(), seen[1].y(), seen[1].z()]) - o))
                     hit &= tmin <= t_vis * 1.02 + 0.05
             need = np.flatnonzero(hit)
+            iset = self._pick_instance_set(table) if len(need) else None
+            if iset is not None:
+                # Of the boxes the ray crosses, the placements whose
+                # triangles it can meet (the spatial index, with margins
+                # past the exact test's): only those are baked.
+                need = np.asarray(iset.ray_filter(
+                    need.astype(np.int64), tuple(o.tolist()),
+                    tuple(d.tolist()), reach), dtype=np.int64)
         else:
             if near is None:
                 pos = getattr(self, "_last_mouse_pos", None)
@@ -9868,6 +9932,18 @@ class Viewport(QOpenGLWidget):
                     near_pt = np.clip(e, lo[need], hi[need])
                     dist = np.linalg.norm(near_pt - e, axis=1)
                     need = need[dist <= far]
+                iset = self._pick_instance_set(table) if len(need) else None
+                if iset is not None:
+                    # Of the boxes near the cursor, the placements with a
+                    # hard edge within the farthest reach a snap measures
+                    # or a triangle within the footprint (with margins).
+                    M = self._np_mvp()
+                    need = np.asarray(iset.screen_filter(
+                        need.astype(np.int64),
+                        np.ascontiguousarray(M.T).ravel().tolist(),
+                        float(self.width()), float(self.height()), x, y,
+                        Viewport.GEDGE_REACH_PX + 2.0,
+                        self._PICK_NEAR_PX + 2.0), dtype=np.int64)
                 self._pick_near_memo = (ckey, need)
         new = [int(i) for i in need if id(groups[int(i)]) not in live]
         if len(new) > self._PICK_NEW_PER_QUERY and near != "all":
@@ -10051,7 +10127,7 @@ class Viewport(QOpenGLWidget):
                               chunk["e1"], chunk["e2"],
                               chunk["tri_ent"], off))
             elif chunk["v0"] is not None:
-                static_key.append((id(chunk), chunk.get("rev"), off))
+                static_key.append((chunk.get("uid", id(chunk)), chunk.get("rev"), off))
                 v0, e1, e2, te, cells = _split_chunk_spans(chunk)
                 b_v0.append(v0)
                 b_e1.append(e1)
@@ -10601,7 +10677,11 @@ class Viewport(QOpenGLWidget):
                origin.x(), origin.y(), origin.z(),
                direction.x(), direction.y(), direction.z())
         cached = getattr(self, "_hover_hits_cache", None)
-        if cached is not None and cached[0] == key:
+        # The answer is per entity OF THIS INDEX: a lazy index (#158) is
+        # rebuilt between two asks of one hover when a query brings new
+        # placements in, and the old index's per-entity times read against
+        # the new one picked the wrong face, or ran past its end.
+        if cached is not None and cached[0] == key and cached[2] is idx:
             return cached[1]
         face_t = self._ray_hits(idx, origin, direction, idx.ent_sel)
         sp = _active_cut(self.scene)
@@ -10619,7 +10699,7 @@ class Viewport(QOpenGLWidget):
                 vals = face_t[finite]
                 vals[hidden] = np.inf
                 face_t[finite] = vals
-        self._hover_hits_cache = (key, face_t)
+        self._hover_hits_cache = (key, face_t, idx)
         return face_t
 
     def edge_point_under_cursor(self, edge, screen_x: float, screen_y: float):
@@ -10842,12 +10922,15 @@ class Viewport(QOpenGLWidget):
                self.width(), self.height(),
                getattr(self, "_edit_rest_mode", None))
         cached = getattr(self, "_gedge_px_cache", None)
-        if cached is not None and cached[0] == key:
+        # The array itself, not only its id(): a rebuilt index's edges can
+        # be given the address of the ones they replaced.
+        if (cached is not None and cached[0] == key and len(cached) > 2
+                and cached[2] is idx.gedge_a):
             return cached[1]
         ax, ay, oka = self._project_px(idx.gedge_a)
         bx, by, okb = self._project_px(idx.gedge_b)
         data = (ax, ay, bx, by, oka & okb)
-        self._gedge_px_cache = (key, data)
+        self._gedge_px_cache = (key, data, idx.gedge_a)
         return data
 
     #: The group-edge distances' contract with their two readers (the
@@ -10886,7 +10969,8 @@ class Viewport(QOpenGLWidget):
         # the snap scene the rounded one — the same pass must serve both.
         key = (id(proj), int(round(px)), int(round(py)))
         cached = getattr(self, "_gedge_dist_cache", None)
-        if cached is not None and cached[0] == key:
+        if (cached is not None and cached[0] == key and len(cached) > 2
+                and cached[2] is proj):
             return cached[1]
         ax, ay, bx, by, ok = proj
         d = None
@@ -10917,7 +11001,7 @@ class Viewport(QOpenGLWidget):
                         break
         if d is None:
             d = segment_distances(ax, ay, bx, by, ok, px, py)
-        self._gedge_dist_cache = (key, d)
+        self._gedge_dist_cache = (key, d, proj)
         return d
 
     def _ledge_screen(self):
@@ -12118,7 +12202,10 @@ class Viewport(QOpenGLWidget):
         except AttributeError:            # a bare stand-in (tests): no memo
             key = None
         cached = getattr(self, "_face_any_memo", None)
-        if key is not None and cached is not None and cached[0] == key:
+        # Keyed by the index itself, not its id(): a rebuilt index can be
+        # given the address of the one it replaced.
+        if (key is not None and cached is not None and cached[0] == key
+                and len(cached) > 2 and cached[2] is idx):
             return cached[1]
         result = (None, None)
         origin, direction = self._pixel_to_ray(screen_x, screen_y)
@@ -12137,7 +12224,7 @@ class Viewport(QOpenGLWidget):
                     result = idx.entities[chosen]
                     self._face_any_index = chosen
         if key is not None:
-            self._face_any_memo = (key, result)
+            self._face_any_memo = (key, result, idx)
         return result
 
     def pick_face_placement(self, screen_x: float, screen_y: float):
