@@ -11504,6 +11504,22 @@ class Viewport(QOpenGLWidget):
                 best = name
         return best
 
+    def _axis_source_visible(self, name: str, point: QVector3D) -> bool:
+        """Whether an axis has a visible screen direction at ``point``.
+
+        An axis viewed end-on has no usable screen direction; near its
+        vanishing point a small world step must still move visibly on screen.
+        """
+        from core import axes as _axes
+        axis = _axes.axis(name)
+        half_step = 0.25
+        before = self._world_to_pixel(point - axis * half_step)
+        after = self._world_to_pixel(point + axis * half_step)
+        if before is None or after is None:
+            return False
+        return math.hypot(after[0] - before[0],
+                          after[1] - before[1]) >= 0.5
+
     def pick_guide(self, screen_x: float, screen_y: float):
         """Return the construction guide nearest the cursor within the pick
         threshold, or ``None`` (for the Eraser)."""
