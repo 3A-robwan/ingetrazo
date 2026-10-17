@@ -12,6 +12,7 @@ use pyo3::prelude::*;
 
 mod boxes;
 mod facegeom;
+mod gltape;
 mod hlr;
 mod parity;
 mod weld;
@@ -25,6 +26,7 @@ fn ingetrazo_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(face_geometry, m)?)?;
     m.add_function(wrap_pyfunction!(qt_vector_probe, m)?)?;
     m.add_function(wrap_pyfunction!(weld_points, m)?)?;
+    m.add_class::<GlReplay>()?;
     Ok(())
 }
 
@@ -349,4 +351,42 @@ fn weld_points<'py>(
     let rows: Vec<Vec<f32>> = vpos.iter().map(|v| v.to_vec()).collect();
     let arr = if rows.is_empty() { PyArray2::zeros(py, [0, 3], false) } else { PyArray2::from_vec2(py, &rows)? };
     Ok((arr, PyArray1::from_vec(py, ids), PyArray1::from_vec(py, origin)))
+}
+
+/// A recorded run of OpenGL calls, replayed through the current context's
+/// entry points (views.viewport._GlTape): ``GlReplay(addrs)`` with the
+/// eleven entry points in opcode order (glDrawArraysInstanced,
+/// glBindVertexArray, glUniform1i, glUniform1f, glUniform4f, glEnable,
+/// glDisable, glCullFace, glFrontFace, glActiveTexture, glBindTexture).
+#[pyclass(frozen)]
+struct GlReplay {
+    tape: gltape::Tape,
+}
+
+#[pymethods]
+impl GlReplay {
+    #[new]
+    fn new(addrs: Vec<usize>) -> PyResult<Self> {
+        gltape::Tape::new(&addrs)
+            .map(|tape| Self { tape })
+            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing GL entry point"))
+    }
+
+    /// Run ``ops`` (R,5) int64 ``[opcode, a, b, c, d]`` with ``vals`` (R,4)
+    /// float32. The GL context the entry points came from must be current.
+    fn run(&self, ops: PyReadonlyArray2<'_, i64>, vals: PyReadonlyArray2<'_, f32>) -> PyResult<usize> {
+        let o = ops.as_array();
+        let v = vals.as_array();
+        if o.shape()[1] != 5 || v.shape()[1] != 4 || o.shape()[0] != v.shape()[0] {
+            return Err(pyo3::exceptions::PyValueError::new_err("tape shape"));
+        }
+        let rows: Vec<[i64; 5]> = (0..o.shape()[0])
+            .map(|r| [o[[r, 0]], o[[r, 1]], o[[r, 2]], o[[r, 3]], o[[r, 4]]]).collect();
+        let fl: Vec<[f32; 4]> = (0..v.shape()[0])
+            .map(|r| [v[[r, 0]], v[[r, 1]], v[[r, 2]], v[[r, 3]]]).collect();
+        // SAFETY: the viewport calls this inside paintGL, its context
+        // current, with a tape it recorded from its own calls.
+        unsafe { self.tape.run(&rows, &fl) }
+            .map_err(|r| pyo3::exceptions::PyValueError::new_err(format!("bad opcode at {r}")))
+    }
 }

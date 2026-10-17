@@ -378,6 +378,92 @@ _chunk_uid = itertools.count(1)
 
 #: The state-tracking instanced faces pass (tests draw both ways).
 _LEAN_INSTANCED = True
+#: Recorded instanced passes replayed by the native engine when it is on.
+_LEAN_NATIVE_REPLAY = True
+
+
+class _GlTape:
+    """A recorded run of GL calls: each one is made at once (through the
+    PySide wrapper, as ever) and kept twice — as the wrapper call, and as
+    the raw GL call that wrapper makes, for core._native's GlReplay. A
+    replay runs the raw list natively when the engine is there, else the
+    wrapper calls."""
+
+    DRAW, VAO, U1I, U1F, U4F, ENABLE, DISABLE, CULL, FRONT, ACTIVE, TEX = \
+        range(11)
+
+    def __init__(self):
+        self.calls: list = []
+        self.ops: list = []
+        self.vals: list = []
+        self.arrays = None
+
+    def _op(self, code, ints=(), floats=()):
+        self.ops.append((code, *ints, *(0,) * (4 - len(ints))))
+        self.vals.append((*floats, *(0.0,) * (4 - len(floats))))
+
+    def call(self, fn, *args):
+        self.calls.append((fn, args))
+        fn(*args)
+
+    def draw(self, fn, mode, first, count, n):
+        self.call(fn, mode, first, count, n)
+        self._op(self.DRAW, (mode, first, count, n))
+
+    def bind_vao(self, vao):
+        self.call(vao.bind)
+        self._op(self.VAO, (vao.objectId(),))
+
+    def release_vao(self, vao):
+        self.call(vao.release)
+        self._op(self.VAO, (0,))
+
+    def uniform_i(self, prog, loc, v):
+        self.call(prog.setUniformValue, loc, v)
+        self._op(self.U1I, (loc, int(v)))
+
+    def uniform_f(self, prog, loc, v):
+        self.call(prog.setUniformValue1f, loc, v)
+        self._op(self.U1F, (loc,), (float(v),))
+
+    def uniform_4f(self, prog, loc, vec):
+        self.call(prog.setUniformValue, loc, vec)
+        self._op(self.U4F, (loc,), (vec.x(), vec.y(), vec.z(), vec.w()))
+
+    def gl(self, fn, code, value):
+        self.call(fn, value)
+        self._op(code, (value,))
+
+    def tex_bind(self, tex, unit):
+        # QOpenGLTexture::bind(unit): active unit, then bind (not reset).
+        self.call(tex.bind, unit)
+        self._op(self.ACTIVE, (GL_TEXTURE0 + unit,))
+        self._op(self.TEX, (tex.target().value, tex.textureId()))
+
+    def tex_release(self, tex, unit):
+        self.call(tex.release, unit)
+        self._op(self.ACTIVE, (GL_TEXTURE0 + unit,))
+        self._op(self.TEX, (tex.target().value, 0))
+
+    def replay(self, native) -> None:
+        if native is not None:
+            if self.arrays is None:
+                import numpy as np
+                self.arrays = (np.asarray(self.ops, dtype=np.int64)
+                               .reshape(-1, 5),
+                               np.asarray(self.vals, dtype=np.float32)
+                               .reshape(-1, 4))
+            native.run(*self.arrays)
+            return
+        for fn, args in self.calls:
+            fn(*args)
+
+
+#: The GL entry points GlReplay calls, in _GlTape's opcode order.
+_TAPE_FUNCS = (b"glDrawArraysInstanced", b"glBindVertexArray",
+               b"glUniform1i", b"glUniform1f", b"glUniform4f", b"glEnable",
+               b"glDisable", b"glCullFace", b"glFrontFace",
+               b"glActiveTexture", b"glBindTexture")
 
 
 class _InstanceBatch(list):
@@ -3097,6 +3183,13 @@ class Viewport(QOpenGLWidget):
         batches (an orbit mostly keeps them) replays the list as is."""
         prog = self._program
         gl = self._gl
+        # Hand the frame's work so far to the driver first. Fed thousands
+        # of draws back to back, Mesa's Intel driver let an edge pixel
+        # beside a face come out either way from one frame to the next
+        # (1 pixel in ~7 frames on the plant of #158); the general loop's
+        # pace hid it, and a flush here — which does not wait for the GPU —
+        # makes every frame the same as that loop's.
+        gl.glFlush()
         back_rgb = effective_back_color(
             getattr(self.scene, "display_style", None), self.scene)
         key = (mode, tuple(back_rgb), id(getattr(self, "_tex_cache", None)),
@@ -3104,18 +3197,16 @@ class Viewport(QOpenGLWidget):
         rec = getattr(self, "_lean_faces_rec", None)
         if (rec is not None and rec[0] == key and rec[1] is by_proto
                 and all(e.get("mat_batch") is b for e, b in rec[2])):
-            for fn, args in rec[3]:
-                fn(*args)
+            rec[3].replay(self._gl_replay())
             return
-        ops: list = []
+        tape = _GlTape()
         pairs: list = []
-
-        def emit(fn, *args):
-            ops.append((fn, args))
-            fn(*args)
         back_vec = QVector4D(back_rgb[0], back_rgb[1], back_rgb[2], 1.0)
+        # What the general loop never relies on is unknown on entry (None:
+        # the first use sets it); the cull and textures switches are off
+        # between passes, as that loop assumes too.
         state = {"fade": None, "vcol": None, "back": False, "cull": False,
-                 "front": None, "tex": 0, "shade": 1.0, "cut": 0}
+                 "front": None, "tex": 0, "shade": None, "cut": None}
 
         def need(key_, value, apply):
             if state[key_] != value:
@@ -3123,35 +3214,35 @@ class Viewport(QOpenGLWidget):
                 state[key_] = value
 
         def set_vcol(v):
-            emit(prog.setUniformValue, self._loc_use_vcolor, v)
+            tape.uniform_i(prog, self._loc_use_vcolor, v)
 
         def set_cull(on):
             if on:
-                emit(gl.glEnable, GL_CULL_FACE)
-                emit(gl.glCullFace, GL_FRONT)
+                tape.gl(gl.glEnable, tape.ENABLE, GL_CULL_FACE)
+                tape.gl(gl.glCullFace, tape.CULL, GL_FRONT)
             else:
-                emit(gl.glDisable, GL_CULL_FACE)
+                tape.gl(gl.glDisable, tape.DISABLE, GL_CULL_FACE)
 
         def set_shade(v):
-            emit(prog.setUniformValue1f, self._loc_shade, float(v))
+            tape.uniform_f(prog, self._loc_shade, float(v))
 
         def set_tex(v):
-            emit(prog.setUniformValue, self._loc_use_tex, v)
+            tape.uniform_i(prog, self._loc_use_tex, v)
 
         def set_cut(v):
-            emit(prog.setUniformValue, self._loc_hard_cutout, v)
+            tape.uniform_i(prog, self._loc_hard_cutout, v)
 
         def set_front(mirrored):
-            emit(gl.glFrontFace, GL_CW if mirrored else GL_CCW)
+            tape.gl(gl.glFrontFace, tape.FRONT, GL_CW if mirrored else GL_CCW)
 
         def set_fade(v):
-            emit(prog.setUniformValue1f, self._loc_fade, v)
+            tape.uniform_f(prog, self._loc_fade, v)
 
         def set_color(r, g, b):
             # _set_color: the colour, and the back kept in step.
             v = QVector4D(r, g, b, 1.0)
-            emit(prog.setUniformValue, self._loc_color, v)
-            emit(prog.setUniformValue, self._loc_back_color, v)
+            tape.uniform_4f(prog, self._loc_color, v)
+            tape.uniform_4f(prog, self._loc_back_color, v)
         bound = None
         back_tint = not _NO_BACK_TINT
         cacheable = True
@@ -3173,24 +3264,23 @@ class Viewport(QOpenGLWidget):
                     need("cull", False, set_cull)
                     need("vcol", 1, set_vcol)
                     if not state["back"]:
-                        emit(prog.setUniformValue, self._loc_back_color,
-                             back_vec)
+                        tape.uniform_4f(prog, self._loc_back_color, back_vec)
                         state["back"] = True
                     bound = entry["vcol_vao"]
-                    emit(bound.bind)
-                    emit(draw, GL_TRIANGLES, 0, entry["vcol_count"], n)
+                    tape.bind_vao(bound)
+                    tape.draw(draw, GL_TRIANGLES, 0, entry["vcol_count"], n)
                 if entry["tex_runs"]:
                     need("cull", False, set_cull)
                     need("vcol", 0, set_vcol)
                     bound = entry["tex_vao"]
-                    emit(bound.bind)
+                    tape.bind_vao(bound)
                     if mode == "shaded":
                         for (path, shade), s0, cnt in entry["tex_runs"]:
                             r, g, b = self._texture_avg_color(path)
                             need("shade", float(shade), set_shade)
                             set_color(r, g, b)
                             state["back"] = False
-                            emit(draw, GL_TRIANGLES, s0, cnt, n)
+                            tape.draw(draw, GL_TRIANGLES, s0, cnt, n)
                     else:
                         need("tex", 1, set_tex)
                         for (path, shade), s0, cnt in entry["tex_runs"]:
@@ -3200,9 +3290,9 @@ class Viewport(QOpenGLWidget):
                             need("shade", float(shade), set_shade)
                             need("cut", 1 if getattr(tex, "_cutout", False)
                                  else 0, set_cut)
-                            emit(tex.bind, 0)
-                            emit(draw, GL_TRIANGLES, s0, cnt, n)
-                            emit(tex.release, 0)
+                            tape.tex_bind(tex, 0)
+                            tape.draw(draw, GL_TRIANGLES, s0, cnt, n)
+                            tape.tex_release(tex, 0)
                         need("cut", 0, set_cut)
                         need("tex", 0, set_tex)
                     need("shade", 1.0, set_shade)
@@ -3210,15 +3300,18 @@ class Viewport(QOpenGLWidget):
                     need("cull", True, set_cull)
                     need("vcol", 0, set_vcol)
                     bound = entry["dback_vao"]
-                    emit(bound.bind)
-                    emit(draw, GL_TRIANGLES, 0, entry["dback_count"], n)
+                    tape.bind_vao(bound)
+                    tape.draw(draw, GL_TRIANGLES, 0, entry["dback_count"], n)
         if bound is not None:
-            emit(bound.release)
+            tape.release_vao(bound)
         need("cull", False, set_cull)
-        need("vcol", 0, set_vcol)
-        need("shade", 1.0, set_shade)
-        need("front", False, set_front)
-        self._lean_faces_rec = ((key, by_proto, pairs, ops) if cacheable
+        if state["vcol"] is not None:
+            need("vcol", 0, set_vcol)
+        if state["shade"] is not None:
+            need("shade", 1.0, set_shade)
+        if state["front"] is not None:
+            need("front", False, set_front)
+        self._lean_faces_rec = ((key, by_proto, pairs, tape) if cacheable
                                 else None)
 
     def _draw_instanced_faces(self, mode, style) -> None:
@@ -3393,16 +3486,11 @@ class Viewport(QOpenGLWidget):
         rec = getattr(self, "_lean_edges_rec", None)
         if (rec is not None and rec[0] == key and rec[1] is by_proto
                 and all(e.get("mat_batch") is b for e, b in rec[2])):
-            for fn, args in rec[3]:
-                fn(*args)
+            rec[3].replay(self._gl_replay())
             return
-        ops: list = []
+        tape = _GlTape()
         pairs: list = []
         cacheable = True
-
-        def emit(fn, *args):
-            ops.append((fn, args))
-            fn(*args)
         fade_now = None
         bound = None
         draw = extra.glDrawArraysInstanced
@@ -3420,16 +3508,38 @@ class Viewport(QOpenGLWidget):
                 else:
                     cacheable = False
                 if fade != fade_now:
-                    emit(prog.setUniformValue1f, self._loc_fade, fade)
+                    tape.uniform_f(prog, self._loc_fade, fade)
                     fade_now = fade
                 bound = entry["edges_vao"]
-                emit(bound.bind)
-                emit(draw, GL_LINES, 0, entry["edge_count"], n)
+                tape.bind_vao(bound)
+                tape.draw(draw, GL_LINES, 0, entry["edge_count"], n)
         if bound is not None:
-            emit(bound.release)
-        emit(prog.setUniformValue1f, self._loc_fade, 0.0)
-        self._lean_edges_rec = ((key, by_proto, pairs, ops) if cacheable
+            tape.release_vao(bound)
+        tape.uniform_f(prog, self._loc_fade, 0.0)
+        self._lean_edges_rec = ((key, by_proto, pairs, tape) if cacheable
                                 else None)
+
+    def _gl_replay(self):
+        """core._native's GlReplay for this viewport's GL context (the
+        experimental engine), or ``None``: tapes then replay through the
+        PySide wrappers."""
+        if not _LEAN_NATIVE_REPLAY:
+            return None
+        ctx = self.context()
+        memo = getattr(self, "_gl_replay_memo", None)
+        if memo is not None and memo[0] is ctx:
+            return memo[1]
+        replay = None
+        from core import _native
+        mod = _native.native
+        if mod is not None and hasattr(mod, "GlReplay") and ctx is not None:
+            try:
+                replay = mod.GlReplay([int(ctx.getProcAddress(n) or 0)
+                                       for n in _TAPE_FUNCS])
+            except Exception:  # noqa: BLE001 — a missing entry: Python
+                replay = None
+        self._gl_replay_memo = (ctx, replay)
+        return replay
 
     def _draw_instanced_edges(self) -> None:
         by_proto = getattr(self, "_frame_instanced", None)
