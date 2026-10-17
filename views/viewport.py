@@ -4093,6 +4093,20 @@ class Viewport(QOpenGLWidget):
         self._fbo_size = (0, 0)
         if getattr(self, "_proto_draw", None):
             self._proto_draw = {}
+        self._forget_frame_records()
+
+    def _forget_frame_records(self) -> None:
+        """Drop the recorded instanced passes, the native replayer and the
+        frame's batches. A tape holds the context's own function tables
+        (``extraFunctions()``): kept past the context, PySide handed that
+        stale wrapper back for a NEW object made at the same address — a
+        later viewport's ``context()`` came back as a QOpenGLExtraFunctions
+        and initializeGL failed (1 test run in ~10)."""
+        for name in ("_lean_faces_rec", "_lean_edges_rec",
+                     "_gl_replay_memo", "_inst_frame_memo",
+                     "_frame_instanced"):
+            if getattr(self, name, None) is not None:
+                setattr(self, name, None)
 
     def release_gl_textures(self) -> None:
         """Free every GL texture while the context can still take them back.
@@ -4102,6 +4116,7 @@ class Viewport(QOpenGLWidget):
         leaked with a "Texture has not been destroyed" warning each (harmless
         at process exit, real if the context is ever torn down and recreated
         mid-session, e.g. on reparenting)."""
+        self._forget_frame_records()
         self.makeCurrent()
         try:
             cache = getattr(self, "_tex_cache", None)
