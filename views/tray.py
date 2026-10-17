@@ -1153,6 +1153,10 @@ class ComponentsPanel(QWidget):
         self._in_model.setContextMenuPolicy(Qt.CustomContextMenu)
         self._in_model.customContextMenuRequested.connect(
             self._in_model_menu)
+        # Pictures are drawn for the rows on screen only: a plant of 1 815
+        # components drew all of them at every refresh (#158).
+        self._in_model.verticalScrollBar().valueChanged.connect(
+            self._schedule_thumbs)
         lay.addWidget(self._in_model)
         # The definitions of another document, kept here unplaced: a
         # library drawn from a file of one's own.
@@ -1180,10 +1184,11 @@ class ComponentsPanel(QWidget):
             if not g.is_component() or getattr(g, "billboard", False):
                 continue
             by_proto.setdefault(id(g.mesh), []).append(g)
-        rows = [(gs[0].name, len(gs[0].mesh.faces), gs,
+        from core.mesh import face_count
+        rows = [(gs[0].name, face_count(gs[0].mesh), gs,
                  kept_template(scene, gs[0].mesh))
                 for gs in by_proto.values()]
-        rows += [(t.name, len(t.mesh.faces), [], t)
+        rows += [(t.name, face_count(t.mesh), [], t)
                  for t in getattr(scene, "kept_components", None) or ()
                  if id(t.mesh) not in by_proto]
         rows.sort(key=lambda r: (-len(r[2]), (r[0] or "").lower()))
@@ -1232,7 +1237,7 @@ class ComponentsPanel(QWidget):
             if kept is not None:
                 label += "  · " + tr("kept")
             item = QListWidgetItem(label)
-            item.setIcon(QIcon(thumbnail(gs[0] if gs else kept)))
+            item.setIcon(self._blank_thumb())
             item.setData(Qt.UserRole, gs)
             item.setData(Qt.UserRole + 1, kept)
             self._in_model.addItem(item)
@@ -1243,6 +1248,44 @@ class ComponentsPanel(QWidget):
             self._in_model.count() >= self.FILTER_FROM
             or bool(self._in_model_filter.text()))
         self._apply_in_model_filter()
+        self._schedule_thumbs()
+
+    def _blank_thumb(self) -> QIcon:
+        icon = getattr(self, "_blank_icon", None)
+        if icon is None:
+            from views.component_thumbs import SIZE as _THUMB
+            pm = QPixmap(_THUMB, _THUMB)
+            pm.fill(Qt.transparent)
+            icon = self._blank_icon = QIcon(pm)
+        return icon
+
+    def _schedule_thumbs(self, _value=None) -> None:
+        """Draw the pictures of the rows now on screen, once the list has
+        laid itself out (a scroll, a refresh, a filter, a resize)."""
+        timer = getattr(self, "_thumbs_timer", None)
+        if timer is None:
+            from PySide6.QtCore import QTimer
+            timer = self._thumbs_timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(self._draw_visible_thumbs)
+        timer.start(0)
+
+    def _draw_visible_thumbs(self) -> None:
+        from views.component_thumbs import thumbnail
+        lst = self._in_model
+        area = lst.viewport().rect()
+        for i in range(lst.count()):
+            item = lst.item(i)
+            if item.isHidden() or item.data(Qt.UserRole + 2):
+                continue
+            if not lst.visualItemRect(item).intersects(area):
+                continue
+            groups = item.data(Qt.UserRole) or []
+            definition = groups[0] if groups else item.data(Qt.UserRole + 1)
+            if definition is None:
+                continue
+            item.setIcon(QIcon(thumbnail(definition)))
+            item.setData(Qt.UserRole + 2, True)
 
     def _mark_selected_row(self) -> None:
         """Light the row whose instances are what the model has selected.
@@ -1274,6 +1317,7 @@ class ComponentsPanel(QWidget):
             item.setHidden(bool(needle) and definition is not None
                            and needle not in name.casefold())
         fit_rows(self._in_model, max_rows=12)
+        self._schedule_thumbs()
 
     def _select_component(self, item) -> None:
         groups = item.data(Qt.UserRole)

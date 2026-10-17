@@ -1501,6 +1501,25 @@ def _load_geometry(mesh, meta, geom: dict) -> None:
         face_attr = face_attr[~face_bad]
     if not len(pos) or not (len(edges) or len(counts)):
         return
+    if curves is not None and curves.size:
+        top = int(curves.max())
+        if top >= _mesh_mod._CURVE_COUNTER:
+            _mesh_mod._CURVE_COUNTER = top + 1
+
+    def build(mesh):
+        _build_geometry(mesh, meta, pos, edges, flags, curves, layers,
+                        rings, sizes, counts, face_attr)
+    from core import _native
+    if not (_native.wanted()
+            and _mesh_mod.DeferredMesh.defer(mesh, build, len(counts))):
+        build(mesh)
+
+
+def _build_geometry(mesh, meta, pos, edges, flags, curves, layers, rings,
+                    sizes, counts, face_attr) -> None:
+    """The objects of a format-3 block: :func:`_load_geometry`'s second
+    half, run at once or, for a lazy mesh, on its first touch."""
+    import numpy as np
 
     vobjs, inverse = mesh.bulk_weld(pos.astype(np.float64))
     emap = None
@@ -1516,10 +1535,6 @@ def _load_geometry(mesh, meta, geom: dict) -> None:
                   else [-1] * len(edges))
             eflags = [(s, c if c >= 0 else None, names[l] if l >= 0 else None,
                        h) for s, c, l, h in zip(soft, cl, ll, hidden)]
-            if curves is not None and curves.size:
-                top = int(curves.max())
-                if top >= _mesh_mod._CURVE_COUNTER:
-                    _mesh_mod._CURVE_COUNTER = top + 1
         emap = mesh.add_edges_welded(vobjs, inverse[edges[:, 0]],
                                      inverse[edges[:, 1]], eflags)
     if len(counts):

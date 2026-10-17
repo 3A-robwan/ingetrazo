@@ -1624,6 +1624,67 @@ class Mesh:
         return merged_face
 
 
+
+def _deferred_state(name):
+    def get(self):
+        self._materialize()
+        return getattr(self, name)
+
+    def put(self, value):
+        self._materialize()
+        setattr(self, name, value)
+    return property(get, put)
+
+
+class DeferredMesh(Mesh):
+    """A mesh read from a document whose vertices, edges and faces are not
+    built yet (the experimental engine's lazy meshes): the first touch of
+    any of them builds them, with the very code an eager read runs, and
+    turns the object back into a plain :class:`Mesh`. A big model whose
+    groups are only looked at never pays for millions of Python objects.
+
+    :meth:`defer` only takes an EMPTY mesh, so the deferred build welds
+    against the same empty registry the eager one would."""
+
+    vertices = _deferred_state("vertices")
+    edges = _deferred_state("edges")
+    faces = _deferred_state("faces")
+    _registry = _deferred_state("_registry")
+    _displaced = _deferred_state("_displaced")
+
+    @staticmethod
+    def defer(mesh: Mesh, build, nfaces: int) -> bool:
+        """Turn ``mesh`` into a deferred one that runs ``build(mesh)`` on
+        first touch and makes exactly ``nfaces`` faces; False (nothing
+        done) unless it is a plain empty mesh."""
+        d = mesh.__dict__
+        if (type(mesh) is not Mesh or d["vertices"] or d["edges"]
+                or d["faces"] or d["_registry"]):
+            return False
+        d["_deferred"] = build
+        d["_deferred_nfaces"] = nfaces
+        mesh.__class__ = DeferredMesh
+        return True
+
+    def _materialize(self) -> None:
+        build = self.__dict__.pop("_deferred")
+        del self.__dict__["_deferred_nfaces"]
+        self.__class__ = Mesh
+        build(self)
+
+    def __reduce_ex__(self, protocol):
+        # deepcopy / pickle copy the built mesh, never the pending build.
+        self._materialize()
+        return self.__reduce_ex__(protocol)
+
+
+def face_count(mesh) -> int:
+    """``len(mesh.faces)``, without building a deferred mesh to learn it."""
+    if type(mesh) is DeferredMesh:
+        return mesh.__dict__["_deferred_nfaces"]
+    return len(mesh.faces)
+
+
 def turn_face_over(face) -> None:
     """Reverse ``face``'s winding for the automatic orientation passes —
     which must not move paint from one side of a wall to the other.
