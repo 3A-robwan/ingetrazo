@@ -2956,5 +2956,7 @@
  "Drag up or down to zoom in or out.": "Arrastra hacia arriba o abajo para acercar o alejar.",
  "Drag a box to zoom to that region.": "Arrastra un recuadro para ampliar esa zona.",
  "{d} runs into a hole of this face — try a smaller offset": "{d} se mete en un hueco de esta cara: prueba una equidistancia menor",
- "Click a face and move.": "Clic en una cara y mueve."
+ "Click a face and move.": "Clic en una cara y mueve.",
+ "Install an unreviewed extension?": "¿Instalar una extensión sin revisar?",
+ "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "Nadie que mantiene IngeTrazo ha revisado «{name}».\n\nLas extensiones son código Python: una vez instalada, se ejecuta con tus permisos y puede leer o modificar tus archivos. Instálala solo si confías en su autor ({author})."
 }

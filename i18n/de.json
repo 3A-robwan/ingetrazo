@@ -2956,5 +2956,7 @@
  "Soft, hidden or layer": "Glättung, Ausblendung oder Ebene",
  "Curve": "Kurve",
  "{d} runs into a hole of this face — try a smaller offset": "{d} reicht in eine Öffnung dieser Fläche – versuchen Sie einen kleineren Versatz",
- "Click a face and move.": "Klicke eine Fläche an und bewege."
+ "Click a face and move.": "Klicke eine Fläche an und bewege.",
+ "Install an unreviewed extension?": "Ungeprüfte Erweiterung installieren?",
+ "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» wurde von niemandem aus dem IngeTrazo-Team geprüft.\n\nErweiterungen sind Python-Code: Einmal installiert, läuft sie mit deinen Rechten und kann deine Dateien lesen oder ändern. Installiere sie nur, wenn du ihrem Autor vertraust ({author})."
 }

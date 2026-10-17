@@ -2957,5 +2957,7 @@
  "Click a face and move.": "点击一个面并移动。",
  "Zoom Window": "窗口缩放",
  "Drag up or down to zoom in or out.": "上下拖动以放大或缩小。",
- "Drag a box to zoom to that region.": "拖出一个框以缩放到该区域。"
+ "Drag a box to zoom to that region.": "拖出一个框以缩放到该区域。",
+ "Install an unreviewed extension?": "安装未经审核的扩展？",
+ "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» 尚未经过 IngeTrazo 维护者审核。\n\n扩展是 Python 代码：安装后，它会以你的权限运行，并且可以读取或修改你的文件。只有在信任其作者（{author}）时才安装。"
 }

@@ -2956,5 +2956,7 @@
  "Curve": "Courbe",
  "Zoom Window": "Zoom fenêtre",
  "Drag up or down to zoom in or out.": "Faites glisser vers le haut ou le bas pour zoomer ou dézoomer.",
- "Drag a box to zoom to that region.": "Tracez un cadre pour zoomer sur cette zone."
+ "Drag a box to zoom to that region.": "Tracez un cadre pour zoomer sur cette zone.",
+ "Install an unreviewed extension?": "Installer une extension non vérifiée ?",
+ "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» n’a été vérifiée par aucun mainteneur d’IngeTrazo.\n\nLes extensions sont du code Python : une fois installée, elle s’exécute avec vos droits et peut lire ou modifier vos fichiers. Ne l’installez que si vous faites confiance à son auteur ({author})."
 }

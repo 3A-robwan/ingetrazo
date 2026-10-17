@@ -2964,5 +2964,7 @@
  "Curve": "Krzywa",
  "Zoom Window": "Powiększ okno",
  "Drag up or down to zoom in or out.": "Przeciągnij w górę lub w dół, aby przybliżyć lub oddalić.",
- "Drag a box to zoom to that region.": "Zaznacz prostokąt, aby powiększyć ten obszar."
+ "Drag a box to zoom to that region.": "Zaznacz prostokąt, aby powiększyć ten obszar.",
+ "Install an unreviewed extension?": "Zainstalować niesprawdzone rozszerzenie?",
+ "«{name}» has not been reviewed by an IngeTrazo maintainer.\n\nExtensions are Python code: once installed it runs with your permissions and can read or change your files. Install it only if you trust its author ({author}).": "«{name}» nie zostało sprawdzone przez opiekunów IngeTrazo.\n\nRozszerzenia to kod Python: po zainstalowaniu działa z twoimi uprawnieniami i może odczytywać lub zmieniać twoje pliki. Zainstaluj je tylko, jeśli ufasz jego autorowi ({author})."
 }
