@@ -46,7 +46,7 @@ from PySide6.QtWidgets import QApplication
 
 from core.geometry import Face
 from core.i18n import tr
-from core.mesh import _STITCH_TOL, PAINT_KEYS
+from core.mesh import _STITCH_TOL, PAINT_KEYS, Mesh
 # MeshFace is core.mesh's Face — the class scene meshes are built from. The
 # geometry.Face imported above is a DIFFERENT legacy class; an isinstance
 # against IT is always False, so the preselection arm checks MeshFace.
@@ -1968,6 +1968,8 @@ class PushPullTool(Tool):
             base_paint = _paint_of(self.base_face)
         before_verts = ({id(v) for v in mesh.vertices}
                         if base_tag is not None or base_paint else None)
+        curve_runs = (self._curve_runs(mesh, self.base_face)
+                      if self.base_face is not None else [])
         guard = (mesh.capture_state()
                  if is_closed(mesh) and not _mesh_is_flat(mesh) else None)
         fp_before = self._mesh_fingerprint(mesh) if guard is not None else None
@@ -1984,6 +1986,7 @@ class PushPullTool(Tool):
             self._refused = True
             return
         self._soften_curve_facets(mesh, before_edges)
+        self._tag_moved_curves(mesh, curve_runs)
         if base_tag is not None or base_paint:
             # Only faces carrying at least one vertex this push created — the
             # extrusion's own walls/cap. Rebuilt neighbours (an untagged floor
@@ -2004,6 +2007,60 @@ class PushPullTool(Tool):
                     f.attrs["ifc"] = dict(base_tag)
                 if base_paint and not any(k in f.attrs for k in PAINT_KEYS):
                     f.attrs.update(base_paint)
+
+    @staticmethod
+    def _curve_runs(mesh, face) -> list:
+        """The base's curves as runs of positions: each stretch of its loops
+        whose edges share one curve id (a circle is one closed run, a
+        rounded rectangle four open ones). Read before the push."""
+        runs = []
+        for loop in (face.loop, *face.hole_loops):
+            n = len(loop)
+            if n < 2:
+                continue
+            ids = []
+            for i in range(n):
+                e = mesh.find_edge(loop[i], loop[(i + 1) % n])
+                ids.append(getattr(e, "curve", None) if e is not None else None)
+            if ids[0] is not None and all(c == ids[0] for c in ids):
+                runs.append(([QVector3D(v.position) for v in loop], True))
+                continue
+            start = next((i for i in range(n) if ids[i] != ids[i - 1]), None)
+            if start is None:
+                continue
+            i = start
+            for _ in range(n):
+                if ids[i] is not None and ids[i] != ids[i - 1]:
+                    pts = [QVector3D(loop[i].position)]
+                    j = i
+                    while ids[j] == ids[i] and len(pts) <= n:
+                        j = (j + 1) % n
+                        pts.append(QVector3D(loop[j].position))
+                    runs.append((pts, False))
+                i = (i + 1) % n
+        return runs
+
+    def _tag_moved_curves(self, mesh, runs) -> None:
+        """The base's curves, carried to the moved cap: the ring a pushed
+        circle leaves on top is a curve again, one click selects it all
+        (#626). Only the cap's own edges are looked up -- the cost is the
+        curve's, not the model's."""
+        if not runs or self._normal is None:
+            return
+        shift = self._normal * self.extrusion
+        for pts, closed in runs:
+            moved = [mesh.vertex_at(p + shift) for p in pts]
+            if any(v is None for v in moved):
+                continue
+            pairs = list(zip(moved, moved[1:]))
+            if closed:
+                pairs.append((moved[-1], moved[0]))
+            edges = [mesh.find_edge(a, b) for a, b in pairs]
+            if any(e is None or e.curve is not None for e in edges):
+                continue
+            cid = Mesh.next_curve_id()
+            for e in edges:
+                e.curve = cid
 
     @staticmethod
     def _mesh_fingerprint(mesh):
