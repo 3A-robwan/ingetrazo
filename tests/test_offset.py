@@ -193,3 +193,41 @@ def test_offset_viewport_measurement_text():
     assert "0.25" in vp._measurement_text() or "0,25" in vp._measurement_text()
 
 
+
+
+def test_a_refused_hot_retype_keeps_the_offset_already_made():
+    """Typing 1 then 3 on a 4 × 4 face: 3 is too far and is refused, and
+    the 1 m offset must stay (it vanished: the retype undid it first)."""
+    from tools.offset import OffsetTool
+    from tools.base import ToolContext
+    from PySide6.QtCore import QPointF, Qt
+
+    class _MockVP:
+        def __init__(self, scene, history):
+            self.scene, self.history = scene, history
+        def set_hover(self, *a): pass
+        def update(self): pass
+        def flash_status(self, *a, **k): pass
+        def _pixel_to_ray(self, sx, sy):
+            return QVector3D(sx, sy, 10), QVector3D(0, 0, -1)
+
+    scene = Scene()
+    hist = History(scene)
+    face = scene.mesh.add_face([V(0, 0), V(4, 0), V(4, 4), V(0, 4)])
+    vp = _MockVP(scene, hist)
+    tool = OffsetTool()
+    tool.hovered_face = face
+    tool.on_click(ToolContext(viewport=vp, world=V(2, 0), screen=QPointF(2, 0),
+                              modifiers=Qt.NoModifier, snap=None))
+    tool.on_hover(ToolContext(viewport=vp, world=V(2, 0.5),
+                              screen=QPointF(2, 0.5),
+                              modifiers=Qt.NoModifier, snap=None))
+    assert tool.on_value(vp, 1.0) is True
+    assert len(scene.mesh.faces) == 2
+    steps = len(hist.undo_stack)
+    tool.on_value(vp, 3.0)                 # too far: refused
+    assert len(scene.mesh.faces) == 2
+    assert len(hist.undo_stack) == steps
+    assert tool.on_value(vp, 0.5) is True  # the window is still open
+    inner = next(f for f in scene.mesh.faces if not f.holes)
+    assert abs(inner.area() - 9.0) < 1e-4

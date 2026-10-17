@@ -160,7 +160,14 @@ class OffsetTool(Tool):
         self._ref_inward = last["ref_inward"]
         self.distance = last["sign"] * value
         self.dragging = True
+        depth = len(viewport.history.undo_stack)
         self._commit(viewport)
+        if len(viewport.history.undo_stack) == depth:
+            # The new distance was refused (too far for the face): the
+            # offset already made comes back instead of vanishing with the
+            # undo above, and the retype window stays open.
+            viewport.history.redo()
+            self._last = last
         return True
 
     def on_cancel(self, viewport) -> None:
