@@ -54,7 +54,6 @@ class OffsetTool(Tool):
         self.hovered_edge: Edge | None = None
         self.base_face: Face | None = None
         self.distance: float = 0.0  # signed; >0 inward, <0 outward
-        self._cursor: QVector3D | None = None  # where the drag reads it
         self.dragging: bool = False
         self._loop: list[QVector3D] = []
         self._normal: QVector3D | None = None
@@ -98,16 +97,7 @@ class OffsetTool(Tool):
         cursor = self._cursor_on_plane(viewport, ctx.screen.x(), ctx.screen.y())
         if cursor is not None and self._ref_point is not None:
             self.distance = QVector3D.dotProduct(cursor - self._ref_point, self._ref_inward)
-            self._cursor = cursor
         viewport.update()
-
-    def value_label(self):
-        """The live offset distance, for the measurement box and the
-        label by the cursor (#604: the box stayed empty while dragging)."""
-        if not self.dragging or self._cursor is None:
-            return None
-        from core.units import fmt_len
-        return fmt_len(abs(self.distance)), self._cursor
 
     def on_click(self, ctx: ToolContext) -> None:
         viewport = ctx.viewport
@@ -384,7 +374,6 @@ class OffsetTool(Tool):
         self.hovered_edge = None
         self.base_face = None
         self.distance = 0.0
-        self._cursor = None
         self.dragging = False
         self._loop = []
         self._normal = None
