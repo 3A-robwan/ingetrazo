@@ -1601,6 +1601,16 @@ class PushPullTool(Tool):
                 best = (dd, QVector3D.dotProduct(
                     g.point - self._anchor, self._normal),
                     QVector3D(g.point), "guide_point")
+        # The origin is a point like a corner (#407): every other tool snaps
+        # to it, and pushing "level with the origin" is the usual way back
+        # to the ground plane.
+        origin = QVector3D(0.0, 0.0, 0.0)
+        pix = vp._world_to_pixel(origin)
+        if pix is not None:
+            dd = (pix[0] - sx) ** 2 + (pix[1] - sy) ** 2
+            if dd <= thr * thr and (best is None or dd < best[0]):
+                best = (dd, QVector3D.dotProduct(
+                    origin - self._anchor, self._normal), origin, "origin")
         if best is not None:
             self._inference_point = best[2]
             self._inference_kind = best[3]

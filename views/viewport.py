@@ -7510,8 +7510,10 @@ class Viewport(QOpenGLWidget):
         # The same colours and words as the snap markers: a corner is the
         # endpoint green, an edge the on-edge red, a face the on-face blue
         # — the classic cue says "On edge" while you push level with one.
-        from core.snap import COLOR_ENDPOINT, COLOR_ON_EDGE, COLOR_ON_FACE
+        from core.snap import (COLOR_ENDPOINT, COLOR_ON_EDGE, COLOR_ON_FACE,
+                               COLOR_ORIGIN)
         palette = {
+            "origin": (COLOR_ORIGIN, "origin"),
             "edge": (COLOR_ON_EDGE, "on_edge"),
             "face": (COLOR_ON_FACE, "on_face"),
             "guide_line": (COLOR_ON_EDGE, "on_line"),
