@@ -200,3 +200,18 @@ def test_a_plain_move_still_moves():
     tool.on_click(_ctx(vp, 0.5, 2.5))
     ys = [c[1] for c in _corners(g)]
     assert min(ys) == pytest.approx(2.0)
+
+
+def test_leaving_move_mid_turn_does_not_bring_the_turn_back(  # #480
+):
+    scene, g, vp, tool = _setup()
+    gx = 2.0 + 0.3 * 4.0
+    tool.on_hover(_ctx(vp, gx, 0.5))
+    tool.on_click(_ctx(vp, gx, 0.5))      # take the grip
+    assert tool._grip_rot is not None
+    tool.on_deactivate(vp)                # another tool picked mid-turn
+    tool.on_activate(vp)                  # M again
+    assert tool._grip_rot is None
+    assert _corners(g) == [(0.0, 0.0), (0.0, 1.0), (4.0, 0.0), (4.0, 1.0)]
+    tool.on_click(_ctx(vp, 0.5, 0.5))     # a plain move works again
+    assert tool.start_point is not None
