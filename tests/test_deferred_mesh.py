@@ -161,3 +161,28 @@ def test_defer_takes_only_an_empty_plain_mesh():
     m.add_edge(V(0, 0, 0), V(1, 0, 0))
     assert not M.DeferredMesh.defer(m, lambda mesh: None, 0)
     assert type(m) is M.Mesh
+
+
+def test_face_attrs_first_wear_without_building(binary, monkeypatch,
+                                                tmp_path):
+    """face_attrs of a deferred mesh: the first face of each distinct
+    paint, in face order — what the eager faces give once repeats are
+    dropped — and the mesh stays unbuilt."""
+    scene = _random_scene(random.Random(3))
+    for i, f in enumerate(scene.groups[-1].mesh.faces):
+        f.attrs.update({"mat": f"M{i % 4}"} if i % 3 else {})
+    path = tmp_path / "doc.igz"
+    igz.save_scene(scene, path)
+
+    def firsts(seq):
+        out = []
+        for a in seq:
+            if a not in out:
+                out.append(a)
+        return out
+    eager = _open(monkeypatch, path, False)
+    lazy = _open(monkeypatch, path, True)
+    for me, ml in zip(_meshes(eager), _meshes(lazy)):
+        got = list(M.face_attrs(ml))
+        assert type(ml) is M.DeferredMesh
+        assert got == firsts(f.attrs for f in me.faces)

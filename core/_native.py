@@ -66,3 +66,46 @@ def engine() -> str:
     """«Rust» or «Python», for About and the logs."""
     import core._native as me
     return "Rust" if me.native is not None else "Python"
+
+
+#: The ``std::hypot(x, y, z)`` formulas the module knows (QVector3D's
+#: length() is that call, and C++ standard libraries differ in it).
+_HYPOTS = ("libstdc++",)
+_hypot = _UNSET
+
+
+def qt_hypot():
+    """The formula that reproduces this Qt's ``QVector3D::length()`` bit for
+    bit — tried on a fixed sample against Qt itself, once — or ``None``:
+    the kernels that go through QVector3D arithmetic then stay in Python."""
+    global _hypot
+    if _hypot is _UNSET:
+        _hypot = None
+        mod = available()
+        if mod is not None and hasattr(mod, "qt_vector_probe"):
+            try:
+                _hypot = _probe_hypot(mod)
+            except Exception as exc:  # noqa: BLE001 — then Python
+                log.warning("QVector3D probe failed, using Python: %s", exc)
+    return _hypot
+
+
+def _probe_hypot(mod):
+    import numpy as np
+    from PySide6.QtGui import QVector3D
+    rng = np.random.default_rng(20261017)
+    rows = np.concatenate([
+        rng.normal(size=(3000, 3)),
+        rng.normal(size=(3000, 3)) * rng.choice([1e-6, 1e-3, 1, 1e3, 1e5],
+                                                size=(3000, 1)),
+        np.round(rng.normal(size=(1000, 3)) * 4) / 2,
+    ]).astype(np.float32)
+    qt_len = [QVector3D(*r).length() for r in rows.tolist()]
+    qt_nrm = [list(QVector3D(*r).normalized().toTuple())
+              for r in rows.tolist()]
+    for name in _HYPOTS:
+        ln, nz, _u, _v = mod.qt_vector_probe(rows, name)
+        if ln.tolist() == qt_len and nz.tolist() == qt_nrm:
+            return name
+    log.info("No native formula matches this Qt's QVector3D length")
+    return None

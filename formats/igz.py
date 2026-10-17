@@ -1511,7 +1511,11 @@ def _load_geometry(mesh, meta, geom: dict) -> None:
                         rings, sizes, counts, face_attr)
     from core import _native
     if not (_native.wanted()
-            and _mesh_mod.DeferredMesh.defer(mesh, build, len(counts))):
+            and _mesh_mod.DeferredMesh.defer(
+                mesh, build, len(counts),
+                dict(meta=meta, pos=pos, edges=edges, flags=flags,
+                     curves=curves, layers=layers, rings=rings, sizes=sizes,
+                     counts=counts, face_attr=face_attr))):
         build(mesh)
 
 

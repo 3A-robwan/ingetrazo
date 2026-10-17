@@ -8656,6 +8656,18 @@ class Viewport(QOpenGLWidget):
         # its selection box showed where it is (issue #134, @fafecm).
         if entry is not None and entry.get("mesh") is not mesh:
             entry = None
+        from views import array_bake
+        if array_bake.can_bake(mesh):
+            # A lazy mesh (experimental engine) is baked from its arrays,
+            # and stays unbuilt; while it is, it cannot have changed.
+            if entry is None:
+                entry = array_bake.bake(self, mesh, paint, msig, vkey,
+                                        next(_chunk_uid))
+                if msig is not None:
+                    entry["fp"] = entry["fp"] + (("paint",) + msig,)
+                cache[id(group)] = entry
+            entry["vkey"] = vkey
+            return entry
         if entry is not None:
             if entry.get("vkey") == vkey:
                 return entry
@@ -9218,7 +9230,8 @@ class Viewport(QOpenGLWidget):
         groups = [g for g in self._placements()
                   if getattr(g, "xform", None) is not None
                   and not getattr(g, "billboard", False)]
-        nf = np.fromiter((len(g.mesh.faces) for g in groups), np.int64,
+        from core.mesh import face_count
+        nf = np.fromiter((face_count(g.mesh) for g in groups), np.int64,
                          count=len(groups))
         table = None
         if int(nf.sum()) >= self._PICK_LAZY_MIN_FACES:
@@ -9612,8 +9625,18 @@ class Viewport(QOpenGLWidget):
                     # in it cost ~250 ms a hover on 14 million faces.
                     ents = chunk.get("_pick_ents")
                     if ents is None or ents[0] is not owner:
-                        ents = chunk["_pick_ents"] = (
-                            owner, [(f, owner) for f in chunk["faces"]])
+                        from views import array_bake
+                        if isinstance(chunk["faces"], array_bake.DeferredFaces):
+                            # A lazy mesh (experimental engine): its faces
+                            # are built when a pick lands on one.
+                            pairs = array_bake.LazyPairs(chunk["faces"], owner)
+                        else:
+                            pairs = [(f, owner) for f in chunk["faces"]]
+                        ents = chunk["_pick_ents"] = (owner, pairs)
+                    if not isinstance(ents[1], list) and \
+                            isinstance(b_entities, list):
+                        from views.array_bake import PickEntities
+                        b_entities = PickEntities(b_entities)
                     b_entities.extend(ents[1])
                     b_pidx.append(np.full(n, len(b_plist), dtype=np.int32))
                     b_plist.append(g)
@@ -9680,6 +9703,9 @@ class Viewport(QOpenGLWidget):
             if block["entities"]:
                 offset = len(entities)
                 loose_count = len(entities)
+                if not isinstance(block["entities"], list):
+                    from views.array_bake import PickEntities
+                    entities = PickEntities(entities)
                 entities.extend(block["entities"])
                 place_idx = np.concatenate([
                     np.full(loose_count, -1, dtype=np.int32),

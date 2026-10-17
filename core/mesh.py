@@ -1653,22 +1653,26 @@ class DeferredMesh(Mesh):
     _displaced = _deferred_state("_displaced")
 
     @staticmethod
-    def defer(mesh: Mesh, build, nfaces: int) -> bool:
+    def defer(mesh: Mesh, build, nfaces: int, source=None) -> bool:
         """Turn ``mesh`` into a deferred one that runs ``build(mesh)`` on
-        first touch and makes exactly ``nfaces`` faces; False (nothing
-        done) unless it is a plain empty mesh."""
+        first touch and makes exactly ``nfaces`` faces; ``source`` is what
+        it is built from, for :mod:`core.lazy_mesh` (kept until built).
+        False (nothing done) unless it is a plain empty mesh."""
         d = mesh.__dict__
         if (type(mesh) is not Mesh or d["vertices"] or d["edges"]
                 or d["faces"] or d["_registry"]):
             return False
         d["_deferred"] = build
         d["_deferred_nfaces"] = nfaces
+        d["_deferred_source"] = source
         mesh.__class__ = DeferredMesh
         return True
 
     def _materialize(self) -> None:
         build = self.__dict__.pop("_deferred")
         del self.__dict__["_deferred_nfaces"]
+        del self.__dict__["_deferred_source"]
+        self.__dict__.pop("_deferred_plan", None)
         self.__class__ = Mesh
         build(self)
 
@@ -1683,6 +1687,24 @@ def face_count(mesh) -> int:
     if type(mesh) is DeferredMesh:
         return mesh.__dict__["_deferred_nfaces"]
     return len(mesh.faces)
+
+
+def face_attrs(mesh):
+    """Each face's own attrs, in face order — for a deferred mesh only the
+    first face of each distinct set (what a first-wins tally of materials
+    needs), read from the document without building the mesh."""
+    if type(mesh) is DeferredMesh:
+        import numpy as np
+        from formats.igz import _face_attrs_from_json
+        src = mesh.__dict__["_deferred_source"]
+        table = src["meta"].get("face_attrs") or []
+        fa = np.asarray(src["face_attr"], dtype=np.int64)
+        _u, first = np.unique(fa, return_index=True)
+        for k in fa[np.sort(first)].tolist():
+            yield (_face_attrs_from_json(table[k]) or {}) if k >= 0 else {}
+        return
+    for f in mesh.faces:
+        yield f.attrs
 
 
 def turn_face_over(face) -> None:

@@ -2222,8 +2222,18 @@ class MaterialsPanel(QWidget):
         scene = self._window.viewport.scene
 
         def in_use():
-            for face in scene.render_faces():
-                yield face.attrs
+            # The first wear of each paint is all the tally keeps, so each
+            # mesh is read once, not once per copy (21 406 copies of 2 722
+            # meshes in #158), and a lazy one stays unbuilt.
+            from core.mesh import face_attrs
+            for f in scene.loose_mesh.faces:
+                if scene.entity_visible(f):
+                    yield f.attrs
+            seen: set = set()
+            for g, _m in scene.placements():
+                if id(g.mesh) not in seen:
+                    seen.add(id(g.mesh))
+                    yield from face_attrs(g.mesh)
             # A group's paint lives on the group, not on its faces (#133,
             # @fafecm: it only showed up here once the group was exploded).
             from core.group import iter_placements

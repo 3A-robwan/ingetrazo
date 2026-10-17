@@ -11,8 +11,10 @@ use numpy::{PyArray1, PyArray2, PyReadonlyArray2, PyReadonlyArray3, PyReadonlyAr
 use pyo3::prelude::*;
 
 mod boxes;
+mod facegeom;
 mod hlr;
 mod parity;
+mod weld;
 
 #[pymodule]
 fn ingetrazo_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -20,6 +22,9 @@ fn ingetrazo_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<HlrOccluders>()?;
     m.add_function(wrap_pyfunction!(touching_boxes, m)?)?;
     m.add_class::<ParityTris>()?;
+    m.add_function(wrap_pyfunction!(face_geometry, m)?)?;
+    m.add_function(wrap_pyfunction!(qt_vector_probe, m)?)?;
+    m.add_function(wrap_pyfunction!(weld_points, m)?)?;
     Ok(())
 }
 
@@ -182,4 +187,165 @@ impl ParityTris {
         let o = [origin.0, origin.1, origin.2];
         Ok(py.detach(|| inner.crossings(o, &d, m.as_deref(), skip)))
     }
+}
+
+fn hypot_of(name: &str) -> PyResult<facegeom::Hypot> {
+    match name {
+        "libstdc++" => Ok(facegeom::Hypot::LibStdCxx),
+        _ => Err(pyo3::exceptions::PyValueError::new_err("unknown hypot")),
+    }
+}
+
+/// QVector3D's own arithmetic on each row of ``v`` (N,3) float32, for the
+/// start-up check that ``hypot`` is this Qt's: ``(length (N,), normalized
+/// (N,3), plane u (N,3), plane v (N,3))`` — core.triangulate.plane_axes.
+#[pyfunction]
+fn qt_vector_probe<'py>(
+    py: Python<'py>,
+    v: PyReadonlyArray2<'_, f32>,
+    hypot: &str,
+) -> PyResult<(Bound<'py, PyArray1<f32>>, Bound<'py, PyArray2<f32>>,
+               Bound<'py, PyArray2<f32>>, Bound<'py, PyArray2<f32>>)> {
+    let h = hypot_of(hypot)?;
+    let v = v.as_array();
+    let n = v.shape()[0];
+    let (mut ln, mut nz, mut pu, mut pv) = (Vec::with_capacity(n), Vec::new(), Vec::new(), Vec::new());
+    for i in 0..n {
+        let x = facegeom::V3(v[[i, 0]], v[[i, 1]], v[[i, 2]]);
+        ln.push(facegeom::length(x, h));
+        let m = facegeom::normalized(x, h);
+        nz.push(vec![m.0, m.1, m.2]);
+        let (a, b) = facegeom::plane_axes(x, h);
+        pu.push(vec![a.0, a.1, a.2]);
+        pv.push(vec![b.0, b.1, b.2]);
+    }
+    Ok((PyArray1::from_vec(py, ln), PyArray2::from_vec2(py, &nz)?,
+        PyArray2::from_vec2(py, &pu)?, PyArray2::from_vec2(py, &pv)?))
+}
+
+/// views.viewport._face_geometry for every face of a mesh given as arrays:
+/// ``pos`` (V,3) float32 vertex positions, ``corners`` every ring's vertex
+/// indices (rings concatenated, each face's outer ring first),
+/// ``ring_sizes`` and ``ring_counts`` (rings per face). Returns ``(normal
+/// (F,3) f32, ln (F,) f32 — the Newell length, area = ln / 2 — centroid
+/// (F,3) f32, NaN for a face of under three corners, tris (T,3) u32 vertex
+/// indices, tri_face (T,) u32, unit (F,3) f32, tris_unit, tri_face_unit)``;
+/// each face's triangles in order. ``unit`` and its triangles are the
+/// viewport's ``_normal_of`` / ``_tris_of`` (Qt's normalized()).
+/// ``compensated_sum``: this Python's sum() of floats is Neumaier's (3.12+).
+#[pyfunction]
+fn face_geometry<'py>(
+    py: Python<'py>,
+    pos: PyReadonlyArray2<'_, f32>,
+    corners: PyReadonlyArray1<'_, i64>,
+    ring_sizes: PyReadonlyArray1<'_, i64>,
+    ring_counts: PyReadonlyArray1<'_, i64>,
+    hypot: &str,
+    compensated_sum: bool,
+) -> PyResult<(Bound<'py, PyArray2<f32>>, Bound<'py, PyArray1<f32>>,
+               Bound<'py, PyArray2<f32>>, Bound<'py, PyArray2<u32>>,
+               Bound<'py, PyArray1<u32>>, Bound<'py, PyArray2<f32>>,
+               Bound<'py, PyArray2<u32>>, Bound<'py, PyArray1<u32>>)> {
+    use rayon::prelude::*;
+    let h = hypot_of(hypot)?;
+    let p = pos.as_array();
+    let pts: Vec<facegeom::V3> = (0..p.shape()[0])
+        .map(|i| facegeom::V3(p[[i, 0]], p[[i, 1]], p[[i, 2]])).collect();
+    let nv = pts.len() as i64;
+    let corners: Vec<u32> = corners.as_array().iter().map(|&c| {
+        if c < 0 || c >= nv { u32::MAX } else { c as u32 }
+    }).collect();
+    if corners.iter().any(|&c| c == u32::MAX) {
+        return Err(pyo3::exceptions::PyValueError::new_err("corner out of range"));
+    }
+    let sizes = ring_sizes.as_array().to_vec();
+    let counts = ring_counts.as_array().to_vec();
+    // Each face's first ring, and each ring's first corner.
+    let mut ring_start = Vec::with_capacity(sizes.len() + 1);
+    let mut acc = 0usize;
+    for &s in &sizes {
+        ring_start.push(acc);
+        acc += s as usize;
+    }
+    ring_start.push(acc);
+    if acc != corners.len() {
+        return Err(pyo3::exceptions::PyValueError::new_err("ring sizes"));
+    }
+    let mut face_ring = Vec::with_capacity(counts.len() + 1);
+    let mut r = 0usize;
+    for &c in &counts {
+        face_ring.push(r);
+        r += c as usize;
+    }
+    face_ring.push(r);
+    if r != sizes.len() {
+        return Err(pyo3::exceptions::PyValueError::new_err("ring counts"));
+    }
+    let geoms: Vec<facegeom::FaceGeom> = py.detach(|| {
+        (0..counts.len()).into_par_iter().map(|f| {
+            let rings: Vec<&[u32]> = (face_ring[f]..face_ring[f + 1])
+                .map(|k| &corners[ring_start[k]..ring_start[k + 1]]).collect();
+            facegeom::face_geometry(&pts, &rings, h, compensated_sum)
+        }).collect()
+    });
+    let nf = geoms.len();
+    let mut normal = Vec::with_capacity(nf);
+    let mut ln = Vec::with_capacity(nf);
+    let mut cen = Vec::with_capacity(nf);
+    let mut tris = Vec::new();
+    let mut tri_face = Vec::new();
+    let mut unit = Vec::with_capacity(nf);
+    let mut tris_u = Vec::new();
+    let mut tri_face_u = Vec::new();
+    for (f, g) in geoms.into_iter().enumerate() {
+        unit.push(vec![g.unit.0, g.unit.1, g.unit.2]);
+        for t in g.tris_unit.as_ref().unwrap_or(&g.tris) {
+            tris_u.push(t.to_vec());
+            tri_face_u.push(f as u32);
+        }
+        normal.push(vec![g.normal.0, g.normal.1, g.normal.2]);
+        ln.push(g.ln);
+        cen.push(match g.centroid {
+            Some(c) => vec![c.0, c.1, c.2],
+            None => vec![f32::NAN; 3],
+        });
+        for t in g.tris {
+            tris.push(t.to_vec());
+            tri_face.push(f as u32);
+        }
+    }
+    let tris_arr = if tris.is_empty() {
+        PyArray2::zeros(py, [0, 3], false)
+    } else {
+        PyArray2::from_vec2(py, &tris)?
+    };
+    let normal_arr = if nf == 0 { PyArray2::zeros(py, [0, 3], false) } else { PyArray2::from_vec2(py, &normal)? };
+    let cen_arr = if nf == 0 { PyArray2::zeros(py, [0, 3], false) } else { PyArray2::from_vec2(py, &cen)? };
+    let unit_arr = if nf == 0 { PyArray2::zeros(py, [0, 3], false) } else { PyArray2::from_vec2(py, &unit)? };
+    let tris_u_arr = if tris_u.is_empty() {
+        PyArray2::zeros(py, [0, 3], false)
+    } else {
+        PyArray2::from_vec2(py, &tris_u)?
+    };
+    Ok((normal_arr, PyArray1::from_vec(py, ln), cen_arr, tris_arr, PyArray1::from_vec(py, tri_face),
+        unit_arr, tris_u_arr, PyArray1::from_vec(py, tri_face_u)))
+}
+
+/// core.lazy_mesh.weld (Mesh.bulk_weld on an empty mesh): ``pos`` (N,3)
+/// float32 points, ``scale`` the weld cell (10**decimals), ``tol2`` the
+/// probe's squared distance. Returns ``(vertex positions (V,3) float32,
+/// point → vertex (N,))``.
+#[pyfunction]
+fn weld_points<'py>(
+    py: Python<'py>,
+    pos: PyReadonlyArray2<'_, f32>,
+    scale: f64,
+    tol2: f64,
+) -> PyResult<(Bound<'py, PyArray2<f32>>, Bound<'py, PyArray1<i64>>)> {
+    let p = pos.as_array();
+    let pts: Vec<[f32; 3]> = (0..p.shape()[0]).map(|i| [p[[i, 0]], p[[i, 1]], p[[i, 2]]]).collect();
+    let (vpos, ids) = py.detach(|| weld::weld(&pts, scale, tol2));
+    let rows: Vec<Vec<f32>> = vpos.iter().map(|v| v.to_vec()).collect();
+    let arr = if rows.is_empty() { PyArray2::zeros(py, [0, 3], false) } else { PyArray2::from_vec2(py, &rows)? };
+    Ok((arr, PyArray1::from_vec(py, ids)))
 }
