@@ -87,3 +87,29 @@ def test_batches_are_the_walks():
     finally:
         win._saved_version = win.viewport.scene.version
         win.close()
+
+
+def test_cull_is_the_array_formula():
+    """The per-plane cull of _gather_instanced keeps exactly what the
+    (planes, boxes, 3) formula it replaced kept — infinite boxes against
+    planes with a zero component (inf·0) included."""
+    rng = np.random.default_rng(2)
+    lo = rng.uniform(-50, 50, size=(500, 3))
+    hi = lo + rng.uniform(0, 9, size=(500, 3))
+    lo[:20], hi[:20] = -np.inf, np.inf            # boxless placements
+    for _ in range(40):
+        pl = rng.uniform(-1, 1, size=(6, 4))
+        pl[rng.integers(0, 6), rng.integers(0, 3)] = 0.0
+        pl[:, 3] *= 30
+        n = pl[:, :3]
+        pick = np.where(n[:, None, :] >= 0.0, hi[None, :, :], lo[None, :, :])
+        want = ((pick * n[:, None, :]).sum(axis=2)
+                + pl[:, 3][:, None] >= 0.0).all(axis=0)
+        got = np.ones(len(lo), dtype=bool)
+        for row in pl.tolist():
+            nx, ny, nz, d = row
+            px = hi[:, 0] if nx >= 0.0 else lo[:, 0]
+            py = hi[:, 1] if ny >= 0.0 else lo[:, 1]
+            pz = hi[:, 2] if nz >= 0.0 else lo[:, 2]
+            got &= ((px * nx + py * ny) + pz * nz) + d >= 0.0
+        assert np.array_equal(got, want)

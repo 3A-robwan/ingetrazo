@@ -378,6 +378,8 @@ _chunk_uid = itertools.count(1)
 
 #: The state-tracking instanced faces pass (tests draw both ways).
 _LEAN_INSTANCED = True
+#: Span lists this long are culled with NumPy (_visible_spans_np).
+_SPAN_VECTOR_MIN = 64
 #: Recorded instanced passes replayed by the native engine when it is on.
 _LEAN_NATIVE_REPLAY = True
 
@@ -2894,13 +2896,17 @@ class Viewport(QOpenGLWidget):
         if planes is None:
             keep = np.ones(len(groups), dtype=bool)
         else:
-            # Same p-vertex test as ``_aabb_visible``, all boxes at once.
-            pl = np.asarray(planes, dtype=np.float64)
-            n = pl[:, :3]
-            pick = np.where(n[:, None, :] >= 0.0, hi[None, :, :],
-                            lo[None, :, :])
-            keep = ((pick * n[:, None, :]).sum(axis=2)
-                    + pl[:, 3][:, None] >= 0.0).all(axis=0)
+            # Same p-vertex test as ``_aabb_visible``, all boxes at once —
+            # a plane at a time on the box columns (the (planes, boxes, 3)
+            # array it used to build was most of a frame's gather, #158);
+            # the same products and sums, in the same order.
+            keep = np.ones(len(groups), dtype=bool)
+            for pl in planes:
+                nx, ny, nz, d = (float(c) for c in pl)
+                px = hi[:, 0] if nx >= 0.0 else lo[:, 0]
+                py = hi[:, 1] if ny >= 0.0 else lo[:, 1]
+                pz = hi[:, 2] if nz >= 0.0 else lo[:, 2]
+                keep &= ((px * nx + py * ny) + pz * nz) + d >= 0.0
         # One pool per (prototype, container paint): a painted instance
         # (issue #47) draws its own bake of the prototype, not the plain
         # one its siblings share — pooled by mesh alone it kept showing
@@ -9562,6 +9568,8 @@ class Viewport(QOpenGLWidget):
         ``split`` (a vertex offset) is a boundary merging never crosses, so
         the caller can still tell the two sides apart — the faded context
         before it, the group being edited from it on."""
+        if len(spans) >= _SPAN_VECTOR_MIN and planes:
+            return self._visible_spans_np(spans, planes, split)
         out: list = []
         culled = 0
         for bbox, start, count in spans:
@@ -9578,6 +9586,55 @@ class Viewport(QOpenGLWidget):
             else:
                 out.append((start, count))
         return out, culled
+
+    def _visible_spans_np(self, spans, planes, split=None):
+        """:meth:`_visible_spans` over many spans at once: the same p-vertex
+        test, float op for float op, on arrays kept per span list (a model
+        of 21 406 placements tested ~4 800 boxes one by one per frame)."""
+        import numpy as np
+        memo = getattr(self, "_span_arrays", None)
+        if memo is None:
+            memo = self._span_arrays = {}
+        hit = memo.get(id(spans))
+        if hit is None or hit[0] is not spans:
+            if len(memo) > 16:
+                memo.clear()
+            n = len(spans)
+            has = np.zeros(n, dtype=bool)
+            lo = np.zeros((n, 3))
+            hi = np.zeros((n, 3))
+            start = np.empty(n, dtype=np.int64)
+            count = np.empty(n, dtype=np.int64)
+            for i, (bbox, s0, c0) in enumerate(spans):
+                start[i] = s0
+                count[i] = c0
+                if bbox is not None:
+                    has[i] = True
+                    lo[i], hi[i] = bbox[0], bbox[1]
+            hit = memo[id(spans)] = (spans, has, lo, hi, start, count)
+        _s, has, lo, hi, start, count = hit
+        vis = np.ones(len(start), dtype=bool)
+        for nx, ny, nz, d in planes:
+            px = hi[:, 0] if nx >= 0.0 else lo[:, 0]
+            py = hi[:, 1] if ny >= 0.0 else lo[:, 1]
+            pz = hi[:, 2] if nz >= 0.0 else lo[:, 2]
+            vis &= ~(((nx * px + ny * py) + nz * pz) + d < 0.0)
+        live = count > 0
+        drawn = live & (vis | ~has)
+        culled = int(count[live & ~drawn].sum())
+        idx = np.flatnonzero(drawn)
+        if not len(idx):
+            return [], culled
+        st = start[idx]
+        ct = count[idx]
+        brk = np.ones(len(idx), dtype=bool)
+        brk[1:] = st[1:] != st[:-1] + ct[:-1]
+        if split is not None:
+            # A run never crosses the split (see _visible_spans).
+            brk[1:] |= (st[:-1] < split) & (split <= st[1:])
+        heads = np.flatnonzero(brk)
+        sums = np.add.reduceat(ct, heads)
+        return list(zip(st[heads].tolist(), sums.tolist())), culled
 
     def _tex_run_spans(self, parts, planes, fading: bool):
         """Frustum-culled draw spans of one texture run, split into
