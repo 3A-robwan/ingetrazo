@@ -9935,6 +9935,185 @@ class Viewport(QOpenGLWidget):
         return np.flatnonzero((inside & front.all(axis=1)) | straddle
                               | ~finite)
 
+    def _pick_block_part(self, candidatos, tocables, lazy_set, base):
+        """One part of the pick block (see _pick_index): the faces, owners,
+        triangles and hard edges of ``candidatos``, numbered after ``base``
+        (the part before it, or None). Lists, joined by _pick_join_parts."""
+        import numpy as np
+        scene = self.scene
+        chunks = []
+        for g in candidatos:
+            if getattr(g, "billboard", False):
+                continue          # per-frame quad; picked separately
+            gvis = scene.entity_visible(g)
+            # The layer says whether it can be snapped to; the context
+            # says whether it can be picked.
+            gsnap = scene.entity_selectable(g)
+            gsel = gsnap and id(g) in tocables
+            if not (gvis or gsnap):
+                continue
+            chunk = self._group_chunk(g)
+            if not (chunk["faces"] or chunk["edges"]):
+                continue          # nothing in it to pick or snap to
+            # Note the `or edges`: a group of nothing but lines and arcs
+            # has no faces, and skipping it here dropped it out of the
+            # index ENTIRELY — so inference found none of its edges and
+            # the edge fallback below, written for "a lines-only group",
+            # read an empty array and never found it either (GitHub #8).
+            # The OWNER a hit resolves to depends on the open context
+            # (inside the plaza its children are the objects): it keys
+            # the block too, or a double-click into the plaza kept
+            # answering "the plaza" for the arch inside (Marco,
+            # 2026-09-14).
+            chunks.append((g, chunk, gvis, gsel, gsnap))
+        n_ent = base["n_ent"] if base else 0
+        n_plist = base["n_plist"] if base else 0
+        b_tri_off = base["n_tri"] if base else 0
+        n_ggroups = base["n_ggroups"] if base else 0
+        b_entities: list = []
+        # Per entity, the PLACEMENT (proxy) whose matrix puts the
+        # face in the world — the owner above is what a click
+        # selects. Run-length, one int per face: a Python object
+        # per face doubled the cold build (30 → 65 ms).
+        b_pidx: list = []
+        b_plist: list = []
+        b_v0, b_e1, b_e2, b_te = [], [], [], []
+        b_area, b_vis, b_sel = [], [], []
+        b_spans: list = []    # (bbox, tri start, count) per chunk
+        # Group hard edges, flat — pick_group's fallback (cursor over
+        # empty space / lines-only group) walked every group edge in
+        # Python (~300 ms per mouse move against a 300k-edge import).
+        b_gea, b_geb, b_ggi = [], [], []
+        b_gsel: list = []     # per edge: may pick_group land on it
+        b_ggroups: list = []
+        # Lazy placements (#158) keep their triangles in their own
+        # arrays — spans the ray walks as they are — and go after
+        # the static chunks, whose concatenation is kept: joining
+        # every array on each change of the lazy set copied
+        # hundreds of MB per hover.
+        b_own: list = []
+        static_key: list = []
+        count = 0
+        for g, chunk, gvis, gsel, gsnap in chunks:
+            n = len(chunk["faces"])
+            off = n_ent + count
+            owner = self._owner_of(g)
+            # A chunk keeps its (face, owner) list: the block is
+            # rebuilt whenever the lazy placements change (#158),
+            # and re-making a tuple per face of everything already
+            # in it cost ~250 ms a hover on 14 million faces.
+            ents = chunk.get("_pick_ents")
+            if ents is None or ents[0] is not owner:
+                from views import array_bake
+                if isinstance(chunk["faces"], array_bake.DeferredFaces):
+                    # A lazy mesh (experimental engine): its faces
+                    # are built when a pick lands on one.
+                    pairs = array_bake.LazyPairs(chunk["faces"], owner)
+                else:
+                    pairs = [(f, owner) for f in chunk["faces"]]
+                ents = chunk["_pick_ents"] = (owner, pairs)
+            b_entities.append(ents[1])
+            count += n
+            b_pidx.append(np.full(n, n_plist + len(b_plist), dtype=np.int32))
+            b_plist.append(g)
+            b_area.append(chunk["areas"])
+            b_vis.append(np.full(n, gvis, dtype=bool))
+            b_sel.append(np.full(n, gsel, dtype=bool))
+            if chunk["v0"] is not None and id(g) in lazy_set:
+                b_own.append((chunk.get("bbox"), chunk["v0"],
+                              chunk["e1"], chunk["e2"],
+                              chunk["tri_ent"], off))
+            elif chunk["v0"] is not None:
+                static_key.append((id(chunk), chunk.get("rev"), off))
+                v0, e1, e2, te, cells = _split_chunk_spans(chunk)
+                b_v0.append(v0)
+                b_e1.append(e1)
+                b_e2.append(e2)
+                b_te.append(te + off)
+                if cells is None:
+                    b_spans.append((chunk.get("bbox"), b_tri_off,
+                                    len(v0)))
+                else:
+                    # One span per grid cell, each with its own box:
+                    # a ray meets the cells it crosses, not the chunk.
+                    b_spans += [(bb, b_tri_off + s0, n)
+                                for bb, s0, n in cells]
+                b_tri_off += len(v0)
+            if gsnap and chunk["edges"]:
+                ge = chunk.get("_pick_ge")
+                if ge is None or ge[0] is not chunk["edges"]:
+                    ge = chunk["_pick_ge"] = (
+                        chunk["edges"],
+                        np.frombuffer(chunk["edges"], dtype=np.float32)
+                        .reshape(-1, 2, 3).astype(np.float64))
+                ge = ge[1]
+                b_gea.append(ge[:, 0])
+                b_geb.append(ge[:, 1])
+                b_ggi.append(np.full(len(ge), n_ggroups + len(b_ggroups),
+                                     dtype=np.int64))
+                b_gsel.append(np.full(len(ge), gsel, dtype=bool))
+                b_ggroups.append(owner)
+        part = {"entities": b_entities, "pidx": b_pidx, "plist": b_plist,
+                "area": b_area, "vis": b_vis, "sel": b_sel,
+                "own": b_own, "static_key": static_key,
+                "v0": b_v0, "e1": b_e1, "e2": b_e2, "te": b_te,
+                "spans": b_spans, "gea": b_gea, "geb": b_geb, "ggi": b_ggi,
+                "gsel": b_gsel, "ggroups": b_ggroups,
+                "n_ent": n_ent + count, "n_plist": n_plist + len(b_plist),
+                "n_tri": b_tri_off,
+                "n_ggroups": n_ggroups + len(b_ggroups)}
+        if base is None:
+            # The fixed part joins its own lists once, here: it is kept.
+            for k in ("pidx", "area", "vis", "sel", "gea", "geb", "ggi",
+                      "gsel"):
+                part[k] = [np.concatenate(part[k])] if part[k] else []
+            if all(isinstance(e, list) for e in b_entities):
+                part["entities"] = [[x for e in b_entities for x in e]]
+        return part
+
+    def _pick_join_parts(self, fixed, lazy) -> dict:
+        """The pick block of the fixed part followed by the lazy one — the
+        very arrays the single pass made, in the same order."""
+        import numpy as np
+        from views.array_bake import PickEntities
+
+        def cat(k, empty):
+            parts = fixed[k] + lazy[k]
+            return np.concatenate(parts) if parts else empty
+        ents = fixed["entities"] + lazy["entities"]
+        if not lazy["entities"] and len(ents) == 1 and \
+                isinstance(ents[0], list):
+            entities: list = ents[0]      # the fixed part's, kept
+        elif all(isinstance(e, list) for e in ents) and \
+                sum(map(len, ents)) < 200_000:
+            entities = [x for e in ents for x in e]
+        else:
+            entities = PickEntities()
+            for e in ents:
+                entities.extend(e)
+        static = fixed["static_key"] + lazy["static_key"]
+        gea = fixed["gea"] + lazy["gea"]
+        return {
+            "entities": entities,
+            "place_idx": cat("pidx", np.empty(0, np.int32)),
+            "placements": fixed["plist"] + lazy["plist"],
+            "areas": cat("area", np.empty(0)),
+            "vis": cat("vis", np.empty(0, bool)),
+            "sel": cat("sel", np.empty(0, bool)),
+            **Viewport._pick_static_tris(self, tuple(static),
+                                         fixed["v0"] + lazy["v0"],
+                                         fixed["e1"] + lazy["e1"],
+                                         fixed["e2"] + lazy["e2"],
+                                         fixed["te"] + lazy["te"]),
+            "own": fixed["own"] + lazy["own"],
+            "gedge_a": np.concatenate(gea) if gea else None,
+            "gedge_b": cat("geb", None) if gea else None,
+            "gedge_gi": cat("ggi", None) if gea else None,
+            "gedge_sel": cat("gsel", None) if gea else None,
+            "gedge_groups": fixed["ggroups"] + lazy["ggroups"],
+            "spans": fixed["spans"] + lazy["spans"],
+        }
+
     def _pick_index(self, near=None):
         """Flat NumPy pick index of the scene — triangles of every loose and
         group face (with visibility/selectability masks and areas) plus the
@@ -9971,6 +10150,17 @@ class Viewport(QOpenGLWidget):
                id(self.scene.edit_group), getattr(self, "_pick_gen", 0))
         cached = getattr(self, "_pick_index_cache", None)
         if cached is not None and cached[0] == key:
+            return cached[1]
+        if (cached is not None and len(cached) > 2
+                and cached[0][:4] == key[:4]
+                and getattr(self, "_frozen_cache_version", None) is not None
+                and cached[2] is not None
+                and cached[2] is getattr(self, "_pick_block", None)):
+            # Only the lazy set moved, under a frozen preview (a drag): the
+            # block is kept frozen as it is, the loose part is the same —
+            # the rebuild would make this very index again (it did, ~35 ms
+            # a pointer move dragging beside the plant of #158).
+            self._pick_index_cache = (key, cached[1], cached[2])
             return cached[1]
         _p0 = _time_mod.perf_counter() if _PERF else 0.0
         import numpy as np
@@ -10072,141 +10262,26 @@ class Viewport(QOpenGLWidget):
                    oculto, len(candidatos), getattr(self, "_pick_gen", 0))
             blk = getattr(self, "_pick_block", None)
             frozen = getattr(self, "_frozen_cache_version", None) is not None
-            chunks = []
             if blk is None or (blk[0] != sig and not frozen):
-                for g in candidatos:
-                    if getattr(g, "billboard", False):
-                        continue          # per-frame quad; picked separately
-                    gvis = scene.entity_visible(g)
-                    # The layer says whether it can be snapped to; the context
-                    # says whether it can be picked.
-                    gsnap = scene.entity_selectable(g)
-                    gsel = gsnap and id(g) in tocables
-                    if not (gvis or gsnap):
-                        continue
-                    chunk = self._group_chunk(g)
-                    if not (chunk["faces"] or chunk["edges"]):
-                        continue          # nothing in it to pick or snap to
-                    # Note the `or edges`: a group of nothing but lines and arcs
-                    # has no faces, and skipping it here dropped it out of the
-                    # index ENTIRELY — so inference found none of its edges and
-                    # the edge fallback below, written for "a lines-only group",
-                    # read an empty array and never found it either (GitHub #8).
-                    # The OWNER a hit resolves to depends on the open context
-                    # (inside the plaza its children are the objects): it keys
-                    # the block too, or a double-click into the plaza kept
-                    # answering "the plaza" for the arch inside (Marco,
-                    # 2026-09-14).
-                    chunks.append((g, chunk, gvis, gsel, gsnap))
-                b_entities: list = []
-                # Per entity, the PLACEMENT (proxy) whose matrix puts the
-                # face in the world — the owner above is what a click
-                # selects. Run-length, one int per face: a Python object
-                # per face doubled the cold build (30 → 65 ms).
-                b_pidx: list = []
-                b_plist: list = []
-                b_v0, b_e1, b_e2, b_te = [], [], [], []
-                b_area, b_vis, b_sel = [], [], []
-                b_spans: list = []    # (bbox, tri start, count) per chunk
-                b_tri_off = 0
-                # Group hard edges, flat — pick_group's fallback (cursor over
-                # empty space / lines-only group) walked every group edge in
-                # Python (~300 ms per mouse move against a 300k-edge import).
-                b_gea, b_geb, b_ggi = [], [], []
-                b_gsel: list = []     # per edge: may pick_group land on it
-                b_ggroups: list = []
-                # Lazy placements (#158) keep their triangles in their own
-                # arrays — spans the ray walks as they are — and go after
-                # the static chunks, whose concatenation is kept: joining
-                # every array on each change of the lazy set copied
-                # hundreds of MB per hover.
+                # Two parts, fixed placements first, as the block always
+                # ran: the fixed part lasts while the placements do, and a
+                # change of the lazy set rebuilds only the lazy part on its
+                # offsets. Re-making the fixed one each time (900
+                # placements, half a million faces) was most of every hover
+                # that met new lazy placements on the plant of #158.
                 lazy_set = (lazy[4] if lazy is not None else ())
-                chunks.sort(key=lambda c: id(c[0]) in lazy_set)
-                b_own: list = []
-                static_key: list = []
-                for g, chunk, gvis, gsel, gsnap in chunks:
-                    n = len(chunk["faces"])
-                    off = len(b_entities)
-                    owner = self._owner_of(g)
-                    # A chunk keeps its (face, owner) list: the block is
-                    # rebuilt whenever the lazy placements change (#158),
-                    # and re-making a tuple per face of everything already
-                    # in it cost ~250 ms a hover on 14 million faces.
-                    ents = chunk.get("_pick_ents")
-                    if ents is None or ents[0] is not owner:
-                        from views import array_bake
-                        if isinstance(chunk["faces"], array_bake.DeferredFaces):
-                            # A lazy mesh (experimental engine): its faces
-                            # are built when a pick lands on one.
-                            pairs = array_bake.LazyPairs(chunk["faces"], owner)
-                        else:
-                            pairs = [(f, owner) for f in chunk["faces"]]
-                        ents = chunk["_pick_ents"] = (owner, pairs)
-                    if not isinstance(ents[1], list) and \
-                            isinstance(b_entities, list):
-                        from views.array_bake import PickEntities
-                        b_entities = PickEntities(b_entities)
-                    b_entities.extend(ents[1])
-                    b_pidx.append(np.full(n, len(b_plist), dtype=np.int32))
-                    b_plist.append(g)
-                    b_area.append(chunk["areas"])
-                    b_vis.append(np.full(n, gvis, dtype=bool))
-                    b_sel.append(np.full(n, gsel, dtype=bool))
-                    if chunk["v0"] is not None and id(g) in lazy_set:
-                        b_own.append((chunk.get("bbox"), chunk["v0"],
-                                      chunk["e1"], chunk["e2"],
-                                      chunk["tri_ent"], off))
-                    elif chunk["v0"] is not None:
-                        static_key.append((id(chunk), chunk.get("rev"), off))
-                        v0, e1, e2, te, cells = _split_chunk_spans(chunk)
-                        b_v0.append(v0)
-                        b_e1.append(e1)
-                        b_e2.append(e2)
-                        b_te.append(te + off)
-                        if cells is None:
-                            b_spans.append((chunk.get("bbox"), b_tri_off,
-                                            len(v0)))
-                        else:
-                            # One span per grid cell, each with its own box:
-                            # a ray meets the cells it crosses, not the chunk.
-                            b_spans += [(bb, b_tri_off + s0, n)
-                                        for bb, s0, n in cells]
-                        b_tri_off += len(v0)
-                    if gsnap and chunk["edges"]:
-                        ge = chunk.get("_pick_ge")
-                        if ge is None or ge[0] is not chunk["edges"]:
-                            ge = chunk["_pick_ge"] = (
-                                chunk["edges"],
-                                np.frombuffer(chunk["edges"], dtype=np.float32)
-                                .reshape(-1, 2, 3).astype(np.float64))
-                        ge = ge[1]
-                        b_gea.append(ge[:, 0])
-                        b_geb.append(ge[:, 1])
-                        b_ggi.append(np.full(len(ge), len(b_ggroups),
-                                             dtype=np.int64))
-                        b_gsel.append(np.full(len(ge), gsel, dtype=bool))
-                        b_ggroups.append(owner)
-                blk = (sig, {
-                    "entities": b_entities,
-                    "place_idx": (np.concatenate(b_pidx) if b_pidx
-                                  else np.empty(0, np.int32)),
-                    "placements": b_plist,
-                    "areas": (np.concatenate(b_area) if b_area
-                              else np.empty(0)),
-                    "vis": (np.concatenate(b_vis) if b_vis
-                            else np.empty(0, bool)),
-                    "sel": (np.concatenate(b_sel) if b_sel
-                            else np.empty(0, bool)),
-                    **Viewport._pick_static_tris(self, tuple(static_key),
-                                                 b_v0, b_e1, b_e2, b_te),
-                    "own": b_own,
-                    "gedge_a": np.concatenate(b_gea) if b_gea else None,
-                    "gedge_b": np.concatenate(b_geb) if b_gea else None,
-                    "gedge_gi": np.concatenate(b_ggi) if b_gea else None,
-                    "gedge_sel": np.concatenate(b_gsel) if b_gea else None,
-                    "gedge_groups": b_ggroups,
-                    "spans": b_spans,
-                })
+                fixed = [g for g in candidatos if id(g) not in lazy_set]
+                lazies = [g for g in candidatos if id(g) in lazy_set]
+                fkey = (sig[0], oculto, len(fixed), id(scene.edit_group))
+                fpart = getattr(self, "_pick_fixed_part", None)
+                if fpart is None or fpart[0] != fkey:
+                    # Called through the class: the stub viewports of the
+                    # tests run this unbound.
+                    fpart = self._pick_fixed_part = (fkey, Viewport._pick_block_part(
+                        self, fixed, tocables, lazy_set, None))
+                lpart = Viewport._pick_block_part(self, lazies, tocables,
+                                                  lazy_set, fpart[1])
+                blk = (sig, Viewport._pick_join_parts(self, fpart[1], lpart))
                 self._pick_block = blk
             block = blk[1]
             if block["entities"]:
@@ -10299,7 +10374,7 @@ class Viewport(QOpenGLWidget):
         idx.own_spans = own_spans
         if _PERF:
             _plog("pick_index", (_time_mod.perf_counter() - _p0) * 1000.0)
-        self._pick_index_cache = (key, idx)
+        self._pick_index_cache = (key, idx, getattr(self, "_pick_block", None))
         return idx
 
     def _pick_static_tris(self, key, v0, e1, e2, te) -> dict:
