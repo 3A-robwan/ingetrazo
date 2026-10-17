@@ -325,6 +325,9 @@ class PushPullTool(Tool):
         self._prism_cap: bool = False
         self._drag_pre_oriented: bool = False
         self._anchor: QVector3D | None = None  # fixed centroid for measuring extrusion
+        # Where the face was clicked, on its plane: the drag measures from
+        # here (see _grab_point).
+        self._grab: QVector3D | None = None
         self._normal: QVector3D | None = None
         self._cap_positions: list[QVector3D] = []  # original cap vertices
         # The clean model under a STAGED preview (see _show_staged_preview):
@@ -519,11 +522,12 @@ class PushPullTool(Tool):
         if inferred is not None:
             self.extrusion = inferred
         else:
+            grab = self._grab if self._grab is not None else self._anchor
             projected = viewport._project_to_lock_line(
-                self._anchor, self._normal, ctx.screen.x(), ctx.screen.y()
+                grab, self._normal, ctx.screen.x(), ctx.screen.y()
             )
             self.extrusion = QVector3D.dotProduct(
-                projected - self._anchor, self._normal)
+                projected - grab, self._normal)
         self._clamp_extrusion(viewport)
         # A clean prism extend/shrink is previewed by MOVING the cap, so the
         # model itself shows the result and nothing of the old shape is left
@@ -574,6 +578,7 @@ class PushPullTool(Tool):
             self._drag_pre_oriented = True
             self._anchor = face.centroid()
             self._normal = self._outward_normal(face, target.mesh)
+            self._grab = self._grab_point(viewport, ctx)
             self._attached, self._prism_cap = self._classify_base(target)
             self._cap_positions = self._cap_loop_positions(face)
             self._prism_verts = self._cap_vertices(target)
@@ -596,6 +601,21 @@ class PushPullTool(Tool):
                 self._tiny_hint_shown = True
             return
         self._commit(viewport)
+
+    def _grab_point(self, viewport, ctx: ToolContext) -> QVector3D | None:
+        """The clicked spot on the face's plane, or ``None`` (the centroid
+        then stands in).
+
+        The drag is measured along the line through this point: the cursor
+        stays on it. Through the centroid instead, a click near a corner of
+        a 12 m slab read -3.39 m for a 0.3 m pull, and a ring's centroid lies
+        in its hole -- 1 m of cursor gave 0.13 m walls (tutorial hunt 2,
+        A13/B5)."""
+        hit = getattr(viewport, "_ray_hit_plane", None)
+        if hit is None or self._anchor is None or self._normal is None:
+            return None
+        return hit((ctx.screen.x(), ctx.screen.y()),
+                   (self._anchor, self._normal))
 
     def on_double_click(self, ctx: ToolContext) -> None:
         """Repeat the last committed distance on the face under the cursor,
@@ -624,6 +644,7 @@ class PushPullTool(Tool):
             self._drag_pre_oriented = True
             self._anchor = face.centroid()
             self._normal = self._outward_normal(face, target.mesh)
+            self._grab = self._grab_point(viewport, ctx)
             self._attached, self._prism_cap = self._classify_base(target)
             self._cap_positions = self._cap_loop_positions(face)
             self._prism_verts = self._cap_vertices(target)
@@ -2450,6 +2471,7 @@ class PushPullTool(Tool):
         self._hover_group = None
         self._selected_arm = False
         self._anchor = None
+        self._grab = None
         self._normal = None
         self._cap_positions = []
         self._preview_snapshot = None
