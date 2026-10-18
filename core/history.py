@@ -22,7 +22,7 @@ import os as _os
 import time as _time_mod
 from abc import ABC, abstractmethod
 from pathlib import Path as _Path
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 _PERF = bool(_os.environ.get("INGETRAZO_PERF"))
 _perf_file = None
@@ -166,6 +166,10 @@ class History:
         self.scene = scene
         self.undo_stack: list[Command] = []
         self.redo_stack: list[Command] = []
+        #: Changes when the user commits, undoes or redoes an operation.
+        #: Tools use this to expire post-operation numeric corrections even
+        #: if Undo followed by Redo puts the same command back on top.
+        self.revision = 0
         #: Message describing the last rolled-back failure (UI may flash it).
         self.last_error: Optional[str] = None
         #: Why the last command declined to happen (:class:`CommandRejected`).
@@ -202,12 +206,55 @@ class History:
         # edited): undo/redo re-enter that context so a snapshot restore never
         # lands on the wrong mesh after the user exits the group.
         cmd._history_mesh = self.scene.mesh
+        cmd._history_edit_group = getattr(self.scene, "edit_group", None)
         self.undo_stack.append(cmd)
         cap = int(getattr(self, "max_steps", 0) or 0)
         if cap > 0 and len(self.undo_stack) > cap:
             del self.undo_stack[:len(self.undo_stack) - cap]
         self.redo_stack.clear()
         self._rebind_dimensions()
+        self.revision += 1
+
+    def replace_last(self, previous: Command,
+                     build: Callable[[], Optional[Command]], *,
+                     revision: Optional[int] = None) -> Optional[Command]:
+        """Rebuild the last operation at a new numeric value, as one Undo step.
+
+        ``build`` runs against the scene BEFORE ``previous`` and returns an
+        unexecuted replacement, or ``None`` when the requested result is not
+        possible. An invalid result or failed command restores the previous
+        operation and its history. Nothing is replayed in another edit context.
+        """
+        if (not self.undo_stack or self.undo_stack[-1] is not previous
+                or (revision is not None and revision != self.revision)
+                or getattr(previous, "_history_mesh", self.scene.mesh) is not self.scene.mesh
+                or getattr(previous, "_history_edit_group", None)
+                is not getattr(self.scene, "edit_group", None)):
+            return None
+        before_revision = self.revision
+        before_redo = list(self.redo_stack)
+        before_selection = set(self.scene.selection)
+        self.undo()
+        replacement = None
+        try:
+            replacement = build()
+            if replacement is not None:
+                self.execute(replacement)
+        except Exception as exc:
+            self.last_error = f"{type(previous).__name__}: {exc}"
+            self.last_rejected = None
+            self._log_failure(previous, exc)
+        if replacement is not None and self.undo_stack and self.undo_stack[-1] is replacement:
+            self.revision = before_revision + 1
+            return replacement
+        error, rejected = self.last_error, self.last_rejected
+        self.redo()
+        self.redo_stack[:] = before_redo
+        self.scene.selection.clear()
+        self.scene.selection.update(before_selection)
+        self.last_error, self.last_rejected = error, rejected
+        self.revision = before_revision
+        return None
 
     def _rebind_dimensions(self) -> None:
         """After every command, undo and redo: a dimension whose vertex
@@ -250,6 +297,7 @@ class History:
         self._in_command_mesh(cmd, lambda: cmd.undo(self.scene))
         self.redo_stack.append(cmd)
         self._rebind_dimensions()
+        self.revision += 1
         return True
 
     def redo(self) -> bool:
@@ -259,6 +307,7 @@ class History:
         self._in_command_mesh(cmd, lambda: cmd.do(self.scene))
         self.undo_stack.append(cmd)
         self._rebind_dimensions()
+        self.revision += 1
         return True
 
     def _in_command_mesh(self, cmd, fn) -> None:
@@ -278,6 +327,7 @@ class History:
     def clear(self) -> None:
         self.undo_stack.clear()
         self.redo_stack.clear()
+        self.revision += 1
 
 
 # ---- Concrete commands ------------------------------------------------------
@@ -1381,6 +1431,77 @@ class AddGuideCommand(Command):
     def undo(self, scene) -> None:
         if self.guide in scene.guides:
             scene.guides.remove(self.guide)
+        scene.version += 1
+
+
+class MoveGuidesCommand(Command):
+    """Translate construction lines/points, including their drawn origins."""
+
+    def __init__(self, guides, delta: QVector3D) -> None:
+        self.guides = list(guides)
+        self.delta = QVector3D(delta)
+        self._before = None
+
+    @staticmethod
+    def shift(guide, step: QVector3D) -> None:
+        guide.point = guide.point + step
+        if guide.origin is not None:
+            guide.origin = guide.origin + step
+
+    def do(self, scene) -> None:
+        if self._before is None:
+            self._before = [(g, QVector3D(g.point),
+                             QVector3D(g.origin) if g.origin is not None else None)
+                            for g in self.guides]
+        for guide, point, origin in self._before:
+            guide.point = point + self.delta
+            guide.origin = origin + self.delta if origin is not None else None
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        for guide, point, origin in self._before:
+            guide.point = QVector3D(point)
+            guide.origin = QVector3D(origin) if origin is not None else None
+        scene.version += 1
+
+
+class RotateGuidesCommand(Command):
+    """Rotate guide lines/points rigidly, replaying exact original coordinates."""
+
+    def __init__(self, guides, centre: QVector3D, axis: QVector3D,
+                 deg: float) -> None:
+        self.guides = list(guides)
+        self.centre = QVector3D(centre)
+        self.axis = QVector3D(axis)
+        self.deg = float(deg)
+        self._before = None
+
+    @staticmethod
+    def pose(guide, point, direction, origin, matrix) -> None:
+        """Place a guide from saved coordinates, or restore them with None."""
+        guide.point = matrix.map(point) if matrix is not None else QVector3D(point)
+        guide.direction = None
+        if direction is not None:
+            guide.direction = (matrix.mapVector(direction).normalized()
+                               if matrix is not None else QVector3D(direction))
+        guide.origin = None
+        if origin is not None:
+            guide.origin = matrix.map(origin) if matrix is not None else QVector3D(origin)
+
+    def do(self, scene) -> None:
+        if self._before is None:
+            self._before = [(g, QVector3D(g.point),
+                             QVector3D(g.direction) if g.direction is not None else None,
+                             QVector3D(g.origin) if g.origin is not None else None)
+                            for g in self.guides]
+        matrix = rotation_matrix(self.centre, self.axis, self.deg)
+        for guide, point, direction, origin in self._before:
+            self.pose(guide, point, direction, origin, matrix)
+        scene.version += 1
+
+    def undo(self, scene) -> None:
+        for guide, point, direction, origin in self._before:
+            self.pose(guide, point, direction, origin, None)
         scene.version += 1
 
 

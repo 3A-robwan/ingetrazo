@@ -19,6 +19,8 @@ untouched.
 """
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QVector3D
 
@@ -77,6 +79,7 @@ class FilletTool(Tool):
         self._plan_key = None
         self._message: str | None = None
         self._viewport = None
+        self._last = None
 
     @staticmethod
     def _corners_mode() -> bool:
@@ -119,6 +122,7 @@ class FilletTool(Tool):
             set_hover(None)
 
     def _reset(self) -> None:
+        self._last = None
         self.edges = []
         self.sizing = False
         self.hover_edge = None
@@ -183,6 +187,7 @@ class FilletTool(Tool):
         return [edge]
 
     def on_click(self, ctx: ToolContext) -> None:
+        self._last = None
         vp = ctx.viewport
         self._viewport = vp
         if self.sizing:
@@ -260,6 +265,7 @@ class FilletTool(Tool):
         picked corners do not make edges, so they are let go."""
         if affect not in ("edges", "vertices") or affect == FilletTool.affect:
             return
+        self._last = None
         FilletTool.affect = affect
         mesh = getattr(getattr(viewport, "scene", None), "mesh", None)
         if affect == "vertices":
@@ -305,6 +311,7 @@ class FilletTool(Tool):
     def set_measure(self, viewport, measure: str) -> None:
         if measure not in dict(self._MEASURES):
             return
+        self._last = None
         FilletTool.measure = measure
         viewport.flash_status(tr("Measure: {m}", m=tr(self._measure_label())))
         self._replan()
@@ -313,6 +320,7 @@ class FilletTool(Tool):
 
     def set_size(self, viewport, value: float) -> None:
         """The panel's Amount: the size, without rounding yet."""
+        self._last = None
         FilletTool.radius = float(value)
         self._replan()
         self._sync_panel()
@@ -328,6 +336,7 @@ class FilletTool(Tool):
             shape = tuple((float(x), float(y), bool(sm)) for x, y, sm in shape)
         elif shape is not None and shape not in dict(self._SHAPES):
             return
+        self._last = None
         if shape is not None and self._corners_mode():
             viewport.flash_status(tr("Drawn profiles bevel edges only."))
             self._sync_panel()
@@ -342,6 +351,7 @@ class FilletTool(Tool):
     def set_corners(self, viewport, corners: str) -> None:
         if corners not in ("round", "cut"):
             return
+        self._last = None
         FilletTool.corners = corners
         viewport.flash_status(tr("Corners: {c}", c=tr(
             "Fill (triangle / cap)" if corners == "round" else "No fill (notch)")))
@@ -386,8 +396,10 @@ class FilletTool(Tool):
         return tr("Ctrl = measure ({m})", m=tr(self._measure_label()))
 
     def on_value(self, viewport, value) -> bool:
-        if isinstance(value, tuple) or value <= 0:
+        if not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
             return False
+        if self._valid_last(viewport):
+            return self._retype(viewport, radius=float(value))
         FilletTool.radius = float(value)
         if self.edges:
             self._commit(viewport)
@@ -404,6 +416,8 @@ class FilletTool(Tool):
         n = int(n)
         if n < 1:
             return False
+        if self._valid_last(viewport):
+            return self._retype(viewport, segments=n)
         FilletTool.segments = n
         viewport.flash_status(tr("{n} segments", n=n))
         self._replan()
@@ -416,6 +430,8 @@ class FilletTool(Tool):
         if not 0.0 < p < 1.0:
             viewport.flash_status(tr("The profile must be between 0 and 1."))
             return False
+        if self._valid_last(viewport):
+            return self._retype(viewport, profile=float(p), shape=None)
         FilletTool.profile = float(p)
         FilletTool.shape = None          # a number is the superellipse
         viewport.flash_status(tr("Profile {p}", p=f"{p:.2f}"))
@@ -481,11 +497,21 @@ class FilletTool(Tool):
         mesh = viewport.scene.mesh
         n = len(self.edges)
         r = FilletTool.radius
+        targets = tuple(self._current_edges())
+        settings = self._settings()
         cmd = SnapshotMutation(lambda scene: apply_fillet(scene.mesh, plan),
                                mesh=mesh)
         viewport.history.execute(cmd)
+        if not viewport.history.undo_stack or viewport.history.undo_stack[-1] is not cmd:
+            return
         viewport.scene.clear_selection()
         self._reset()
+        self._last = {
+            "cmd": cmd, "revision": viewport.history.revision,
+            "targets": targets, "settings": settings, "mesh": mesh,
+            "context": getattr(viewport.scene, "edit_group", None),
+            "content_version": viewport.scene.content_version,
+        }
         set_hover = getattr(viewport, "set_hover", None)
         if set_hover is not None:
             set_hover(None)
@@ -501,6 +527,59 @@ class FilletTool(Tool):
         viewport.flash_status(said, 3000)
         self._sync_panel()
         viewport.update()
+
+    @staticmethod
+    def _settings() -> dict:
+        return {name: getattr(FilletTool, name) for name in (
+            "radius", "segments", "profile", "measure", "corners", "shape", "affect")}
+
+    def _valid_last(self, viewport) -> bool:
+        last = self._last
+        history = viewport.history
+        if last is None:
+            return False
+        if (last["revision"] != history.revision
+                or last["content_version"] != viewport.scene.content_version
+                or last["mesh"] is not viewport.scene.mesh
+                or last["context"] is not getattr(viewport.scene, "edit_group", None)
+                or not history.undo_stack or history.undo_stack[-1] is not last["cmd"]):
+            self._last = None
+            return False
+        return True
+
+    def _retype(self, viewport, **changed) -> bool:
+        from core.history import SnapshotMutation
+        last = self._last
+        settings = dict(last["settings"], **changed)
+        mesh = last["mesh"]
+        message = []
+
+        def build():
+            if settings["affect"] == "vertices":
+                plan = plan_vertex_bevel(mesh, last["targets"], settings["radius"],
+                                         settings["segments"], settings["profile"])
+            else:
+                plan = plan_fillet(mesh, last["targets"], settings["radius"],
+                                   settings["segments"], settings["profile"],
+                                   settings["measure"], settings["corners"], settings["shape"])
+            if isinstance(plan, str):
+                message.append(plan)
+                return None
+            return SnapshotMutation(lambda scene: apply_fillet(scene.mesh, plan), mesh=mesh)
+
+        cmd = viewport.history.replace_last(last["cmd"], build, revision=last["revision"])
+        last["content_version"] = viewport.scene.content_version
+        if cmd is None:
+            if message:
+                viewport.flash_status(message[0], 4000)
+            return False
+        for name, value in settings.items():
+            setattr(FilletTool, name, value)
+        last.update(cmd=cmd, revision=viewport.history.revision, settings=settings)
+        viewport.scene.clear_selection()
+        self._sync_panel()
+        viewport.update()
+        return True
 
     # ---- Preview --------------------------------------------------------------
     def preview_faces(self):

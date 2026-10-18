@@ -10,6 +10,8 @@ UX (the classic push/pull modeller behaviour):
   geometry deforms live as you drag (faces tilt, walls stretch).
 - Second click drops at the current offset. Typing a length + Enter moves
   exactly that far along the current direction; ``X;Y;Z`` + Enter is a 3D delta.
+  Immediately retyping replaces that move from its original grab point,
+  including in copy mode, and remains one undoable operation.
 - Tapping Ctrl toggles COPY mode (issue #20): the original stays
   put and a translated copy is created (a component instance copies as a
   sibling instance); the copy's wireframe previews at the cursor. Right after
@@ -28,17 +30,21 @@ history stays clean while you still see the deformation as it happens.
 """
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QMatrix4x4, QVector3D
 
 from core.group import Group, copy_group, transformed_attrs
+from core.guide import Guide
 from core.i18n import tr
 from core.mesh import Edge, Face, Mesh
 from core.dimension import Dimension
-from core.history import (AddEdgeCommand, AddFaceCommand, Command,
+from core.history import (AddEdgeCommand, AddFaceCommand, AddGuideCommand, Command,
                           CompoundCommand,
                           InsertGroupCommand, MoveGroupCommand,
                           MoveDimensionsCommand, MoveTextLabelsCommand,
+                          MoveGuidesCommand,
                           MoveVerticesCommand)
 from core.textlabel import TextLabel
 from core.topology import _key
@@ -252,6 +258,7 @@ class MoveTool(Tool):
         self._groups: list[Group] = []         # whole groups being moved
         self._splanes: list = []               # section planes being moved
         self._images: list = []                # reference images being moved
+        self._guides: list[Guide] = []         # construction lines and points
         self._labels: list[TextLabel] = []     # leader texts whose label moves
         self._dims: dict = {}                  # dimension → "line" | "rigid"
         self._preview_delta = QVector3D(0.0, 0.0, 0.0)  # currently applied live
@@ -260,7 +267,7 @@ class MoveTool(Tool):
         self._sel_faces: list = []             # loose geometry copy mode duplicates
         self._sel_edges: list = []
         self._base_segments: list = []         # wireframe for the copy preview
-        self._last: dict | None = None         # the copy just made, for "3x" / "/3"
+        self._last: dict | None = None         # the last move/copy, for numeric corrections
         # Rotation grips (issue #115): the group they sit on, the grips,
         # the one under the cursor, and — once one is taken — the Rotate
         # tool that runs the turn (its protractor, snaps, VCB and commit).
@@ -275,16 +282,20 @@ class MoveTool(Tool):
         self._reset()
         self._copy = False
         self._last = None
+        self._grip_rot_done = None
+        self._grip_rot = None
 
     def on_deactivate(self, viewport) -> None:
         if self._grip_rot is not None:
             self._grip_rot.on_cancel(viewport)
+        self._grip_rot = None
         self._clear_grips()
         self._end_freeze(viewport)
         self._revert_preview(viewport)
         self._reset()
         self._copy = False
         self._last = None
+        self._grip_rot_done = None
 
     @property
     def cursor_plus(self) -> bool:
@@ -352,6 +363,7 @@ class MoveTool(Tool):
                 self._clear_grips()
             return
         if self.start_point is None and self._hot_grip is not None:
+            self._last = None
             self._start_grip_rotation(ctx)
             return
         if self.start_point is None:
@@ -382,8 +394,20 @@ class MoveTool(Tool):
                 # A click on a dimension's lines grabs the dimension, not
                 # the geometry behind it.
                 groups, positions, verts = [], [], []
+            guides = [g for g in viewport.scene.selection
+                      if isinstance(g, Guide) and g in viewport.scene.guides]
+            if (not viewport.scene.selection and not groups and not labels
+                    and not splanes and not dims):
+                # Match Select: an edge/group or annotation wins, but a thin
+                # guide on a face is the deliberate target over that face.
+                pick = getattr(viewport, "pick_guide", None)
+                guide = pick(ctx.screen.x(), ctx.screen.y()) if pick else None
+                if (guide is not None
+                        and viewport.pick_edge(ctx.screen.x(), ctx.screen.y()) is None):
+                    guides = [guide]
+                    positions, verts, images = [], [], []
             if not (groups or positions or labels or splanes or images
-                    or dims):
+                    or dims or guides):
                 return  # nothing under the cursor / selected to move
             self._last = None            # a new move ends the array window
             self.start_point = ctx.world
@@ -394,6 +418,7 @@ class MoveTool(Tool):
             self._dims = dims
             self._splanes = splanes
             self._images = images
+            self._guides = guides
             # The grabbed positions resolved to vertex OBJECTS once: the live
             # preview then moves these identities directly, so dragging through
             # (or onto) a coincident vertex never drags the innocent one along.
@@ -440,19 +465,64 @@ class MoveTool(Tool):
                 self._clear_grips()
             return done
         if self.start_point is None or self.grab is None:
+            last = self._last
+            if last is None:
+                return False
+            delta = self._value_delta(value, last["direction"])
+            return delta is not None and self._replace_move(viewport, delta)
+        direction = (self.hover_point - self.grab
+                     if self.hover_point is not None else None)
+        delta = self._value_delta(value, direction)
+        if delta is None:
             return False
-        if isinstance(value, tuple):
-            if len(value) != 3:
-                return False  # 2-tuple is a rectangle's W×H, not a move delta
-            delta = QVector3D(value[0], value[1], value[2])
-        else:
-            if self.hover_point is None:
-                return False
-            direction = self.hover_point - self.grab
-            if direction.length() < 1e-9:
-                return False
-            delta = direction.normalized() * value
         self._commit(viewport, delta)
+        return True
+
+    @staticmethod
+    def _value_delta(value, direction):
+        if isinstance(value, bool):
+            return None
+        try:
+            if isinstance(value, tuple):
+                if len(value) != 3 or not all(math.isfinite(float(v)) for v in value):
+                    return None
+                delta = QVector3D(*(float(v) for v in value))
+            else:
+                length = float(value)
+                if (not math.isfinite(length) or direction is None
+                        or direction.length() < 1e-9):
+                    return None
+                delta = direction.normalized() * length
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if (not all(math.isfinite(v) for v in (delta.x(), delta.y(), delta.z()))
+                or delta.length() < 1e-9):
+            return None
+        return delta
+
+    def _replace_move(self, viewport, delta, array=None) -> bool:
+        last = self._last
+        if last is None:
+            return False
+        if (viewport.history is not last["history"]
+                or viewport.history.revision != last["revision"]
+                or viewport.scene.content_version != last["content_version"]):
+            self._last = None
+            return False
+        count, mode = array if array is not None else last["array"]
+        deltas = ([delta * (k / float(count)) for k in range(1, count + 1)]
+                  if mode == "/" else
+                  [delta * float(k) for k in range(1, count + 1)])
+        cmd = viewport.history.replace_last(
+            last["cmd"], lambda: last["build"](deltas), revision=last["revision"])
+        if cmd is None:
+            last["content_version"] = viewport.scene.content_version
+            return False
+        last.update(cmd=cmd, delta=QVector3D(delta), array=(count, mode),
+                    revision=viewport.history.revision,
+                    content_version=viewport.scene.content_version)
+        self._tell_join(viewport, getattr(cmd, "commands", [cmd]))
+        viewport.update()
         return True
 
     def array_pending(self, viewport) -> bool:
@@ -460,7 +530,10 @@ class MoveTool(Tool):
         the viewport then lets a bare «x» open the value box (#542) instead
         of switching to Text. The same test ``on_array_value`` applies."""
         last = self._last
-        if last is None or self.start_point is not None:
+        if (last is None or not last["copy"] or self.start_point is not None
+                or viewport.history is not last["history"]
+                or viewport.history.revision != last["revision"]
+                or viewport.scene.content_version != last["content_version"]):
             return False
         stack = getattr(viewport.history, "undo_stack", None)
         return bool(stack) and stack[-1] is last["cmd"]
@@ -481,6 +554,8 @@ class MoveTool(Tool):
         it re-lays the copies ten metres apart along the copy's direction;
         typed DURING a Ctrl-drag it makes the copy there and then — the
         cursor gave the direction, the entry the count and the spacing."""
+        if count < 1 or (step is not None and (not math.isfinite(step) or step <= 0)):
+            return False
         if step is not None and self.start_point is not None:
             if not self._copy or self.hover_point is None or self.grab is None:
                 return False
@@ -491,35 +566,23 @@ class MoveTool(Tool):
             if self._last is None:
                 return False
             return self.on_array_value(viewport, count, mode)
-        if step is not None and self._last is not None:
-            d = self._last["delta"]
-            if d.length() < 1e-9:
-                return False
-            self._last["delta"] = d.normalized() * step
         last = self._last
-        if last is None or self.start_point is not None or count < 1:
-            return False
-        stack = getattr(viewport.history, "undo_stack", None)
-        if not stack or stack[-1] is not last["cmd"]:
-            self._last = None
+        if (last is None or not last["copy"] or self.start_point is not None
+                or count < 1):
             return False
         delta = last["delta"]
-        if mode == "/":
-            deltas = [delta * (k / float(count)) for k in range(1, count + 1)]
-        else:
-            deltas = [delta * float(k) for k in range(1, count + 1)]
-        viewport.history.undo()
-        cmd = last["build"](deltas)
-        if cmd is None:
-            self._last = None
+        if step is not None:
+            if not math.isfinite(step) or step <= 0:
+                return False
+            delta = delta.normalized() * step
+        if not self._replace_move(viewport, delta, array=(count, mode)):
             return False
-        viewport.history.execute(cmd)
-        last["cmd"] = cmd
         viewport.flash_status(tr("{n} copies").format(n=count))
-        viewport.update()
         return True
 
     def on_cancel(self, viewport) -> None:
+        self._grip_rot_done = None
+        self._last = None
         if self._grip_rot is not None:
             self._grip_rot.on_cancel(viewport)
             self._grip_rot = None
@@ -577,6 +640,12 @@ class MoveTool(Tool):
         if not edges and not groups:
             return None
         return edges, groups
+
+    def snap_excluded_guides(self) -> set[int]:
+        """Moving guides cannot attract their own cursor; copy originals can."""
+        if self.grab is None or self._copy:
+            return set()
+        return {id(g) for g in self._guides}
 
     def moving_face_ids(self) -> set:
         """The loose faces the drag bends — any face with a corner on a
@@ -736,7 +805,7 @@ class MoveTool(Tool):
                         a, b = xf.map(a), xf.map(b)
                     self._base_segments.append((a, b))
         sel = list(viewport.scene.selection)
-        if not sel and not self._groups:
+        if not sel and not self._groups and not self._guides:
             # Nothing selected and no group hover-picked: the click grabbed
             # the loose entity under the cursor (mirror of gather_targets).
             edge = viewport.pick_edge(ctx.screen.x(), ctx.screen.y())
@@ -756,6 +825,10 @@ class MoveTool(Tool):
                         (QVector3D(lp[i]), QVector3D(lp[(i + 1) % n])))
         for e in self._sel_edges:
             self._base_segments.append((QVector3D(e.a), QVector3D(e.b)))
+        for guide in self._guides:
+            self._base_segments.append(guide.segment())
+            if guide.origin is not None:
+                self._base_segments.append((QVector3D(guide.origin), QVector3D(guide.point)))
 
     def _make_copy_builder(self, scene=None):
         """A closure that builds the copy command for a list of offsets —
@@ -770,6 +843,7 @@ class MoveTool(Tool):
         groups = list(self._groups)
         faces = list(self._sel_faces)
         edges = list(self._sel_edges)
+        guides = [Guide(g.point, g.direction, g.origin) for g in self._guides]
 
         # Edges that bound a copied face travel with it the old way: the
         # planner runs before the faces are stamped and would lay a second
@@ -796,6 +870,10 @@ class MoveTool(Tool):
                 m.translate(d)
                 for group in groups:
                     cmds.append(InsertGroupCommand(copy_group(group, d)))
+                for guide in guides:
+                    cmds.append(AddGuideCommand(Guide(
+                        guide.point + d, guide.direction,
+                        guide.origin + d if guide.origin is not None else None)))
                 for f in faces:
                     cmds.append(AddFaceCommand(
                         [v + d for v in f.vertices],
@@ -859,6 +937,8 @@ class MoveTool(Tool):
             sp.point = sp.point + step
         for im in self._images:
             im.origin = im.origin + step
+        for guide in self._guides:
+            MoveGuidesCommand.shift(guide, step)
         viewport.scene.version += 1
 
     def _apply_preview(self, viewport, target_delta: QVector3D) -> None:
@@ -879,6 +959,8 @@ class MoveTool(Tool):
                 sp.point = sp.point + step
             for im in self._images:
                 im.origin = im.origin + step
+            for guide in self._guides:
+                MoveGuidesCommand.shift(guide, step)
             self._preview_delta = target_delta
             viewport.set_groups_preview_offset(target_delta)
             return
@@ -900,6 +982,8 @@ class MoveTool(Tool):
                     sp.point = sp.point + step
                 for im in self._images:
                     im.origin = im.origin + step
+                for guide in self._guides:
+                    MoveGuidesCommand.shift(guide, step)
             self._preview_delta = QVector3D(0.0, 0.0, 0.0)
             return
         if self._preview_delta.length() < 1e-12:
@@ -918,42 +1002,56 @@ class MoveTool(Tool):
         # the history holds a single clean entry (and the geometry doesn't shift
         # by double the delta).
         self._revert_preview(viewport)
-        if self._copy and delta.length() > 1e-9:
-            # Copy mode: the original never moved; stamp the copies.
-            build = self._make_copy_builder(viewport.scene)
+        if delta.length() > 1e-9:
+            copy = self._copy
+            build = (self._make_copy_builder(viewport.scene) if copy
+                     else self._make_move_builder())
             cmd = build([delta])
             if cmd is not None:
                 viewport.history.execute(cmd)
-                # Right after the copy, "3x" / "/3" make an array.
-                self._last = {"cmd": cmd, "build": build,
-                              "delta": QVector3D(delta)}
-            self._reset()
-            viewport.update()
-            return
-        if delta.length() > 1e-9:
-            commands = []
-            commands.extend(MoveGroupCommand(g, delta) for g in self._groups)
-            if self._positions:
-                commands.append(MoveVerticesCommand(self._positions, delta))
-            if self._labels:
-                commands.append(MoveTextLabelsCommand(self._labels, delta))
-            if self._dims:
-                commands.append(MoveDimensionsCommand(self._dims, delta))
-            if self._splanes:
-                from core.history import MoveSectionPlanesCommand
-                commands.append(
-                    MoveSectionPlanesCommand(self._splanes, delta))
-            if self._images:
-                from core.history import MoveImagePlanesCommand
-                commands.append(
-                    MoveImagePlanesCommand(self._images, delta))
-            if len(commands) == 1:
-                viewport.history.execute(commands[0])
-            elif commands:
-                viewport.history.execute(CompoundCommand(commands))
-            self._tell_join(viewport, commands)
+                if viewport.history.undo_stack and viewport.history.undo_stack[-1] is cmd:
+                    self._last = {"cmd": cmd, "build": build, "copy": copy,
+                                  "delta": QVector3D(delta),
+                                  "direction": delta.normalized(), "array": (1, "x"),
+                                  "history": viewport.history,
+                                  "revision": viewport.history.revision,
+                                  "content_version": viewport.scene.content_version}
+                self._tell_join(viewport, getattr(cmd, "commands", [cmd]))
         self._reset()
         viewport.update()
+
+    def _make_move_builder(self):
+        groups = list(self._groups)
+        positions = [QVector3D(p) for p in self._positions]
+        labels = list(self._labels)
+        dims = dict(self._dims)
+        splanes = list(self._splanes)
+        images = list(self._images)
+        guides = list(self._guides)
+
+        def build(deltas):
+            delta = deltas[-1]
+            commands = []
+            commands.extend(MoveGroupCommand(g, delta) for g in groups)
+            if positions:
+                commands.append(MoveVerticesCommand(positions, delta))
+            if labels:
+                commands.append(MoveTextLabelsCommand(labels, delta))
+            if dims:
+                commands.append(MoveDimensionsCommand(dims, delta))
+            if splanes:
+                from core.history import MoveSectionPlanesCommand
+                commands.append(MoveSectionPlanesCommand(splanes, delta))
+            if images:
+                from core.history import MoveImagePlanesCommand
+                commands.append(MoveImagePlanesCommand(images, delta))
+            if guides:
+                commands.append(MoveGuidesCommand(guides, delta))
+            if not commands:
+                return None
+            return commands[0] if len(commands) == 1 else CompoundCommand(commands)
+
+        return build
 
     @staticmethod
     def _tell_join(viewport, commands) -> None:
@@ -980,6 +1078,7 @@ class MoveTool(Tool):
         self._dims = {}
         self._splanes = []
         self._images = []
+        self._guides = []
         self._preview_delta = QVector3D(0.0, 0.0, 0.0)
         self._sel_faces = []
         self._sel_edges = []

@@ -163,6 +163,16 @@ class PreferencesDialog(QDialog):
                                       != "0")
         form.addRow("", self._invert_orbit)
 
+        from views.viewport import _load_dynamic_shift_navigation
+        self._dynamic_shift_nav = QCheckBox(tr(
+            "Switch Orbit/Pan with Shift during a drag"))
+        self._dynamic_shift_nav.setChecked(_load_dynamic_shift_navigation(st))
+        self._dynamic_shift_nav.setToolTip(tr(
+            "While holding the middle mouse button or dragging with Orbit, press or release "
+            "Shift to switch between Orbit and Pan. Disable to keep the mode chosen when "
+            "the drag starts."))
+        form.addRow("", self._dynamic_shift_nav)
+
         from tools.walkthrough import look_sensitivity
         self._look_sens = QSpinBox()
         self._look_sens.setRange(1, 100)
@@ -470,6 +480,10 @@ class PreferencesDialog(QDialog):
         st.setValue("nav/invert_orbit_y",
                     "1" if self._invert_orbit.isChecked() else "0")
         self._window.viewport._invert_orbit_y = self._invert_orbit.isChecked()
+
+        _gs.set_value("dynamic_shift_navigation",
+                      "1" if self._dynamic_shift_nav.isChecked() else "0", st)
+        self._window.viewport._dynamic_shift_nav = self._dynamic_shift_nav.isChecked()
 
         # First Person reads it on every look move: nothing to push.
         st.setValue("walk/look_sensitivity", int(self._look_sens.value()))

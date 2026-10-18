@@ -8,6 +8,8 @@ Behavior follows the classic convention:
 - Snapping to the chain's first point (snap kind ``"close"``) finishes the
   polygon and resets the chain.
 - Esc cancels the chain without committing the pending segment.
+- Retyping a length immediately after a segment corrects that segment.
+  Moving the mouse first starts the next direction in the chain instead.
 
 The tool exposes ``start_point``, ``hover_point`` and ``chain_first_point``
 so the viewport can:
@@ -16,11 +18,35 @@ so the viewport can:
 """
 from __future__ import annotations
 
+import math
+
 from PySide6.QtGui import QVector3D
 
 from core.edits import build_add_edge
-from core.history import Command
+from core.history import AddEdgeCommand, Command
 from tools.base import Tool, ToolContext
+
+
+class _LineEdgeCommand(AddEdgeCommand):
+    """Undo a simple segment without leaving its new endpoints behind."""
+
+    def __init__(self, edge_command) -> None:
+        super().__init__(edge_command.a, edge_command.b, merge=edge_command.merge,
+                         soft=edge_command.soft, curve=edge_command.curve)
+        self._created_vertices = None
+
+    def do(self, scene) -> None:
+        if self._created_vertices is None:
+            missing = [p for p in (self.a, self.b) if scene.mesh.vertex_at(p) is None]
+            super().do(scene)
+            self._created_vertices = [scene.mesh.vertex_at(p) for p in missing]
+        else:
+            scene.mesh.relink_vertices(self._created_vertices)
+            super().do(scene)
+
+    def undo(self, scene) -> None:
+        super().undo(scene)
+        scene.mesh.drop_orphan_vertices(self._created_vertices or ())
 
 
 class LineTool(Tool):
@@ -76,6 +102,9 @@ class LineTool(Tool):
         # (point, normal) of the face the chain was started on, if any.
         # The viewport reads this to keep subsequent points coplanar.
         self.work_plane: tuple[QVector3D, QVector3D] | None = None
+        self._last: dict | None = None
+        self._hover_screen: tuple | None = None
+        self._chain_context: tuple | None = None
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
@@ -87,11 +116,16 @@ class LineTool(Tool):
 
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
+        self._check_context(ctx.viewport)
+        self._last = None
+        self._hover_screen = (ctx.screen.x(), ctx.screen.y())
         clicked = ctx.world
         if self.start_point is None:
             self.start_point = clicked
+            self.hover_point = clicked
             self.chain_first_point = clicked
             self.chain_vertices = [clicked]
+            self._chain_context = self._context(ctx.viewport)
             return
 
         if (clicked - self.start_point).length() < 1e-9:
@@ -101,16 +135,17 @@ class LineTool(Tool):
             # history as a degenerate edge and come back as a noisy
             # rollback.
             return
-        cmd = self._commit_edge(ctx.viewport, self.start_point, clicked)
-        ctx.viewport.history.execute(cmd)
-        if ctx.snap.kind == "close":
-            self._reset()
-        else:
-            self.chain_vertices.append(clicked)
-            self.start_point = clicked
-        ctx.viewport.update()
+        self._commit_segment(ctx.viewport, clicked)
 
     def on_hover(self, ctx: ToolContext) -> None:
+        self._check_context(ctx.viewport)
+        screen = (ctx.screen.x(), ctx.screen.y())
+        if (self._last is not None and self._last["screen"] is not None
+                and screen != self._last["screen"]):
+            # Keyboard/snap refreshes reuse the pixel and keep the edit
+            # window. A real mouse move points out the NEXT segment.
+            self._last = None
+        self._hover_screen = screen
         self.hover_point = ctx.world
         ctx.viewport.update()
 
@@ -125,6 +160,8 @@ class LineTool(Tool):
         leaves from where the line now really ends. With only the first
         point placed there is nothing of this chain to undo: the point is
         let go. Idle, the ordinary undo runs."""
+        self._last = None
+        self._hover_screen = None
         if self.start_point is None:
             return False
         if len(self.chain_vertices) > 1:
@@ -157,38 +194,114 @@ class LineTool(Tool):
                         construct numerically (start, then type "3;4;5"
                         for a +3 X, +4 Y, +5 Z delta).
         """
+        if not self._check_context(viewport):
+            return False
+        last = self._last
+        if (last is not None and last["screen"] is None and self.hover_point is not None
+                and (self.hover_point - last["endpoint"]).length() > 1e-9):
+            # Script callers can set a new rubber-band point directly,
+            # without delivering mouse events or screen coordinates.
+            self._last = last = None
+        if last is not None:
+            history = viewport.history
+            if (history is not last["history"] or history.revision != last["revision"]
+                    or not history.undo_stack or history.undo_stack[-1] is not last["cmd"]):
+                self._reset()
+                return False
+            endpoint = self._value_endpoint(value, last["start"], last["direction"])
+            if endpoint is None:
+                return False
+            cmd = history.replace_last(
+                last["cmd"], lambda: self._commit_edge(viewport, last["start"], endpoint),
+                revision=last["revision"])
+            if cmd is None:
+                last["content_version"] = viewport.scene.content_version
+                return False
+            last.update(cmd=cmd, revision=history.revision, endpoint=QVector3D(endpoint),
+                        content_version=viewport.scene.content_version)
+            self._finish_segment(last, endpoint)
+            self._last = last
+            viewport.update()
+            return True
         if self.start_point is None:
             return False
+        direction = (self.hover_point - self.start_point
+                     if self.hover_point is not None else None)
+        endpoint = self._value_endpoint(value, self.start_point, direction)
+        return endpoint is not None and self._commit_segment(viewport, endpoint)
 
-        if isinstance(value, tuple):
-            if len(value) != 3:
-                return False  # 2-tuple is a rectangle's W×H, not a line delta
-            dx, dy, dz = value
-            new_endpoint = QVector3D(
-                self.start_point.x() + dx,
-                self.start_point.y() + dy,
-                self.start_point.z() + dz,
-            )
-        else:
-            # A negative length runs AWAY from the cursor, as Move/Copy
-            # already do (issue #58, @pacaeiro: «Command LINE do not accept
-            # negative values»). Only zero has nowhere to go.
-            if self.hover_point is None or abs(value) < 1e-9:
-                return False
-            delta = self.hover_point - self.start_point
-            if delta.length() < 1e-9:
-                return False
-            direction = delta.normalized()
-            new_endpoint = self.start_point + direction * value
+    # ---- Internals ----------------------------------------------------------
+    @staticmethod
+    def _value_endpoint(value, start, direction):
+        if isinstance(value, bool):
+            return None
+        try:
+            if isinstance(value, tuple):
+                if len(value) != 3 or not all(math.isfinite(float(v)) for v in value):
+                    return None
+                delta = QVector3D(*(float(v) for v in value))
+            else:
+                length = float(value)
+                if (not math.isfinite(length) or direction is None
+                        or direction.length() < 1e-9):
+                    return None
+                delta = direction.normalized() * length
+        except (TypeError, ValueError, OverflowError):
+            return None
+        endpoint = start + delta
+        if (not all(math.isfinite(v) for v in (endpoint.x(), endpoint.y(), endpoint.z()))
+                or delta.length() < 1e-9):
+            return None
+        return endpoint
 
-        viewport.history.execute(self._commit_edge(viewport, self.start_point, new_endpoint))
-        self.chain_vertices.append(new_endpoint)
-        self.start_point = new_endpoint
-        self.hover_point = new_endpoint
+    @staticmethod
+    def _context(viewport):
+        return viewport.scene, viewport.scene.mesh, getattr(viewport.scene, "edit_group", None)
+
+    def _check_context(self, viewport) -> bool:
+        context = self._last["context"] if self._last is not None else self._chain_context
+        changed = (self._last is not None
+                   and self._last["content_version"] != viewport.scene.content_version)
+        if changed or (context is not None and any(
+                a is not b for a, b in zip(context, self._context(viewport)))):
+            self._reset()
+            return False
+        return True
+
+    def _commit_segment(self, viewport, endpoint) -> bool:
+        start = QVector3D(self.start_point)
+        before = [QVector3D(p) for p in self.chain_vertices] or [QVector3D(start)]
+        first = QVector3D(self.chain_first_point) if self.chain_first_point is not None else before[0]
+        last = {"start": start, "direction": (endpoint - start).normalized(),
+                "endpoint": QVector3D(endpoint), "vertices": before, "first": first,
+                "plane": self.work_plane, "screen": self._hover_screen,
+                "context": self._context(viewport), "history": viewport.history}
+        try:
+            cmd = self._commit_edge(viewport, start, endpoint)
+        except Exception:
+            return False
+        viewport.history.execute(cmd)
+        if not viewport.history.undo_stack or viewport.history.undo_stack[-1] is not cmd:
+            return False
+        last.update(cmd=cmd, revision=viewport.history.revision,
+                    content_version=viewport.scene.content_version)
+        self._finish_segment(last, endpoint)
+        self._last = last
         viewport.update()
         return True
 
-    # ---- Internals ----------------------------------------------------------
+    def _finish_segment(self, last, endpoint) -> None:
+        if len(last["vertices"]) >= 3 and (endpoint - last["first"]).length() < 1e-6:
+            self._reset()
+        else:
+            self.chain_vertices = [QVector3D(p) for p in last["vertices"]] + [QVector3D(endpoint)]
+            self.start_point = QVector3D(endpoint)
+            self.chain_first_point = QVector3D(last["first"])
+            self.work_plane = last["plane"]
+            self._chain_context = last["context"]
+        self.hover_point = QVector3D(endpoint)
+        self._hover_screen = last["screen"]
+
     def _commit_edge(self, viewport, start: QVector3D, end: QVector3D) -> Command:
         """Build the command for a new edge. ``build_add_edge`` welds
         coincident edges, splits any existing edge the new one crosses
@@ -197,11 +310,14 @@ class LineTool(Tool):
         face" behaviour, now correct even when the loop relies on a crossing."""
         cam = getattr(viewport, "camera", None)
         eye = cam.eye() if cam is not None and hasattr(cam, "eye") else None
-        return build_add_edge(viewport.scene, start, end, detect_faces=True,
-                              eye=eye)
+        cmd = build_add_edge(viewport.scene, start, end, detect_faces=True, eye=eye)
+        return _LineEdgeCommand(cmd) if type(cmd) is AddEdgeCommand else cmd
 
     def _reset(self) -> None:
         self.start_point = None
         self.chain_first_point = None
         self.chain_vertices = []
         self.work_plane = None
+        self._last = None
+        self._hover_screen = None
+        self._chain_context = None

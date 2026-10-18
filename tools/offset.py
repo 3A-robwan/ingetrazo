@@ -13,6 +13,8 @@ into the VCB.
 """
 from __future__ import annotations
 
+import math
+
 from PySide6.QtGui import QVector3D
 
 from core.edits import build_add_edges
@@ -68,13 +70,16 @@ class OffsetTool(Tool):
         #: (select the edges, then Offset): the first click
         #: starts the offset instead of picking.
         self._armed: bool = False
+        self._last = None
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
+        self._last = None
         self._reset()
         self._arm_from_selection(viewport)
 
     def on_deactivate(self, viewport) -> None:
+        self._last = None
         viewport.set_hover(None)
         self._reset()
         viewport.update()
@@ -102,6 +107,7 @@ class OffsetTool(Tool):
     def on_click(self, ctx: ToolContext) -> None:
         viewport = ctx.viewport
         if not self.dragging:
+            self._last = None             # a working click starts a new operation
             if self._armed:
                 self._armed = False          # the run is already in _loop
             elif self.hovered_face is not None:
@@ -128,8 +134,10 @@ class OffsetTool(Tool):
         self._commit(viewport)
 
     def on_value(self, viewport, value) -> bool:
-        if isinstance(value, tuple):
+        if not isinstance(value, (int, float)) or not math.isfinite(value):
             return False
+        if not self.dragging:
+            return self._retype(viewport, value)
         if not self.dragging or not self._loop or value <= 0.0:
             return False
         # Keep the side the user is dragging toward; default to inward.
@@ -139,6 +147,7 @@ class OffsetTool(Tool):
         return True
 
     def on_cancel(self, viewport) -> None:
+        self._last = None
         viewport.set_hover(None)
         self._reset()
         viewport.update()
@@ -243,9 +252,58 @@ class OffsetTool(Tool):
         return True
 
     def _commit(self, viewport) -> None:
+        state = {name: getattr(self, name) for name in (
+            "base_face", "_normal", "_chain", "_closed")}
+        state["_loop"] = [QVector3D(p) for p in self._loop]
+        cmd = self._build_command(viewport)
+        distance = self.distance
+        if cmd is not None:
+            viewport.history.execute(cmd)
+        self._reset()
+        stack = viewport.history.undo_stack
+        self._last = (dict(state=state, cmd=cmd,
+                           revision=viewport.history.revision,
+                           scene=viewport.scene,
+                           content_version=viewport.scene.content_version,
+                           sign=-1.0 if distance < 0.0 else 1.0)
+                      if cmd is not None and stack and stack[-1] is cmd else None)
+        viewport.update()
+
+    def _retype(self, viewport, value) -> bool:
+        last = self._last
+        if last is None or value == 0.0:
+            return False
+        history = viewport.history
+        if (history.revision != last["revision"] or not history.undo_stack
+                or viewport.scene is not last["scene"]
+                or viewport.scene.content_version != last["content_version"]
+                or history.undo_stack[-1] is not last["cmd"]
+                or getattr(last["cmd"], "_history_mesh", None) is not viewport.scene.mesh
+                or getattr(last["cmd"], "_history_edit_group", None)
+                is not viewport.scene.edit_group):
+            self._last = None
+            return False
+
+        def build():
+            # Build against the ORIGINAL face/edges restored by replace_last,
+            # never offset the offset that was just drawn.
+            staged = OffsetTool()
+            for name, parameter in last["state"].items():
+                setattr(staged, name, parameter)
+            staged.distance = last["sign"] * value
+            return staged._build_command(viewport)
+
+        cmd = history.replace_last(last["cmd"], build, revision=last["revision"])
+        last["content_version"] = viewport.scene.content_version
+        if cmd is None:
+            return False
+        last.update(cmd=cmd, revision=history.revision)
+        viewport.update()
+        return True
+
+    def _build_command(self, viewport):
         if self._chain:
-            self._commit_chain(viewport)
-            return
+            return self._build_chain_command(viewport)
         regions = offset_regions(self._loop, self._normal, self.distance)
         if not regions:
             # Safety net: the exact slide-and-intersect path still runs when
@@ -285,11 +343,9 @@ class OffsetTool(Tool):
         # Snapshot undo: Delete/Add compose fine forward, but the hole edges
         # the ring creates don't reverse cleanly command-by-command (they
         # leaked on undo). One snapshot reverses exactly.
-        viewport.history.execute(SnapshotCompound(commands))
-        self._reset()
-        viewport.update()
+        return SnapshotCompound(commands)
 
-    def _commit_chain(self, viewport) -> None:
+    def _build_chain_command(self, viewport):
         """Edges mode: the slid run becomes new edges — nothing is deleted
         and no face is managed; a run that closes a planar loop gets its
         face from the ordinary edge detection, as if drawn by hand."""
@@ -303,11 +359,7 @@ class OffsetTool(Tool):
             return
         cam = getattr(viewport, "camera", None)
         eye = cam.eye() if cam is not None and hasattr(cam, "eye") else None
-        viewport.history.execute(
-            build_add_edges(viewport.scene, _segments(off, self._closed),
-                            eye=eye))
-        self._reset()
-        viewport.update()
+        return build_add_edges(viewport.scene, _segments(off, self._closed), eye=eye)
 
     def _refuse(self, viewport) -> None:
         """Nothing survives the offset — say the limit instead of going quiet.

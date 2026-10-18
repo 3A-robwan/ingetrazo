@@ -4784,9 +4784,9 @@ class MainWindow(QMainWindow):
         self.viewport.update()
 
     def _on_select_all(self) -> None:
-        """Select every entity (Ctrl+A) — edges (soft included), faces, groups
-        and dimensions. The safe way to rotate/move/scale a WHOLE model: a
-        window box-select that misses one protruding piece leaves it behind
+        """Select every entity (Ctrl+A) — edges (soft included), faces, groups,
+        dimensions and construction guides. The safe way to rotate/move/scale
+        a WHOLE model: a window box-select that misses one protruding piece leaves it behind
         and the transform warps the boundary (the sigue.igz report)."""
         sel = self.viewport.scene.selection
         sel.clear()
@@ -4798,12 +4798,13 @@ class MainWindow(QMainWindow):
         sel.update(self.viewport.scene.groups if ctx is None
                    else (getattr(ctx, "children", None) or []))
         sel.update(getattr(self.viewport.scene, "dimensions", []))
+        sel.update(getattr(self.viewport.scene, "guides", []))
         # Bump the version and say so: the GL colour caches are keyed on it
         # and Entity Info listens for it, so a selection made behind
         # Scene.select()'s back left the status bar counting entities the
         # viewport drew unselected and the tray called "nothing selected"
         # (issue #38). Everything else goes through Scene.select(); this
-        # one builds the set by hand because "all" is four sources.
+        # one builds the set by hand because "all" is several sources.
         self.viewport.scene.version += 1
         self.viewport.notify_scene_changed()
         self.statusBar().showMessage(

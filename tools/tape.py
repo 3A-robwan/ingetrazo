@@ -27,6 +27,8 @@ locks onto, erasable with the Eraser or Edit ▸ Delete Guides. Esc cancels.
 """
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QVector3D
 
@@ -66,6 +68,7 @@ class TapeMeasureTool(Tool):
         self._edge = None            # source edge → guide-line mode
         self._from_point = False     # started on a named point → guide point
         self._measured: float | None = None
+        self._last = None
         #: Ctrl on the Tape cycles THREE ways, as the usual status
         #: bar spells out: «Ctrl = Líneas guía del ciclo / Puntos guía /
         #: Medida» (Marco's screenshot, 2026-09-17).
@@ -117,9 +120,11 @@ class TapeMeasureTool(Tool):
         # after one measure-only reading the guides looked broken (Marco,
         # 2026-09-17: «solo funciona con ctrl»).
         self._mode = "line"
+        self._last = None
         self._reset()
 
     def on_deactivate(self, viewport) -> None:
+        self._last = None
         self._reset()
         self.hover_point = None
 
@@ -143,6 +148,7 @@ class TapeMeasureTool(Tool):
         return True
 
     def _toggle_mode(self, viewport) -> None:
+        self._last = None
         names = [m for m, _lbl in self._MODES]
         self._mode = names[(names.index(self._mode) + 1) % len(names)]
         viewport.flash_status(
@@ -157,6 +163,7 @@ class TapeMeasureTool(Tool):
 
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
+        self._last = None
         viewport = ctx.viewport
         if self.start_point is None:
             self.start_point = ctx.world
@@ -236,6 +243,14 @@ class TapeMeasureTool(Tool):
     def on_value(self, viewport, value) -> bool:
         """Typing a distance places the guide — line or point — exactly
         there, instead of wherever the second click landed."""
+        if not isinstance(value, (int, float)) or not math.isfinite(value):
+            return False
+        try:
+            fmt_len_fine(abs(value))
+        except (ArithmeticError, ValueError, OverflowError):
+            return False
+        if self.start_point is None and self._last is not None:
+            return self._retype_guide(viewport, float(value))
         if (self.start_point is None or isinstance(value, tuple)
                 or self.hover_point is None):
             return False
@@ -269,6 +284,7 @@ class TapeMeasureTool(Tool):
         return True
 
     def on_cancel(self, viewport) -> None:
+        self._last = None
         self._reset()
         viewport.update()
 
@@ -320,8 +336,10 @@ class TapeMeasureTool(Tool):
         """A guide POINT (a ``Guide`` with no direction) at ``where`` —
         with its guide segment back to ``origin`` when measured from a
         named point."""
-        viewport.history.execute(AddGuideCommand(
-            Guide(QVector3D(where), None, origin)))
+        guide = Guide(QVector3D(where), None, origin)
+        cmd = AddGuideCommand(guide)
+        viewport.history.execute(cmd)
+        self._remember_guide(viewport, cmd, where - self.start_point)
         d = (where - self.start_point).length()
         viewport.flash_status(
             (tr("Guide point at {d}, with its segment") if origin is not None
@@ -329,9 +347,52 @@ class TapeMeasureTool(Tool):
 
     def _place_guide(self, viewport, offset: QVector3D) -> None:
         guide = Guide(self.start_point + offset, self._edge_dir())
-        viewport.history.execute(AddGuideCommand(guide))
+        cmd = AddGuideCommand(guide)
+        viewport.history.execute(cmd)
+        self._remember_guide(viewport, cmd, offset)
         viewport.flash_status(
             tr("Guide at {d}").format(d=fmt_len_fine(offset.length())), 3000)
+
+    def _remember_guide(self, viewport, cmd, offset) -> None:
+        history = viewport.history
+        if (not history.undo_stack or history.undo_stack[-1] is not cmd
+                or offset.length() < 1e-9):
+            self._last = None
+            return
+        guide = cmd.guide
+        self._last = {
+            "cmd": cmd, "revision": history.revision,
+            "base": QVector3D(self.start_point), "direction": offset.normalized(),
+            "axis": QVector3D(guide.direction) if guide.direction is not None else None,
+            "origin": QVector3D(guide.origin) if guide.origin is not None else None,
+            "mesh": viewport.scene.mesh,
+            "context": getattr(viewport.scene, "edit_group", None),
+            "content_version": viewport.scene.content_version,
+        }
+
+    def _retype_guide(self, viewport, distance: float) -> bool:
+        last = self._last
+        history = viewport.history
+        if (last["revision"] != history.revision
+                or last["content_version"] != viewport.scene.content_version
+                or last["mesh"] is not viewport.scene.mesh
+                or last["context"] is not getattr(viewport.scene, "edit_group", None)
+                or not history.undo_stack or history.undo_stack[-1] is not last["cmd"]):
+            self._last = None
+            return False
+        def build():
+            point = last["base"] + last["direction"] * distance
+            if not all(math.isfinite(c) for c in point.toTuple()):
+                return None
+            return AddGuideCommand(Guide(point, last["axis"], last["origin"]))
+        cmd = history.replace_last(last["cmd"], build, revision=last["revision"])
+        last["content_version"] = viewport.scene.content_version
+        if cmd is None:
+            return False
+        last.update(cmd=cmd, revision=history.revision)
+        viewport.flash_status(tr("Guide at {d}").format(d=fmt_len_fine(abs(distance))), 3000)
+        viewport.update()
+        return True
 
     def _reset(self) -> None:
         self.start_point = None

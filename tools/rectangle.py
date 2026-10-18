@@ -49,10 +49,55 @@ def _plane_axes(normal: QVector3D) -> tuple[QVector3D, QVector3D]:
     return u, v
 
 
+class _ShapeRetype:
+    """Keep a finished shape editable only until the next working operation."""
+
+    def _clear_retype(self) -> None:
+        self._last_shape = None
+        self._last_window = None
+
+    def _remember_shape(self, viewport, cmd, parameters) -> None:
+        history, scene = viewport.history, viewport.scene
+        stack = getattr(history, "undo_stack", ())
+        if not stack or stack[-1] is not cmd:
+            return
+        self._viewport = viewport
+        self._last_shape = parameters
+        self._last_window = (cmd, history.revision, scene, scene.mesh,
+                             scene.edit_group, scene.content_version)
+
+    def _can_retype(self, viewport=None) -> bool:
+        viewport = viewport or getattr(self, "_viewport", None)
+        if viewport is None or getattr(self, "_last_shape", None) is None:
+            return False
+        cmd, revision, scene, mesh, context, content_version = self._last_window
+        history = viewport.history
+        stack = history.undo_stack
+        valid = (viewport.scene is scene and scene.mesh is mesh
+                 and scene.edit_group is context and scene.content_version == content_version
+                 and history.revision == revision and stack and stack[-1] is cmd)
+        if not valid:
+            self._clear_retype()
+        return bool(valid)
+
+    def _replace_shape(self, viewport, parameters, build) -> bool:
+        if not self._can_retype(viewport):
+            return False
+        cmd, revision, *_ = self._last_window
+        previous = self._last_shape
+        replacement = viewport.history.replace_last(cmd, build, revision=revision)
+        # A failed rebuild restores the old result. Refresh its version stamp
+        # too, so correcting an invalid value does not close the retry window.
+        self._remember_shape(viewport, replacement or cmd,
+                             parameters if replacement is not None else previous)
+        viewport.update()
+        return replacement is not None
+
+
 # No AxisMagnet here, deliberately (issue #52): the second click is the
 # OPPOSITE CORNER, and a corner pulled onto the axis through the first is a
 # rectangle of zero height. See ``tools.base.AxisMagnet``.
-class RectangleTool(PlaneLock, Tool):
+class RectangleTool(_ShapeRetype, PlaneLock, Tool):
     name = "Rectangle"
     shortcut = "R"
     description = "Draw a rectangle from two opposite corners."
@@ -83,6 +128,7 @@ class RectangleTool(PlaneLock, Tool):
         #: The side the cursor is stretching ("u" width / "v" height): a lone
         #: typed number goes there and the other side stays as shown.
         self._live_side: str | None = None
+        self._clear_retype()
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
@@ -97,6 +143,7 @@ class RectangleTool(PlaneLock, Tool):
     def on_click(self, ctx: ToolContext) -> None:
         self.note_plane(ctx.viewport)
         if self.start_point is None:
+            self._clear_retype()
             self.start_point = ctx.world
             if self.work_plane is None:
                 self.work_plane = self.locked_work_plane(ctx.world)
@@ -177,7 +224,9 @@ class RectangleTool(PlaneLock, Tool):
         the second along its vertical axis. A lone number sets the side the
         cursor is stretching and keeps the other as it reads (both, with the
         square locked)."""
-        if self.start_point is None or self.hover_point is None:
+        if self.start_point is None:
+            return self._retype_rectangle(viewport, value)
+        if self.hover_point is None:
             return False
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             if self._square_locked():
@@ -197,7 +246,7 @@ class RectangleTool(PlaneLock, Tool):
             w, h = value
         else:
             return False
-        if w <= 0.0 or h <= 0.0:
+        if not all(math.isfinite(d) and d > 0.0 for d in (w, h)):
             return False
         u, v = self._axes()
         du, dv = self._dimensions(self.start_point, self.hover_point)
@@ -361,20 +410,63 @@ class RectangleTool(PlaneLock, Tool):
 
     def _commit_rect(self, viewport, corners: list[QVector3D]) -> None:
         u, v = self._axes()
-        corners = face_the_plane(corners, QVector3D.crossProduct(u, v))
+        normal = QVector3D.crossProduct(u, v)
+        du, dv = corners[1] - corners[0], corners[3] - corners[0]
+        parameters = {
+            "origin": ((corners[0] + corners[2]) * 0.5 if self._from_center
+                       else QVector3D(corners[0])),
+            "u": du.normalized(), "v": dv.normalized(),
+            "width": du.length(), "height": dv.length(),
+            "normal": normal, "centered": self._from_center,
+            "side": self._live_side, "square": self._square_locked(),
+        }
+        cmd = self._build_rectangle(viewport, corners, normal)
+        viewport.history.execute(cmd)
+        self._reset()
+        self._remember_shape(viewport, cmd, parameters)
+        viewport.update()
+
+    @staticmethod
+    def _build_rectangle(viewport, corners, normal):
+        corners = face_the_plane(corners, normal)
         segments = [(corners[i], corners[(i + 1) % 4]) for i in range(4)]
         # The rectangle owns its face explicitly (the loop spans corner to
         # corner regardless of how its edges get subdivided by crossings), so
         # let the edge builder handle splitting/welding but not auto-facing.
-        cmd = build_add_edges(
+        return build_add_edges(
             viewport.scene,
             segments,
             detect_faces=False,
             extra=[AddFaceCommand(list(corners))],
         )
-        viewport.history.execute(cmd)
-        self._reset()
-        viewport.update()
+
+    def _retype_rectangle(self, viewport, value) -> bool:
+        if not self._can_retype(viewport):
+            return False
+        parameters = dict(self._last_shape)
+        w, h = parameters["width"], parameters["height"]
+        if isinstance(value, tuple) and len(value) == 2:
+            w, h = value
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            if parameters["square"]:
+                w = h = value
+            elif parameters["side"] == "u":
+                w = value
+            elif parameters["side"] == "v":
+                h = value
+            else:
+                return False
+        else:
+            return False
+        if not all(math.isfinite(d) and d > 0.0 for d in (w, h)):
+            return False
+        parameters.update(width=w, height=h)
+        origin, u, v = (parameters[key] for key in ("origin", "u", "v"))
+        a = origin - (u * w + v * h) * 0.5 if parameters["centered"] else origin
+        corners = [a, a + u * w, a + u * w + v * h, a + v * h]
+        return self._replace_shape(
+            viewport, parameters,
+            lambda: self._build_rectangle(viewport, corners, parameters["normal"]))
 
 
     def _toggle_center(self, viewport, say: bool = True) -> None:
@@ -419,6 +511,7 @@ class RectangleTool(PlaneLock, Tool):
         return self.plane_lock_key(viewport, key)
 
     def _reset(self) -> None:
+        self._clear_retype()
         self.start_point = None
         self.chain_first_point = None
         self.work_plane = None

@@ -27,6 +27,8 @@ Rectangle and the arcs do (Marco, 2026-09-10: «sospecho que no es igual»).
 """
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QVector3D
 
@@ -37,9 +39,10 @@ from core.axes import plane_axes  # drawing axes (#44)
 from tools.base import AxisMagnet, face_the_plane, PlaneLock, Tool, ToolContext
 from core.units import fmt_len, fmt_pair
 from tools.protractor import DISC_PX, TICK_DEG
+from tools.rectangle import _ShapeRetype
 
 
-class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
+class RotatedRectangleTool(_ShapeRetype, AxisMagnet, PlaneLock, Tool):
     #: Debajo de esto el ancho no hace rectángulo: las esquinas se funden.
     _MIN_WIDTH = 1e-6
 
@@ -53,7 +56,8 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
 
     @property
     def vcb_label(self) -> str:  # type: ignore[override]
-        return "Length; angle" if self.base_point is None else "Width; angle"
+        return ("Width; angle" if self.base_point is not None or self._can_retype()
+                else "Length; angle")
 
     def magnet_on(self) -> bool:
         # The base edge is a direction from the first corner; the height
@@ -82,6 +86,8 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         #: (#70, @pacaeiro: «the protactor could react to Shift… That way
         #: we fix the orientation and can give the distance»).
         self._held_dir: QVector3D | None = None
+        self._viewport = None
+        self._clear_retype()
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
@@ -94,6 +100,7 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
         if self.start_point is None:
+            self._clear_retype()
             # BEFORE start_point is set: the plane comes from the arrow-key
             # lock if there is one, else from the face under this very click.
             self.work_plane = self._capture_plane(ctx)
@@ -197,7 +204,7 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         Ángulo», which is the only way to raise a rectangle whose base edge
         lies flat."""
         if self.start_point is None:
-            return False
+            return self._retype_rotated(viewport, value)
         if self.base_point is None:
             return self._on_edge_value(viewport, value)
         if self.hover_point is None:
@@ -206,12 +213,12 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
             if len(value) != 2:
                 return False
             width, angle = value
-            if width <= 0.0:
+            if not all(math.isfinite(d) for d in (width, angle)) or width <= 0.0:
                 return False
             self.angle = _degrees(angle)
             corners = self._corners(float(width))
         else:
-            if value == 0.0:
+            if not math.isfinite(value) or value == 0.0:
                 return False
             # El LADO ya viaja dentro del ángulo que guarda el hover: 180° es
             # el lado opuesto a `_perp`, -90° es hacia abajo. Sacar además un
@@ -396,14 +403,65 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
             # private of the viewport, and the test doubles do not have it.
             leer = getattr(viewport, "_work_plane_normal", None)
             plano = leer() if callable(leer) else None
-        corners = face_the_plane(corners, plano)
-        segments = [(corners[i], corners[(i + 1) % 4]) for i in range(4)]
-        cmd = build_add_edges(
-            viewport.scene, segments, detect_faces=False,
-            extra=[AddFaceCommand(list(corners))])
+        origin = QVector3D(corners[0])
+        base, width = corners[1] - origin, corners[3] - origin
+        normal = self._normal()
+        perpendicular = QVector3D.crossProduct(normal, base.normalized()).normalized()
+        angle = math.degrees(math.atan2(QVector3D.dotProduct(width, normal),
+                                       QVector3D.dotProduct(width, perpendicular)))
+        parameters = {
+            "origin": origin, "base": base.normalized(),
+            "perpendicular": perpendicular, "normal": normal,
+            "length": base.length(), "width": width.length(), "angle": angle,
+            "face_normal": QVector3D(plano) if plano is not None else None,
+        }
+        cmd = self._build_rotated(viewport, corners, plano)
         viewport.history.execute(cmd)
         self._reset()
+        self._remember_shape(viewport, cmd, parameters)
         viewport.update()
+
+    @staticmethod
+    def _build_rotated(viewport, corners, normal):
+        corners = face_the_plane(corners, normal)
+        segments = [(corners[i], corners[(i + 1) % 4]) for i in range(4)]
+        return build_add_edges(
+            viewport.scene, segments, detect_faces=False,
+            extra=[AddFaceCommand(list(corners))])
+
+    def _retype_rotated(self, viewport, value) -> bool:
+        """Retype width/angle, or all three fields: base length;width;angle."""
+        if not self._can_retype(viewport):
+            return False
+        parameters = dict(self._last_shape)
+        length, angle = parameters["length"], parameters["angle"]
+        if isinstance(value, tuple) and len(value) in (2, 3):
+            if not all(math.isfinite(d) for d in value):
+                return False
+            if len(value) == 3:
+                length, width, angle = value
+            else:
+                width, angle = value
+            angle = _degrees(angle)
+            if width <= 0.0:
+                return False
+        elif isinstance(value, (int, float)) and not isinstance(value, bool):
+            width = value
+        else:
+            return False
+        if (not all(math.isfinite(d) for d in (length, width, angle))
+                or length <= 0.0 or width == 0.0):
+            return False
+        parameters.update(length=length, width=width, angle=angle)
+        origin = parameters["origin"]
+        base = origin + parameters["base"] * length
+        radians = math.radians(angle)
+        off = (parameters["perpendicular"] * math.cos(radians)
+               + parameters["normal"] * math.sin(radians)) * width
+        corners = [origin, base, base + off, origin + off]
+        return self._replace_shape(
+            viewport, parameters,
+            lambda: self._build_rotated(viewport, corners, parameters["face_normal"]))
 
     # ---- Protractors (#70) --------------------------------------------------
     #: Snaps that name a real point of the model: the width goes there.
@@ -525,6 +583,7 @@ class RotatedRectangleTool(AxisMagnet, PlaneLock, Tool):
         return segs
 
     def _reset(self) -> None:
+        self._clear_retype()
         self.start_point = None
         self.base_point = None
         self.work_plane = None

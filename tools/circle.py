@@ -51,9 +51,10 @@ def busy_plane(scene, new_points):
 from core.i18n import tr
 from core.axes import plane_axes  # drawing axes (#44)
 from tools.base import AxisMagnet, PlaneLock, Tool, ToolContext
+from tools.rectangle import _ShapeRetype
 
 
-class _RadialTool(AxisMagnet, PlaneLock, Tool):
+class _RadialTool(_ShapeRetype, AxisMagnet, PlaneLock, Tool):
     """Shared centre+radius regular-polygon tool. Subclasses set ``sides``."""
 
     sides: int = 24
@@ -64,13 +65,14 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
 
         Returns the English source label; the status bar translates it.
         """
-        return "Radius" if self.start_point is not None else "Sides"
+        return "Radius" if self.start_point is not None or self._can_retype() else "Sides"
 
     def __init__(self) -> None:
         self.start_point: QVector3D | None = None   # centre (also drives work plane)
         self.hover_point: QVector3D | None = None
         self.work_plane: tuple[QVector3D, QVector3D] | None = None
         self._viewport = None
+        self._clear_retype()
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
@@ -84,6 +86,7 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
     def on_click(self, ctx: ToolContext) -> None:
         self.note_plane(ctx.viewport)
         if self.start_point is None:
+            self._clear_retype()
             self.start_point = ctx.world
             if self.work_plane is None:
                 self.work_plane = self.locked_work_plane(ctx.world)
@@ -101,9 +104,16 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
 
     def on_segments_value(self, viewport, n: int) -> bool:
         """The classic "24s": the side count, typed at any moment."""
-        n = int(n)
+        try:
+            n = int(n)
+        except (ValueError, TypeError, OverflowError):
+            return False
         if n < 3:
             return False
+        if self.start_point is None and self._can_retype(viewport):
+            parameters = dict(self._last_shape, sides=n)
+            if not self._replace_radial(viewport, parameters):
+                return False
         self.sides = n
         viewport.flash_status(tr("{n} sides", n=n))
         viewport.update()
@@ -112,13 +122,18 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
     def value_is_unitless(self) -> bool:
         """Before the centre the typed number is a side COUNT (#176);
         after it, the radius, a length in the document's unit."""
-        return self.start_point is None
+        return self.start_point is None and not self._can_retype()
 
     def on_value(self, viewport, value) -> bool:
         """Before the centre is placed, a typed number sets the **side count**
         (type sides + Enter); after it, the number is the **radius**."""
-        if isinstance(value, tuple):
+        if (isinstance(value, (tuple, bool)) or not isinstance(value, (int, float))
+                or not math.isfinite(value)):
             return False
+        if self.start_point is None and self._can_retype(viewport):
+            if value <= 0.0:
+                return False
+            return self._replace_radial(viewport, dict(self._last_shape, radius=value))
         if self.start_point is None:
             n = int(round(value))
             if n >= 3:
@@ -211,6 +226,23 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
         return out
 
     def _commit(self, viewport, pts: list[QVector3D]) -> None:
+        center = QVector3D(self.start_point)
+        radial = pts[0] - center
+        u, v = self._axes()
+        normal = QVector3D.crossProduct(u, v).normalized()
+        parameters = {
+            "center": center, "radial": radial.normalized(),
+            "tangent": QVector3D.crossProduct(normal, radial.normalized()).normalized(),
+            "radius": radial.length(), "sides": len(pts),
+        }
+        cmd = self._build_radial(viewport, pts)
+        viewport.history.execute(cmd)
+        self._reset()
+        self._remember_shape(viewport, cmd, parameters)
+        viewport.update()
+
+    @staticmethod
+    def _build_radial(viewport, pts):
         n = len(pts)
         segments = [(pts[i], pts[(i + 1) % n]) for i in range(n)]
         # The outline is drawn (a 24-segment circle reads round). What hides is
@@ -235,17 +267,25 @@ class _RadialTool(AxisMagnet, PlaneLock, Tool):
         else:
             extra = [AddFaceCommand(list(pts)),
                      TagCurveCommand(list(pts), closed=True)]
-        cmd = build_add_edges(
+        return build_add_edges(
             viewport.scene, segments, detect_faces=False, extra=extra)
-        viewport.history.execute(cmd)
-        self._reset()
-        viewport.update()
+
+    def _replace_radial(self, viewport, parameters) -> bool:
+        n, radius = parameters["sides"], parameters["radius"]
+        center = parameters["center"]
+        u, v = parameters["radial"], parameters["tangent"]
+        pts = [center + (u * math.cos(2 * math.pi * k / n)
+                         + v * math.sin(2 * math.pi * k / n)) * radius
+               for k in range(n)]
+        return self._replace_shape(viewport, parameters,
+                                   lambda: self._build_radial(viewport, pts))
 
 
     def on_key(self, viewport, key: int, modifiers) -> bool:
         return self.plane_lock_key(viewport, key)
 
     def _reset(self) -> None:
+        self._clear_retype()
         self.start_point = None
         self.work_plane = None
         self.hover_plane = None

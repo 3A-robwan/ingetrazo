@@ -490,6 +490,13 @@ def _load_invert_orbit_y() -> bool:
     return str(QSettings().value("nav/invert_orbit_y", "0")) != "0"
 
 
+def _load_dynamic_shift_navigation(settings=None) -> bool:
+    """Whether Shift can switch Orbit/Pan during a held mouse drag."""
+    from core import general_settings
+    return str(general_settings.value(
+        "dynamic_shift_navigation", "1", settings)).lower() not in ("0", "false")
+
+
 def _load_msaa() -> int:
     """Scene-FBO multisample count (Preferences ▸ General). 4 is the
     historical hardcoded value; the FBO still falls back to 0 on drivers
@@ -1065,6 +1072,7 @@ class Viewport(QOpenGLWidget):
         self.scene.hide_similar_components = _load_hide_similar()
         self._invert_wheel = _load_invert_wheel()
         self._invert_orbit_y = _load_invert_orbit_y()
+        self._dynamic_shift_nav = _load_dynamic_shift_navigation()
         self._msaa = _load_msaa()
 
         # Hover highlight (Select tool). Not version-tracked — it changes with
@@ -1122,7 +1130,11 @@ class Viewport(QOpenGLWidget):
 
         # Camera navigation state (middle button)
         self._last_pos = None
+        # The gesture's base mode, independent of the selected nav tool:
+        # MMB always orbits/pans, even when the left button is set to Zoom.
+        self._camera_drag_mode = None
         self._pan_mode = False
+        self._pan_depth = None
         #: where the current orbit gesture turns (#164); None = the target
         self._orbit_pivot = None
         # A mouse-look drag for a tool with ``on_look`` (First Person):
@@ -10396,7 +10408,11 @@ class Viewport(QOpenGLWidget):
         # used to kill on-line snapping in ordinary 3D views); guide POINTS
         # snap as degenerate pseudo-edges, exactly like survey points.
         lines = []
+        excluded_guides = getattr(self.active_tool, "snap_excluded_guides", None)
+        excluded_guides = excluded_guides() if callable(excluded_guides) else set()
         for g in getattr(self.scene, "guides", None) or []:
+            if id(g) in excluded_guides:
+                continue
             if g.is_line:
                 seg = self._guide_snap_segment(g)
                 if seg is not None:
@@ -11491,8 +11507,10 @@ class Viewport(QOpenGLWidget):
         # any camera drag it was in the middle of.
         self.nav_mode = None
         self._last_pos = None
+        self._camera_drag_mode = None
         self._orbit_pivot = None
         self._pan_mode = False
+        self._pan_depth = None
         self._look_drag = None
         self.unsetCursor()
         if self.active_tool is not None:
@@ -11554,13 +11572,16 @@ class Viewport(QOpenGLWidget):
         """The pointer for a camera nav mode: orbit / pan / the magnifier
         (each navigation tool shows its own icon)."""
         from views.icons import tool_cursor
-        if self.nav_mode in ("orbit", "pan", "zoom", "zoom_window"):
-            cur = tool_cursor(self.nav_mode)
+        mode = self.nav_mode
+        if self._last_pos is not None and self._camera_drag_mode is not None:
+            mode = "pan" if self._pan_mode else self._camera_drag_mode
+        if mode in ("orbit", "pan", "zoom", "zoom_window"):
+            cur = tool_cursor(mode)
             if cur is not None:
                 self.setCursor(cur)
                 return
             self.setCursor(Qt.CrossCursor
-                           if self.nav_mode in ("zoom", "zoom_window")
+                           if mode in ("zoom", "zoom_window")
                            else Qt.OpenHandCursor)
 
     # ---- Copy / paste -------------------------------------------------------
@@ -11978,11 +11999,48 @@ class Viewport(QOpenGLWidget):
                     return o + d * ((span[0] + span[1]) * 0.5)
         return QVector3D(self.camera.target)
 
+    def _begin_camera_drag(self, ev, mode: str) -> None:
+        """Grab one world point for the whole Orbit/Pan gesture."""
+        self._camera_drag_mode = mode
+        self._last_pos = ev.position().toPoint()
+        self._pan_mode = (mode == "pan" or
+                          (mode == "orbit" and bool(ev.modifiers() & Qt.ShiftModifier)))
+        self._orbit_pivot = (self._orbit_pivot_at(ev.position().x(), ev.position().y())
+                             if mode in ("orbit", "pan") else None)
+        self._pan_depth = self._depth_of(self._orbit_pivot)
+        self._apply_nav_cursor()
+
+    def _update_camera_drag_shift(self, down: bool) -> bool:
+        """Consume Shift for an Orbit drag; switch modes if enabled.
+
+        Key events update the cursor at once. Mouse moves also re-read the
+        modifier, recovering a press/release delivered to another widget.
+        Neither path changes the camera or resets the last mouse position.
+        """
+        if self._last_pos is None or self._camera_drag_mode != "orbit":
+            return False
+        if not down:
+            # A drawing inference may have been locked before MMB was
+            # pressed. Its Shift release still ends that lock, including
+            # when only the next mouse event tells us the key is up.
+            self._shift_lock = None
+        if self._dynamic_shift_nav and self._pan_mode != down:
+            self._pan_mode = down
+            if down:
+                # Orbit may have changed the grabbed point's view depth.
+                # Keep its world position, without another pick under the
+                # now-moved cursor or a jump to the camera target.
+                self._pan_depth = self._depth_of(self._orbit_pivot)
+            self._apply_nav_cursor()
+        return True
+
     def _end_camera_drag(self) -> None:
         """Forget a camera drag in progress (orbit, pan or zoom by drag)."""
         self._last_pos = None
+        self._camera_drag_mode = None
         self._orbit_pivot = None
         self._pan_mode = False
+        self._pan_depth = None
         if self.nav_mode is not None:
             self._apply_nav_cursor()
         else:
@@ -12003,8 +12061,10 @@ class Viewport(QOpenGLWidget):
         self.last_snap = None
         self.nav_mode = mode
         self._last_pos = None             # a drag in progress ends here
+        self._camera_drag_mode = None
         self._orbit_pivot = None
         self._pan_mode = False
+        self._pan_depth = None
         if mode is not None:
             self._apply_nav_cursor()      # orbit / pan / magnifier icons
         else:
@@ -12099,17 +12159,7 @@ class Viewport(QOpenGLWidget):
             self._begin_look(ev)
             return
         if ev.button() == Qt.MiddleButton:
-            self._last_pos = ev.position().toPoint()
-            self._pan_mode = bool(ev.modifiers() & Qt.ShiftModifier)
-            self._orbit_pivot = self._orbit_pivot_at(
-                ev.position().x(), ev.position().y())
-            self._pan_depth = self._depth_of(self._orbit_pivot)
-            # While the wheel-drag lasts, the pointer becomes the
-            # orbit (or pan) icon; the tool cursor comes back on release.
-            from views.icons import tool_cursor
-            cur = tool_cursor("pan" if self._pan_mode else "orbit")
-            if cur is not None:
-                self.setCursor(cur)
+            self._begin_camera_drag(ev, "orbit")
             return
         # Nav buttons: left-drag orbits/pans the camera.
         # Hold Shift while orbiting to pan temporarily (matches MMB+Shift).
@@ -12120,20 +12170,7 @@ class Viewport(QOpenGLWidget):
                 self._zoom_box_start = ev.position()
                 self._zoom_box_cur = ev.position()
                 return
-            self._last_pos = ev.position().toPoint()
-            self._pan_mode = (
-                self.nav_mode == "pan"
-                or bool(ev.modifiers() & Qt.ShiftModifier)
-            )
-            self._orbit_pivot = (
-                self._orbit_pivot_at(ev.position().x(), ev.position().y())
-                if self.nav_mode == "orbit" else None)
-            self._pan_depth = (
-                self._depth_of(self._orbit_pivot_at(
-                    ev.position().x(), ev.position().y()))
-                if self._pan_mode else None)
-            # The orbit/pan icon stays through the drag.
-            self._apply_nav_cursor()
+            self._begin_camera_drag(ev, self.nav_mode)
             return
         if ev.button() == Qt.LeftButton and self.active_tool is not None:
             # Triple click: a press landing right after a double-click at the
@@ -12168,6 +12205,10 @@ class Viewport(QOpenGLWidget):
     def _dispatch_tool_click(self, ev, double: bool = False) -> None:
         """Forward a (double-)click to the active tool, then run the shared
         follow-ups: lock the chain to a clicked face's plane, clear the VCB."""
+        # Modifier/axis-release snap refreshes must use this click's pixel,
+        # not the preceding mouse move. For a chaining Line, the old pixel
+        # would otherwise look like the start of its next segment.
+        self._last_mouse_pos = ev.position()
         had_start = getattr(self.active_tool, "start_point", None) is not None
         had_plane = getattr(self.active_tool, "work_plane", None) is not None
         face_at_click = None
@@ -12321,11 +12362,12 @@ class Viewport(QOpenGLWidget):
             # (Andrés Rodríguez, Windows 11 + NVIDIA, 0.5.0).
             self._end_camera_drag()
         if self._last_pos is not None:
+            self._update_camera_drag_shift(bool(ev.modifiers() & Qt.ShiftModifier))
             p = ev.position().toPoint()
             dx = p.x() - self._last_pos.x()
             dy = p.y() - self._last_pos.y()
             self._last_pos = p
-            if self.nav_mode == "zoom":
+            if self._camera_drag_mode == "zoom":
                 self.camera.zoom(-dy * 0.035)        # drag up = zoom in
             elif self._pan_mode:
                 self.camera.pan(dx, dy, self.height(),
@@ -12586,13 +12628,7 @@ class Viewport(QOpenGLWidget):
             self._end_look()
             return
         if ev.button() == Qt.MiddleButton:
-            self._last_pos = None
-            self._orbit_pivot = None
-            self._pan_mode = False
-            if self.nav_mode is not None:
-                self._apply_nav_cursor()
-            else:
-                self._apply_tool_cursor()
+            self._end_camera_drag()
             return
 
         if ev.button() == Qt.LeftButton and self._zoom_box_active:
@@ -12606,10 +12642,7 @@ class Viewport(QOpenGLWidget):
             return
 
         if ev.button() == Qt.LeftButton and self.nav_mode is not None:
-            self._last_pos = None
-            self._orbit_pivot = None
-            self._pan_mode = False
-            self._apply_nav_cursor()
+            self._end_camera_drag()
             return
 
         # Stroke tools (the Eraser): notify the release so a press-drag-release
@@ -12887,6 +12920,10 @@ class Viewport(QOpenGLWidget):
         return callable(claims) and bool(claims(ev.key(), ev.modifiers()))
 
     def keyPressEvent(self, ev) -> None:
+        if (ev.key() == Qt.Key_Shift and not ev.isAutoRepeat()
+                and self._update_camera_drag_shift(True)):
+            ev.accept()
+            return
         if ev.key() == Qt.Key_Control and not ev.isAutoRepeat():
             self._ctrl_alone = True       # until another key says otherwise
         # Held keys (First Person): the press and the release are the
@@ -13086,6 +13123,11 @@ class Viewport(QOpenGLWidget):
             tool.on_cancel(self)
             self._release_linear_mode()
             return
+        # An idle tool may still remember its last numeric correction.
+        # Expire it even when this Esc also clears a selection or leaves
+        # a group; otherwise another number could edit the old operation.
+        if tool is not None:
+            tool.on_cancel(self)
         if self.scene.selection or self.extension_pick is not None:
             self.scene.clear_selection()
             self.clear_extension_pick()
@@ -13094,9 +13136,6 @@ class Viewport(QOpenGLWidget):
         if self.scene.edit_group is not None:
             self.end_one_group_edit()       # step out ONE level
             return
-        if tool is not None:
-            tool.on_cancel(self)
-
     # ---- Items an extension lets the user select (issue #205) ---------------
     #: The one extension item selected — ``(entry, item_id, scene version)``
     #: — or None. Kept APART from ``scene.selection``, which only ever holds
@@ -13247,6 +13286,10 @@ class Viewport(QOpenGLWidget):
             self._apply_tool_cursor()
 
     def keyReleaseEvent(self, ev) -> None:
+        if (ev.key() == Qt.Key_Shift and not ev.isAutoRepeat()
+                and self._update_camera_drag_shift(False)):
+            ev.accept()
+            return
         release = getattr(self.active_tool, "on_key_release", None)
         if callable(release):
             if ev.isAutoRepeat() and self._tool_claims_key(ev):
@@ -13339,7 +13382,8 @@ class Viewport(QOpenGLWidget):
             # An angle, a factor or a count is not a length: the tool says
             # so and the document's unit stays out of it (#176).
             unitless = getattr(self.active_tool, "value_is_unitless", None)
-            if callable(unitless) and unitless():
+            radius_input = self._value_buffer.strip().lower().endswith("r")
+            if callable(unitless) and unitless() and not radius_input:
                 from core.units import unitless_numbers
                 with unitless_numbers():
                     value = self._parse_value_buffer(
@@ -13550,11 +13594,12 @@ class Viewport(QOpenGLWidget):
         if m is not None:
             return ("array", int(m.group(1) or m.group(2)), "/")
         if stripped.lower().endswith("r") and ":" not in stripped:
-            import re as _re
-            m = _re.fullmatch(r"(\d+\.?\d*|\.\d+)r", stripped.lower())
-            if m is None:
+            # A radius is a length even when the tool otherwise reads an
+            # angle or a segment count. Explicit units work too: "25mmr".
+            radius = _parse_length_field(buffer.strip()[:-1])
+            if radius is None or radius <= 0 or not math.isfinite(radius):
                 return None
-            return ("radius", float(m.group(1)))
+            return ("radius", radius)
         if stripped.lower().endswith("p") and ":" not in stripped:
             # "0.3p": the profile of a bevel (0 to 1, no unit).
             m = re.fullmatch(r"(\d+\.?\d*|\.\d+)p", stripped.lower())

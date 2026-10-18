@@ -57,9 +57,13 @@ class SegmentCount:
 
     def value_is_unitless(self) -> bool:
         """Before the first click the typed number is a COUNT, not a length."""
+        if self.start_point is None and self._arc_state() is not None:
+            return self._last_params["kind"] == "center"
         return self.start_point is None
 
     def _set_segments(self, viewport, n) -> bool:
+        if not isinstance(n, (int, float)) or not math.isfinite(n):
+            return False
         n = int(round(n))
         if n < self.MIN_SEGMENTS:
             return False
@@ -67,6 +71,128 @@ class SegmentCount:
         viewport.flash_status(tr("{n} segments", n=n))
         viewport.update()
         return True
+
+    def _forget_arc(self):
+        self._last_cmd = self._last_params = self._last_revision = None
+        self._last_viewport = None
+        self._last_scene = self._last_content_version = None
+
+    def _arc_state(self, viewport=None):
+        viewport = viewport or getattr(self, "_last_viewport", None)
+        cmd = getattr(self, "_last_cmd", None)
+        if viewport is None or cmd is None:
+            return None
+        history, scene = viewport.history, viewport.scene
+        if (not history.undo_stack or history.undo_stack[-1] is not cmd
+                or scene is not self._last_scene
+                or scene.content_version != self._last_content_version
+                or history.revision != self._last_revision
+                or getattr(cmd, "_history_mesh", None) is not scene.mesh
+                or getattr(cmd, "_history_edit_group", None) is not scene.edit_group):
+            self._forget_arc()
+            return None
+        return self._last_params
+
+    def _remember_arc(self, viewport, cmd, params):
+        self._forget_arc()
+        if viewport.history.undo_stack and viewport.history.undo_stack[-1] is cmd:
+            self._last_cmd, self._last_params = cmd, params
+            self._last_revision = viewport.history.revision
+            self._last_viewport = viewport
+            self._last_scene = viewport.scene
+            self._last_content_version = viewport.scene.content_version
+
+    def _replace_arc(self, viewport, params):
+        if self._arc_state(viewport) is None:
+            return False
+        points = _points_from_parameters(params, self.segments)
+        if len(points) < 2:
+            return False
+        cmd = viewport.history.replace_last(
+            self._last_cmd,
+            lambda: build_arc_command(viewport, points,
+                                      close_to=params.get("centre") if params.get("pie") else None,
+                                      trim=params.get("trim")),
+            revision=self._last_revision)
+        if cmd is None:
+            self._last_content_version = viewport.scene.content_version
+            return False
+        self._remember_arc(viewport, cmd, params)
+        viewport.update()
+        return True
+
+    def _segments_value(self, viewport, n):
+        params = self._arc_state(viewport) if self.start_point is None else None
+        if not self._set_segments(viewport, n):
+            return False
+        return self._replace_arc(viewport, dict(params)) if params is not None else True
+
+    def _retype_radius(self, viewport, radius):
+        params = self._arc_state(viewport)
+        if (params is None or not isinstance(radius, (int, float))
+                or not math.isfinite(radius) or radius <= 0.0):
+            return False
+        params = dict(params)
+        if params["kind"] == "center":
+            params["radius"] = radius
+        elif params.get("fillet") is not None:
+            corner, ua, ub, reach = params["fillet"]
+            theta = math.acos(max(-1.0, min(1.0, QVector3D.dotProduct(ua, ub))))
+            distance = radius / math.tan(theta / 2.0)
+            if distance > reach + 1e-6:
+                return False
+            start, end = corner + ua * distance, corner + ub * distance
+            u, v = params["u"], params["v"]
+            chord = end - start
+            e2 = (QVector3D.dotProduct(chord, u), QVector3D.dotProduct(chord, v))
+            tangent = -ua
+            angle = math.atan2(e2[0] * QVector3D.dotProduct(tangent, v)
+                               - e2[1] * QVector3D.dotProduct(tangent, u),
+                               e2[0] * QVector3D.dotProduct(tangent, u)
+                               + e2[1] * QVector3D.dotProduct(tangent, v))
+            h = math.hypot(*e2) * 0.5 * math.tan(angle * 0.5)
+            params.update(origin=start, end=e2,
+                          apex=_apex_at_bulge(e2, h))
+            if params.get("trim"):
+                params["trim"] = [(corner, start), (corner, end)]
+        else:
+            half = math.hypot(*params["end"]) * 0.5
+            if radius < half - 1e-9:
+                return False
+            gap = math.sqrt(max(0.0, radius * radius - half * half))
+            bulge = radius + gap if params["major"] else radius - gap
+            ex, ey = params["end"]
+            ax, ay = params["apex"]
+            current_side = -1.0 if (ax - ex * 0.5) * -ey + (ay - ey * 0.5) * ex < 0 else 1.0
+            params["apex"] = _apex_at_bulge(params["end"], current_side * bulge)
+        return self._replace_arc(viewport, params)
+
+
+def _apex_at_bulge(end, bulge):
+    length = math.hypot(*end)
+    return (end[0] * 0.5 - end[1] / length * bulge,
+            end[1] * 0.5 + end[0] / length * bulge)
+
+
+def _chord_parameters(origin, u, v, apex, end, trim=None):
+    length = math.hypot(*end)
+    bulge = ((apex[0] - end[0] * 0.5) * -end[1]
+             + (apex[1] - end[1] * 0.5) * end[0]) / length
+    return dict(kind="chord", origin=QVector3D(origin), u=QVector3D(u),
+                v=QVector3D(v), end=end, apex=apex, trim=trim,
+                side=-1.0 if bulge < 0.0 else 1.0, major=abs(bulge) > length * 0.5)
+
+
+def _points_from_parameters(params, segments):
+    if params["kind"] == "chord":
+        points = _arc_3pts_2d((0.0, 0.0), params["apex"], params["end"], segments)
+        return [params["origin"] + params["u"] * x + params["v"] * y for x, y in points]
+    sweep = params["sweep"]
+    count = segments or max(1, round(abs(sweep) / 15.0))
+    return [params["centre"] +
+            (params["u"] * math.cos(params["a0"] + math.radians(sweep) * k / count)
+             + params["v"] * math.sin(params["a0"] + math.radians(sweep) * k / count))
+            * params["radius"] for k in range(count + 1)]
 
 
 def _circumcenter2(a, b, c):
@@ -125,6 +251,13 @@ def commit_arc(viewport, pts: list[QVector3D], close_to=None, trim=None):
     corner stubs a fillet leaves behind, which the classic tool «cleans out»
     after the face has been split, so the rounded face survives and the corner
     sliver goes with its edges. Returns the executed command."""
+    cmd = build_arc_command(viewport, pts, close_to=close_to, trim=trim)
+    viewport.history.execute(cmd)
+    return cmd
+
+
+def build_arc_command(viewport, pts: list[QVector3D], close_to=None, trim=None):
+    """Plan against the current mesh; replacement calls this after undoing the old arc."""
     segments = [(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
     if close_to is not None:
         segments = ([(close_to, pts[0])] + segments
@@ -149,7 +282,6 @@ def commit_arc(viewport, pts: list[QVector3D], close_to=None, trim=None):
         cmd = build_add_edges(viewport.scene, segments, detect_faces=True,
                               extra=[TagCurveCommand(list(pts), closed=False)]
                               + after)
-    viewport.history.execute(cmd)
     return cmd
 
 
@@ -212,22 +344,19 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
         self._reset()
-        self._last_cmd = None
-        self._last_params = None
+        self._forget_arc()
 
     def on_deactivate(self, viewport) -> None:
         self._reset()
         self.hover_point = None
-        self._last_cmd = None
-        self._last_params = None
+        self._forget_arc()
 
     # ---- Spatial input ------------------------------------------------------
     def on_click(self, ctx: ToolContext) -> None:
         self.note_plane(ctx.viewport)
         self._viewport = ctx.viewport
         if self.start_point is None:
-            self._last_cmd = None
-            self._last_params = None
+            self._forget_arc()
             self.start_point = ctx.world
             if self.work_plane is None:
                 self.work_plane = self.locked_work_plane(ctx.world)
@@ -598,13 +727,26 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
 
     def vcb_caption(self) -> str:
         if self.start_point is None:
+            params = self._arc_state()
+            if params is not None:
+                return "Radius" if params.get("fillet") is not None else "Bulge"
             return "Segments"
         return "Radius" if self._fillet is not None else "Bulge"
 
     def on_value(self, viewport, value) -> bool:
-        if isinstance(value, tuple):
+        if not isinstance(value, (int, float)) or not math.isfinite(value):
             return False
         if self.start_point is None:
+            params = self._arc_state(viewport)
+            if params is not None:
+                if value == 0.0:
+                    return False
+                if params.get("fillet") is not None:
+                    return self._retype_radius(viewport, value)
+                params = dict(params)
+                params["apex"] = _apex_at_bulge(params["end"], params["side"] * value)
+                params["major"] = abs(value) > math.hypot(*params["end"]) * 0.5
+                return self._replace_arc(viewport, params)
             return self._set_segments(viewport, value)
         if self.end_point is None or self.hover_point is None:
             return False
@@ -673,7 +815,9 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         """The usual "2r": type the RADIUS instead of the bulge. The minor
         arc is taken (as usual); a radius smaller than half the chord
         is impossible and is refused with a status message."""
-        if self.end_point is None or radius <= 0:
+        if self.start_point is None and self._arc_state(viewport) is not None:
+            return self._retype_radius(viewport, radius)
+        if not math.isfinite(radius) or self.end_point is None or radius <= 0:
             return False
         half = (self.end_point - self.start_point).length() * 0.5
         if half < 1e-9:
@@ -706,23 +850,10 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
     def on_segments_value(self, viewport, n: int) -> bool:
         """The usual "Ns": the segment count of the arc — the one being
         drawn, or the one just drawn, which is rebuilt in place."""
-        if not self._set_segments(viewport, n):
-            return False
-        cmd, params = self._last_cmd, self._last_params
-        stack = getattr(getattr(viewport, "history", None), "undo_stack", None)
-        if cmd is not None and params is not None and stack and stack[-1] is cmd:
-            viewport.history.undo()
-            pts, trim = params
-            start, end, apex = pts
-            pts2 = _arc_3pts_2d((0.0, 0.0), apex[0], apex[1], self.segments)
-            u, v, origin = apex[2]
-            points = [origin + u * x + v * y for x, y in pts2]
-            self._last_cmd = commit_arc(viewport, points, trim=trim)
-            self._last_params = params
-            viewport.update()
-        return True
+        return self._segments_value(viewport, n)
 
     def on_cancel(self, viewport) -> None:
+        self._forget_arc()
         self._reset()
         viewport.update()
 
@@ -819,14 +950,23 @@ class ArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
 
     def _commit(self, viewport, pts: list[QVector3D], trim=None) -> None:
         apex = getattr(self, "_last_apex", None)
+        params = None
+        if apex is not None:
+            middle, end, (u, v, origin) = apex
+            params = _chord_parameters(origin, u, v, middle, end, trim)
+            if self._fillet is not None and self._bulge_kind == "fillet":
+                corner, p1, p2 = self._fillet
+                vertex = viewport.scene.mesh.vertex_at(corner)
+                reach = min((e.length() for e in vertex.edges), default=float("inf")) \
+                    if vertex is not None else float("inf")
+                params["fillet"] = (QVector3D(corner), (p1 - corner).normalized(),
+                                    (p2 - corner).normalized(), reach)
         if trim and self._fillet is not None:
             V, P1, _P2 = self._fillet
             ArcTool.last_fillet_d = (P1 - V).length()
-        self._last_cmd = commit_arc(viewport, pts, trim=trim)
-        self._last_params = None
-        if apex is not None and len(pts) >= 3:
-            self._last_params = ((None, None, apex), trim)
+        cmd = commit_arc(viewport, pts, trim=trim)
         self._reset()
+        self._remember_arc(viewport, cmd, params)
         viewport.update()
 
     def on_key(self, viewport, key: int, modifiers) -> bool:
@@ -869,17 +1009,21 @@ class ThreePointArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         self.mid_point: QVector3D | None = None
         self.hover_point: QVector3D | None = None
         self.work_plane: tuple[QVector3D, QVector3D] | None = None
+        self._forget_arc()
 
     def on_activate(self, viewport) -> None:
+        self._forget_arc()
         self._reset()
 
     def on_deactivate(self, viewport) -> None:
+        self._forget_arc()
         self._reset()
         self.hover_point = None
 
     def on_click(self, ctx: ToolContext) -> None:
         self.note_plane(ctx.viewport)
         if self.start_point is None:
+            self._forget_arc()
             self.start_point = ctx.world
             if self.work_plane is None:
                 self.work_plane = self.locked_work_plane(ctx.world)
@@ -902,12 +1046,21 @@ class ThreePointArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
     def on_value(self, viewport, value) -> bool:
         if isinstance(value, tuple) or self.start_point is not None:
             return False
+        if self._arc_state(viewport) is not None:
+            return self._retype_radius(viewport, value)
         return self._set_segments(viewport, value)
 
     def on_segments_value(self, viewport, n: int) -> bool:
-        return self._set_segments(viewport, n)
+        return self._segments_value(viewport, n)
+
+    def on_radius_value(self, viewport, radius: float) -> bool:
+        return self._retype_radius(viewport, radius) if self.start_point is None else False
+
+    def vcb_caption(self) -> str:
+        return "Radius" if self.start_point is None and self._arc_state() is not None else "Segments"
 
     def on_cancel(self, viewport) -> None:
+        self._forget_arc()
         self._reset()
         viewport.update()
 
@@ -946,8 +1099,16 @@ class ThreePointArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         return [self.start_point + u * x + v * y for x, y in pts2]
 
     def _commit(self, viewport, pts: list[QVector3D]) -> None:
-        commit_arc(viewport, pts)
+        u, v = self._axes()
+        origin = QVector3D(self.start_point)
+        middle, end = self.mid_point - origin, pts[-1] - origin
+        middle = (QVector3D.dotProduct(middle, u), QVector3D.dotProduct(middle, v))
+        end = (QVector3D.dotProduct(end, u), QVector3D.dotProduct(end, v))
+        samples = _arc_3pts_2d((0.0, 0.0), middle, end, 2)
+        params = _chord_parameters(origin, u, v, samples[1], end)
+        cmd = commit_arc(viewport, pts)
         self._reset()
+        self._remember_arc(viewport, cmd, params)
         viewport.update()
 
 
@@ -990,12 +1151,15 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         self.arm_point: QVector3D | None = None     # radius + 0° direction
         self.hover_point: QVector3D | None = None
         self.work_plane: tuple[QVector3D, QVector3D] | None = None
+        self._forget_arc()
 
     # ---- Lifecycle ----------------------------------------------------------
     def on_activate(self, viewport) -> None:
+        self._forget_arc()
         self._reset()
 
     def on_deactivate(self, viewport) -> None:
+        self._forget_arc()
         self._reset()
         self.hover_point = None
 
@@ -1003,6 +1167,7 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
     def on_click(self, ctx: ToolContext) -> None:
         self.note_plane(ctx.viewport)
         if self.start_point is None:
+            self._forget_arc()
             self.start_point = ctx.world
             if self.work_plane is None:
                 self.work_plane = self.locked_work_plane(ctx.world)
@@ -1023,9 +1188,16 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         ctx.viewport.update()
 
     def on_value(self, viewport, value) -> bool:
-        if isinstance(value, tuple):
+        if not isinstance(value, (int, float)) or not math.isfinite(value):
             return False
         if self.start_point is None:
+            params = self._arc_state(viewport)
+            if params is not None:
+                if abs(value) < 1e-6 or abs(value) > 360.0:
+                    return False
+                params = dict(params)
+                params["sweep"] = params["side"] * value
+                return self._replace_arc(viewport, params)
             return self._set_segments(viewport, value)
         if self.arm_point is None:
             return False
@@ -1039,6 +1211,7 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         return True
 
     def on_cancel(self, viewport) -> None:
+        self._forget_arc()
         self._reset()
         viewport.update()
 
@@ -1068,7 +1241,10 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
                 self.hover_point)
 
     def on_segments_value(self, viewport, n: int) -> bool:
-        return self._set_segments(viewport, n)
+        return self._segments_value(viewport, n)
+
+    def on_radius_value(self, viewport, radius: float) -> bool:
+        return self._retype_radius(viewport, radius) if self.start_point is None else False
 
     def value_is_unitless(self) -> bool:
         """A segment count (before the centre) and a sweep angle (once the
@@ -1078,6 +1254,8 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
 
     def vcb_caption(self) -> str:
         if self.start_point is None:
+            if self._arc_state() is not None:
+                return "Angle"
             return "Segments"
         return "Angle" if self.arm_point is not None else "Radius"
 
@@ -1118,6 +1296,7 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         r = math.hypot(QVector3D.dotProduct(a, u), QVector3D.dotProduct(a, v))
         if r < 1e-6:
             return []
+        self._last_sweep = sweep_deg
         a0 = math.atan2(QVector3D.dotProduct(a, v), QVector3D.dotProduct(a, u))
         if self.segments:
             steps = self.segments
@@ -1131,8 +1310,22 @@ class CenterArcTool(SegmentCount, AxisMagnet, PlaneLock, Tool):
         return out
 
     def _commit(self, viewport, pts: list[QVector3D]) -> None:
-        commit_arc(viewport, pts)
+        self._commit_center_arc(viewport, pts, pie=False)
+
+    def _commit_center_arc(self, viewport, pts, pie):
+        u, v = self._axes()
+        arm = self.arm_point - self.start_point
+        sweep = self._last_sweep
+        params = dict(kind="center", centre=QVector3D(self.start_point),
+                      u=QVector3D(u), v=QVector3D(v),
+                      radius=math.hypot(QVector3D.dotProduct(arm, u),
+                                        QVector3D.dotProduct(arm, v)),
+                      a0=math.atan2(QVector3D.dotProduct(arm, v),
+                                    QVector3D.dotProduct(arm, u)),
+                      sweep=sweep, side=-1.0 if sweep < 0.0 else 1.0, pie=pie)
+        cmd = commit_arc(viewport, pts, close_to=params["centre"] if pie else None)
         self._reset()
+        self._remember_arc(viewport, cmd, params)
         viewport.update()
 
 
@@ -1159,7 +1352,4 @@ class PieTool(CenterArcTool):
         "slice-shaped face.")
 
     def _commit(self, viewport, pts: list[QVector3D]) -> None:
-        centre = QVector3D(self.start_point)
-        commit_arc(viewport, pts, close_to=centre)
-        self._reset()
-        viewport.update()
+        self._commit_center_arc(viewport, pts, pie=True)

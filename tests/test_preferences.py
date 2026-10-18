@@ -101,6 +101,30 @@ def test_cancel_touches_nothing(settings_file):
     assert win.viewport.edit_rest_mode == "fade"
 
 
+def test_dynamic_shift_navigation_is_default_on_persistent_and_applied_live(settings_file):
+    from views.viewport import _load_dynamic_shift_navigation
+    win = _Win()
+    dlg = PreferencesDialog(win)
+    assert dlg._dynamic_shift_nav.isChecked()
+    dlg._dynamic_shift_nav.setChecked(False)
+    dlg.accept()
+    st = _fresh(settings_file)
+    assert st.value("General/dynamic_shift_navigation") == "0"
+    assert win.viewport._dynamic_shift_nav is False
+    assert _load_dynamic_shift_navigation(st) is False
+    assert not PreferencesDialog(win)._dynamic_shift_nav.isChecked()
+
+
+def test_cancel_does_not_change_shift_navigation(settings_file):
+    win = _Win()
+    win.viewport._dynamic_shift_nav = True
+    dlg = PreferencesDialog(win)
+    dlg._dynamic_shift_nav.setChecked(False)
+    dlg.reject()
+    assert _fresh(settings_file).value("General/dynamic_shift_navigation") is None
+    assert win.viewport._dynamic_shift_nav is True
+
+
 def test_rest_mode_applies_through_the_viewport(settings_file):
     win = _Win()
     dlg = PreferencesDialog(win)

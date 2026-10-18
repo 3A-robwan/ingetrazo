@@ -1,5 +1,11 @@
 # IngeTrazo
 
+> **Unofficial experimental source preview by 3A-robwan.** Guide Move/Rotate,
+> numeric correction after operations, and dynamic Shift Orbit/Pan.
+> See [changes, usage, setup and test limitations](docs/experimental-changes.md).
+> This preview is based on upstream `d8ee8c0`; official releases remain with
+> [ingelibre/ingetrazo](https://github.com/ingelibre/ingetrazo).
+
 *Pronounced **EEN-heh-TRAH-soh** — from Spanish* inge(niería) *"engineering"
 +* trazo *"a drawn stroke": the engineer's stroke.*
 

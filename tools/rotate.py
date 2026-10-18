@@ -33,12 +33,15 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QVector3D
 
 from core.group import Group, copy_group, transformed_attrs
+from core.guide import Guide
 from core.history import (
     AddEdgeCommand,
     AddFaceCommand,
+    AddGuideCommand,
     CompoundCommand,
     InsertGroupCommand,
     RotateGroupCommand,
+    RotateGuidesCommand,
     RotateVerticesCommand,
     rotation_matrix,
 )
@@ -65,6 +68,7 @@ class RotateTool(ProtractorBase):
         self._groups: list[Group] = []
         self._splanes: list = []               # section planes being rotated
         self._images: list = []                # reference images being rotated
+        self._guides: list[Guide] = []         # construction lines and points
         self._positions: list[QVector3D] = []
         self._verts: list = []
         self._sel_faces: list = []          # for copy mode (loose geometry)
@@ -153,13 +157,25 @@ class RotateTool(ProtractorBase):
                     groups, positions = [], []
             from tools.move import gather_images
             images = gather_images(ctx)
-            if not (groups or positions or splanes or images):
+            guides = [g for g in viewport.scene.selection
+                      if isinstance(g, Guide) and g in viewport.scene.guides]
+            if not viewport.scene.selection and not groups and not splanes:
+                # A guide on a face is the deliberate thin-line target;
+                # real edges/groups and section frames retain priority.
+                pick = getattr(viewport, "pick_guide", None)
+                guide = pick(ctx.screen.x(), ctx.screen.y()) if pick else None
+                if (guide is not None
+                        and viewport.pick_edge(ctx.screen.x(), ctx.screen.y()) is None):
+                    guides = [guide]
+                    positions, images = [], []
+            if not (groups or positions or splanes or images or guides):
                 viewport.flash_status(
                     tr("Select (or click) the geometry to rotate first"))
                 return
             self._groups = groups
             self._splanes = splanes
             self._images = images
+            self._guides = guides
             self._positions = positions
             mesh = viewport.scene.mesh
             self._verts = [v for v in (mesh.vertex_at(p) for p in positions)
@@ -208,7 +224,8 @@ class RotateTool(ProtractorBase):
             viewport.flash_status(tr("Rotation axis set along the drag"))
 
     def on_value(self, viewport, value) -> bool:
-        if isinstance(value, tuple):
+        value = self._valid_angle(value)
+        if value is None:
             return False
         if self.ref_point is not None:
             # The typed angle turns the way the user is currently dragging.
@@ -216,29 +233,57 @@ class RotateTool(ProtractorBase):
             if self._copy and self.hover_point is not None:
                 cur = self._angle_to(self.hover_point)
                 sign = -1.0 if (cur is not None and cur < 0) else 1.0
-            self._commit(viewport, sign * abs(value))
-            return True
+            return self._commit(viewport, sign * abs(value))
         if self._last is not None:
             # Hot retype: redo the rotation just made at the new
             # angle. A typed negative flips the side.
             last = self._last
-            stack = getattr(viewport.history, "undo_stack", None)
-            if not stack or stack[-1] is not last["cmd"]:
-                self._last = None
-                return False
             side = last["sign"] * (1.0 if value >= 0 else -1.0)
             deg = side * abs(value)
-            viewport.history.undo()
-            cmd = last["build"]([deg])
-            if cmd is None:
-                self._last = None
-                return False
-            viewport.history.execute(cmd)
-            last["cmd"] = cmd
-            last["deg"] = deg
-            viewport.update()
-            return True
+            return self._replace_rotation(viewport, deg)
         return False
+
+    @staticmethod
+    def _valid_angle(value):
+        """Qt rotates with float32 degrees; reject unrepresentable entries."""
+        if isinstance(value, (bool, tuple)):
+            return None
+        try:
+            value = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        return value if math.isfinite(value) and abs(value) <= 3.402823466e38 else None
+
+    def _last_is_current(self, viewport) -> bool:
+        last = self._last
+        stack = getattr(viewport.history, "undo_stack", None)
+        return bool(last is not None and stack and stack[-1] is last["cmd"]
+                    and viewport.history is last["history"]
+                    and viewport.history.revision == last["revision"]
+                    and viewport.scene.content_version == last["content_version"]
+                    and viewport.scene.mesh is last["mesh"]
+                    and viewport.scene.edit_group is last["edit_group"])
+
+    def _replace_rotation(self, viewport, deg, array=None) -> bool:
+        if not self._last_is_current(viewport):
+            self._last = None
+            return False
+        last = self._last
+        count, mode = array if array is not None else last["array"]
+        if self._valid_angle(deg if mode == "/" else deg * count) is None:
+            return False
+        degs = ([deg * (k / float(count)) for k in range(1, count + 1)]
+                if mode == "/" else [deg * k for k in range(1, count + 1)])
+        cmd = viewport.history.replace_last(
+            last["cmd"], lambda: last["build"](degs), revision=last["revision"])
+        if cmd is None:
+            last["content_version"] = viewport.scene.content_version
+            return False
+        last.update(cmd=cmd, deg=deg, array=(count, mode),
+                    revision=viewport.history.revision,
+                    content_version=viewport.scene.content_version)
+        viewport.update()
+        return True
 
     def array_pending(self, viewport) -> bool:
         """Whether a rotate-COPY was just made, so «3x» / «/3» would fan a
@@ -247,8 +292,7 @@ class RotateTool(ProtractorBase):
         last = self._last
         if last is None or not last.get("copy") or self.ref_point is not None:
             return False
-        stack = getattr(viewport.history, "undo_stack", None)
-        return bool(stack) and stack[-1] is last["cmd"]
+        return self._last_is_current(viewport)
 
     def close_array_window(self) -> None:
         """Esc right after a rotate-copy: «3x» / «/3» stop applying and a
@@ -268,22 +312,8 @@ class RotateTool(ProtractorBase):
         if (last is None or not last.get("copy")
                 or self.ref_point is not None or count < 1):
             return False
-        stack = getattr(viewport.history, "undo_stack", None)
-        if not stack or stack[-1] is not last["cmd"]:
-            self._last = None
+        if not self._replace_rotation(viewport, last["deg"], array=(count, mode)):
             return False
-        deg = last["deg"]
-        if mode == "/":
-            degs = [deg * (k / float(count)) for k in range(1, count + 1)]
-        else:
-            degs = [deg * float(k) for k in range(1, count + 1)]
-        viewport.history.undo()
-        cmd = last["build"](degs)
-        if cmd is None:
-            self._last = None
-            return False
-        viewport.history.execute(cmd)
-        last["cmd"] = cmd
         viewport.flash_status(tr("{n} copies").format(n=count))
         viewport.update()
         return True
@@ -313,6 +343,12 @@ class RotateTool(ProtractorBase):
         if not edges and not groups:
             return None
         return edges, groups
+
+    def snap_excluded_guides(self) -> set[int]:
+        """Do not infer against guides swinging live; copy originals stay."""
+        if self.ref_point is None or self._copy:
+            return set()
+        return {id(g) for g in self._guides}
 
     # ---- Visual preview -----------------------------------------------------
     def rubber_band_lines(self):
@@ -383,7 +419,7 @@ class RotateTool(ProtractorBase):
                         a, b = xf.map(a), xf.map(b)
                     self._base_segments.append((a, b))
         sel = list(viewport.scene.selection)
-        if not sel and not self._groups:
+        if not sel and not self._groups and not self._guides:
             # Nothing selected and no group hover-picked: the click grabbed
             # the loose entity under the cursor (mirror of gather_targets).
             edge = viewport.pick_edge(ctx.screen.x(), ctx.screen.y())
@@ -403,6 +439,10 @@ class RotateTool(ProtractorBase):
                         (QVector3D(lp[i]), QVector3D(lp[(i + 1) % n])))
         for e in self._sel_edges:
             self._base_segments.append((QVector3D(e.a), QVector3D(e.b)))
+        for guide in self._guides:
+            self._base_segments.append(guide.segment())
+            if guide.origin is not None:
+                self._base_segments.append((QVector3D(guide.origin), QVector3D(guide.point)))
 
     def _snapshot(self) -> dict:
         """The rotating set exactly as it was before the preview touched it.
@@ -417,7 +457,7 @@ class RotateTool(ProtractorBase):
         if snap is not None:
             return snap
         from PySide6.QtGui import QMatrix4x4
-        snap = {"xf": [], "gv": [], "v": [], "sp": [], "im": []}
+        snap = {"xf": [], "gv": [], "v": [], "sp": [], "im": [], "guides": []}
         vp_only = getattr(self, "_vp_preview", False)
         if not vp_only:
             for group in self._groups:
@@ -431,6 +471,10 @@ class RotateTool(ProtractorBase):
                       for sp in self._splanes]
         snap["im"] = [(im, QVector3D(im.origin), QVector3D(im.u),
                        QVector3D(im.v)) for im in self._images]
+        snap["guides"] = [(g, QVector3D(g.point),
+                           QVector3D(g.direction) if g.direction is not None else None,
+                           QVector3D(g.origin) if g.origin is not None else None)
+                          for g in self._guides]
         self._orig = snap
         return snap
 
@@ -453,7 +497,9 @@ class RotateTool(ProtractorBase):
             im.origin = m.map(origin) if m is not None else QVector3D(origin)
             im.u = m.mapVector(u) if m is not None else QVector3D(u)
             im.v = m.mapVector(v) if m is not None else QVector3D(v)
-        if snap["xf"] or snap["gv"] or snap["v"]:
+        for guide, point, direction, origin in snap["guides"]:
+            RotateGuidesCommand.pose(guide, point, direction, origin, m)
+        if snap["xf"] or snap["gv"] or snap["v"] or snap["guides"]:
             viewport.scene.version += 1
 
     def _apply_preview(self, viewport, target_deg: float) -> None:
@@ -491,6 +537,8 @@ class RotateTool(ProtractorBase):
         positions = list(self._positions)
         faces = list(self._sel_faces)
         edges = list(self._sel_edges)
+        guides = list(self._guides)
+        guide_copies = [Guide(g.point, g.direction, g.origin) for g in guides]
 
         def build(degs):
             """One command for the whole operation. ``degs`` is a LIST of
@@ -506,6 +554,11 @@ class RotateTool(ProtractorBase):
                         g = copy_group(group)  # instance → sibling instance
                         cmds.append(InsertGroupCommand(g))
                         cmds.append(RotateGroupCommand(g, start, axis, deg))
+                    for guide in guide_copies:
+                        copied = Guide(guide.point, guide.direction, guide.origin)
+                        RotateGuidesCommand.pose(copied, guide.point, guide.direction,
+                                                 guide.origin, m)
+                        cmds.append(AddGuideCommand(copied))
                     for f in faces:
                         cmds.append(AddFaceCommand(
                             [m.map(v) for v in f.vertices],
@@ -541,15 +594,18 @@ class RotateTool(ProtractorBase):
                     from core.history import RotateImagePlanesCommand
                     cmds.append(RotateImagePlanesCommand(
                         images, start, axis, deg))
+                if guides:
+                    cmds.append(RotateGuidesCommand(guides, start, axis, deg))
             if not cmds:
                 return None
             return cmds[0] if len(cmds) == 1 else CompoundCommand(cmds)
 
         return build
 
-    def _commit(self, viewport, deg: float) -> None:
+    def _commit(self, viewport, deg: float) -> bool:
         self._revert_preview(viewport)
         self._end_vp_preview(viewport)
+        done = abs(deg) <= 1e-9
         if abs(deg) > 1e-9:
             build = self._make_builder()
             copy = self._copy
@@ -559,20 +615,29 @@ class RotateTool(ProtractorBase):
                 # The angle stays hot — typing a value + Enter
                 # redoes this rotation until the next click or tool change,
                 # and after a COPY «3x» / «/3» fan it into a polar array.
-                self._last = {"cmd": cmd, "build": build, "deg": float(deg),
-                              "copy": copy,
-                              "sign": -1.0 if deg < 0 else 1.0}
+                if viewport.history.undo_stack and viewport.history.undo_stack[-1] is cmd:
+                    done = True
+                    self._last = {"cmd": cmd, "build": build, "deg": float(deg),
+                                  "copy": copy, "array": (1, "x"),
+                                  "history": viewport.history,
+                                  "revision": viewport.history.revision,
+                                  "content_version": viewport.scene.content_version,
+                                  "mesh": viewport.scene.mesh,
+                                  "edit_group": viewport.scene.edit_group,
+                                  "sign": -1.0 if deg < 0 else 1.0}
         self._reset()
         apply = getattr(viewport, "_apply_tool_cursor", None)
         if apply is not None:
             apply()                      # one operation done: the + goes
         viewport.update()
+        return done
 
     def _reset(self) -> None:
         self._reset_protractor()
         self._groups = []
         self._splanes = []
         self._images = []
+        self._guides = []
         self._positions = []
         self._verts = []
         self._sel_faces = []
