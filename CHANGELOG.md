@@ -63,6 +63,17 @@ follow [SemVer](https://semver.org).
   selección en el visor 3D sigue en naranja.
 
 ### Corregido
+- **Ratón 3D (SpaceMouse) en Windows: sin saltos y con el zoom en su
+  sentido** (vídeo de revisión de Rafael García; PR #581 de @deedend como
+  pista): el controlador de 3Dconnexion convierte el movimiento de la tapa
+  en giros de la rueda del ratón para los programas que no conoce, y esos
+  pasos de zoom (unos ocho por segundo) se sumaban a la lectura directa del
+  aparato. Ahora la rueda no hace nada mientras la tapa mueve la vista (por
+  encima de la zona muerta, y 0,4 s después); con la tapa quieta, la rueda
+  del ratón va como siempre. Además el eje adelante/atrás se leía con el
+  signo cambiado en Windows, así que el zoom iba al revés. Y en Preferencias
+  ▸ Ratón 3D hay una lectura en vivo: los seis números que manda el aparato
+  y cómo los entiende IngeTrazo.
 - **Una guía con coordenadas inválidas ya no impide guardar** (#723,
   @kcgemail): el guardado se negaba entero con «un punto con coordenadas
   inválidas … scene › guides[0] › point[0]» y el trabajo no se podía
