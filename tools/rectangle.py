@@ -57,6 +57,8 @@ class RectangleTool(PlaneLock, Tool):
     name = "Rectangle"
     shortcut = "R"
     description = "Draw a rectangle from two opposite corners."
+    axis_source = True
+    axis_source_empty_only = True
     vcb_label = "Dimensions"
     # Only a width AND a height mean something here, so "200,100" is two
     # values (the list comma, #152), not the decimal 200.1.

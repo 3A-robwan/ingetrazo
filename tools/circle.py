@@ -280,6 +280,8 @@ class CircleTool(_RadialTool):
     name = "Circle"
     shortcut = "C"
     description = "Draw a circle from its centre and radius."
+    axis_source = True
+    axis_source_empty_only = True
     sides = 24
 
 
