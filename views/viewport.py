@@ -1247,6 +1247,7 @@ class Viewport(QOpenGLWidget):
         # Camera navigation state (middle button)
         self._last_pos = None
         self._pan_mode = False
+        self._middle_drag_active = False
         #: where the current orbit gesture turns (#164); None = the target
         self._orbit_pivot = None
         # A mouse-look drag for a tool with ``on_look`` (First Person):
@@ -13011,10 +13012,24 @@ class Viewport(QOpenGLWidget):
         self._last_pos = None
         self._orbit_pivot = None
         self._pan_mode = False
+        self._middle_drag_active = False
         if self.nav_mode is not None:
             self._apply_nav_cursor()
         else:
             self._apply_tool_cursor()
+
+    def _set_middle_drag_pan_mode(self, pan: bool) -> None:
+        """Switch an active MMB drag between orbit and pan."""
+        if not self._middle_drag_active or self.nav_mode is not None:
+            return
+        pan = bool(pan)
+        if self._pan_mode == pan:
+            return
+        self._pan_mode = pan
+        from views.icons import tool_cursor
+        cur = tool_cursor("pan" if pan else "orbit")
+        if cur is not None:
+            self.setCursor(cur)
 
     def set_nav_mode(self, mode: Optional[str]) -> None:
         """Enter a camera navigation mode ("orbit" / "pan").
@@ -13033,6 +13048,7 @@ class Viewport(QOpenGLWidget):
         self._last_pos = None             # a drag in progress ends here
         self._orbit_pivot = None
         self._pan_mode = False
+        self._middle_drag_active = False
         if mode is not None:
             self._apply_nav_cursor()      # orbit / pan / magnifier icons
         else:
@@ -13129,6 +13145,7 @@ class Viewport(QOpenGLWidget):
         if ev.button() == Qt.MiddleButton:
             self._last_pos = ev.position().toPoint()
             self._pan_mode = bool(ev.modifiers() & Qt.ShiftModifier)
+            self._middle_drag_active = True
             self._orbit_pivot = self._orbit_pivot_at(
                 ev.position().x(), ev.position().y())
             self._pan_depth = self._depth_of(self._orbit_pivot)
@@ -13355,6 +13372,9 @@ class Viewport(QOpenGLWidget):
             # «el orbital se mantiene activo… no se desactiva con nada»
             # (Andrés Rodríguez, Windows 11 + NVIDIA, 0.5.0).
             self._end_camera_drag()
+        if self._middle_drag_active:
+            self._set_middle_drag_pan_mode(
+                bool(ev.modifiers() & Qt.ShiftModifier))
         if self._last_pos is not None:
             p = ev.position().toPoint()
             dx = p.x() - self._last_pos.x()
@@ -13624,6 +13644,7 @@ class Viewport(QOpenGLWidget):
             self._last_pos = None
             self._orbit_pivot = None
             self._pan_mode = False
+            self._middle_drag_active = False
             if self.nav_mode is not None:
                 self._apply_nav_cursor()
             else:
@@ -13938,6 +13959,7 @@ class Viewport(QOpenGLWidget):
             # outlives the key, so the Shift release must not undo it.
             self._shift_plane_mark = None
         if ev.key() == Qt.Key_Shift and not ev.isAutoRepeat():
+            self._set_middle_drag_pan_mode(True)
             self._capture_shift_lock()
             self._refresh_snap()
             # Do not return — Shift is a modifier; let the rest fall through.
@@ -14309,6 +14331,7 @@ class Viewport(QOpenGLWidget):
                 ev.accept()
                 return
         if ev.key() == Qt.Key_Shift and not ev.isAutoRepeat():
+            self._set_middle_drag_pan_mode(False)
             self._shift_lock = None
             self._release_shift_plane_mark()
             self._refresh_snap()
