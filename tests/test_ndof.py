@@ -256,6 +256,13 @@ def test_the_cap_counts_as_in_use_past_the_dead_zone_and_a_moment_after(
     assert dev.in_use()
     clock[0] += 0.1
     assert not dev.in_use()
+    # the dead zone is the user's: a wider one ignores a bigger resting drift
+    monkeypatch.setattr(ndof_input, "current_settings",
+                        lambda: NdofSettings(deadzone=0.2))
+    dev._emit_motion(NdofSample(forward=0.15))
+    assert not dev.in_use()
+    dev._emit_motion(NdofSample(forward=0.25))
+    assert dev.in_use()
 
 
 def test_wheel_notches_do_not_zoom_while_the_cap_moves_the_view(monkeypatch):

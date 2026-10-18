@@ -95,9 +95,12 @@ class NdofInput(QObject):
             # reading after a pause gets one report's worth of time.
             dt = (now - self._last_t) if self._last_t is not None else 1 / 60
         self._last_t = None if sample.is_idle() else now
+        # Off centre past the user's own dead zone: a cap that rests a
+        # little off zero must not lock the wheel for good.
         if max(abs(v) for v in (sample.right, sample.up, sample.forward,
-                                sample.tilt, sample.spin)) > 0.05:
-            self._moved_t = now         # off centre, past the dead zone
+                                sample.tilt, sample.spin)) > \
+                current_settings().deadzone:
+            self._moved_t = now
         self.motion.emit(sample, float(dt))
 
     def _emit_raw(self, values) -> None:
