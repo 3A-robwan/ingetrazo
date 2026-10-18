@@ -46,6 +46,33 @@ follow [SemVer](https://semver.org).
   selección en el visor 3D sigue en naranja.
 
 ### Corregido
+- **Una guía con coordenadas inválidas ya no impide guardar** (#723,
+  @kcgemail): el guardado se negaba entero con «un punto con coordenadas
+  inválidas … scene › guides[0] › point[0]» y el trabajo no se podía
+  guardar. Una guía es solo una ayuda para dibujar, así que ahora se deja
+  fuera del archivo, como ya pasaba con la cámara (#485); y la Cinta y el
+  Transportador ya no dejan guías así.
+- **Las caras con etiqueta propia de un .skp llegan a su capa** (#700,
+  @Aaron1992): llegaban a una capa con el número interno de la etiqueta
+  («84», «680»…) en vez de su nombre, así que ocultar «Banderas» o «Roof»
+  no las ocultaba. Pasaba en casi todos los .skp con caras etiquetadas.
+- **Las partes que se separan de un grupo etiquetado de un .skp conservan
+  su etiqueta** (#703, @Aaron1992): imágenes, figuras que miran a la cámara
+  y copias de componentes caían en Layer 0 y seguían a la vista al ocultar
+  la etiqueta del grupo.
+- **Ver todo encuadra también las imágenes de referencia visibles** (#702,
+  @Aaron1992): un plano importado para calcar, lejos del origen, se quedaba
+  fuera de la pantalla.
+- **El Asistente IA ya no cierra IngeTrazo al arrancar en algunos Flatpak**
+  (#706, @mvanhorn): pedir la fuente monoespaciada del sistema podía
+  romperse dentro del sandbox; el chat usa ahora la fuente de la
+  aplicación.
+- **Puente IA: una lámina creada con `run_python` es un paso que se puede
+  deshacer** (#715, @francisreboucas, parte de #694): antes el puente
+  respondía «sin cambios» y el deshacer del agente quitaba la edición
+  anterior del usuario.
+- Alemán: la vista trasera es «Hinten» y el relleno sólido del corte
+  «Gefüllt» (#705, @Aaron1992).
 - **La goma ya no borra las aristas que quedan detrás de una cara** (#663,
   @SPMech): al pasar la goma por una cara para borrar una arista dibujada
   en ella, también marcaba la arista de la cara de atrás que caía bajo el
