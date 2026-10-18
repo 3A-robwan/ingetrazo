@@ -13807,6 +13807,14 @@ class Viewport(QOpenGLWidget):
         return None
 
     def wheelEvent(self, ev) -> None:
+        # While a 3D mouse moves the view, wheel notches are its driver's
+        # imitation of the same push (3Dconnexion does that for programs it
+        # does not know): zooming on them too made the view jump a step
+        # about eight times a second over the smooth move.
+        from views.ndof_input import cap_in_use
+        if cap_in_use():
+            ev.accept()
+            return
         self._input_t = _time_mod.monotonic()   # P0: input→paint latency
         # Zoom toward the cursor: keep the point under the
         # pointer fixed on screen, not the origin. During a wheel burst the
