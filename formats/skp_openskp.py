@@ -1316,6 +1316,7 @@ def parse(path, progress=None):
     if progress is not None:
         progress(0.1, "Parsing .skp (OpenSKP)…")
     model = openskp.SkpFile.open(str(path)).parse()
+    openskp_compat.resolve_face_layers(model)   # tag ids → names (#700)
     if progress is not None:
         progress(0.6, "Building geometry…")
     return _adapt(model, Path(path).stem, skp_path=path)

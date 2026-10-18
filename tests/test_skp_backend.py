@@ -802,6 +802,44 @@ def test_openskp_adapter_face_layer_lands_in_attrs():
     assert attrs["layer"] == "Banderas"
 
 
+def test_a_faces_own_tag_arrives_by_name_not_by_its_id(tmp_path):
+    # #700 (@Aaron1992): openskp hands a face's tag as its id in the file,
+    # an instance's as its name. A roof tagged "Roof" landed on a layer
+    # called 11, so hiding "Roof" left the roof on screen. Written with
+    # openskp's own builder, so the ids are the real ones.
+    create = pytest.importorskip("openskp.create")
+    b = create.SkpBuilder()
+    roof = b.add_layer("Roof")
+    with b.add_component_definition("House") as house:
+        house.add_face([(0, 0, 0), (100, 0, 0), (100, 0, 100), (0, 0, 100)])
+        house.add_face([(0, 0, 100), (100, 0, 100), (100, 50, 100),
+                        (0, 50, 100)], layer=roof)
+    b.add_instance(house)
+    path = tmp_path / "roof.skp"
+    b.save(str(path))
+    scene = Scene()
+    skp_format.apply_payload(scene, skp_format.parse_skp(path))
+    layers = sorted(str(f.attrs.get("layer")) for g in scene.groups
+                    for f in g.mesh.faces)
+    assert layers == ["None", "Roof"]
+    assert "Roof" in [ly.name for ly in scene.layers]
+
+
+def test_resolve_face_layers_leaves_names_and_drops_the_default_tag():
+    from formats import openskp_compat
+    faces = {1: NS(layer=11), 2: NS(layer=1), 3: NS(layer="Muros"),
+             4: NS(layer=None), 5: NS(layer=99)}
+    openskp_compat._parse_tables.layers = {1: "Layer0", 11: "Roof"}
+    try:
+        n = openskp_compat.resolve_face_layers(
+            NS(definitions={0: NS(faces=faces)}))
+    finally:
+        openskp_compat._parse_tables.layers = {}
+    assert n == 3
+    assert [faces[i].layer for i in range(1, 6)] == \
+        ["Roof", "", "Muros", None, ""]
+
+
 def test_apply_payload_registers_layers_and_assigns_groups():
     from core.layers import Layer
     scene = Scene()
