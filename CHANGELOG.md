@@ -7,6 +7,23 @@ follow [SemVer](https://semver.org).
 ## [Sin publicar]
 
 ### Añadido
+- **«En el eje» al empezar Línea, Rectángulo, Círculo y Arco** (#546, #718,
+  @pacaeiro): en espacio vacío, el primer punto se engancha a los ejes rojo,
+  verde y azul, como ya hacía la Cinta. Solo cuando no hay nada mejor bajo
+  el cursor: nunca sobre una cara, ni con el eje tapado por el modelo o
+  visto de punta.
+- **Cambiar entre órbita y desplazamiento sin soltar la rueda** (#231, #720,
+  @pacaeiro): durante el arrastre con el botón central, pulsar o soltar
+  Mayús pasa de orbitar a desplazar y al revés.
+
+### Cambiado
+- **El plano de Rectángulo, Círculo y Arco en espacio vacío lo elige la
+  cámara, por el origen de los ejes** (#719, @pacaeiro), como en SketchUp:
+  el suelo al mirar hacia abajo y los planos verticales rojo o verde según
+  hacia dónde mira la vista; antes iban al plano por el centro del modelo.
+  En vistas casi a ras, donde antes el clic no daba punto, ahora sí lo da.
+  La forma se ve del color de su plano mientras se traza. Línea, Cinta y
+  Cota no cambian.
 - **Motor Rust experimental** (apagado por defecto): en Ventana ▸
   Preferencias ▸ General, «Motor Rust (experimental)» calcula las partes
   más pesadas con un módulo nativo nuevo, y se aplica al volver a abrir el
