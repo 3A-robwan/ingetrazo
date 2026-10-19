@@ -16,10 +16,24 @@ Nowe regresje są w `tests/test_eraser_visible_edges.py` oraz
 `tests/test_occluded_edge_picking.py`; pierwsze wersje przed naprawą wykazały
 odpowiednio 14 i 13 błędów. Starsze pliki `../qa/test_*_investigation.py`
 opisują celowo stan błędny sprzed poprawki i nie są testami regresji naprawy.
-W tym wątku użytkownik zlecił publikację wszystkich obecnych poprawek na
-forku oraz ogłoszenie w upstream Discussions / Show and tell. Przygotowywany
-snapshot ma tag `robwan-experimental-2026-10-19`; stan publikacji i świeże
-wyniki sprawdzeń zostaną zapisane po zakończeniu operacji.
+Na polecenie użytkownika opublikowano wszystkie obecne poprawki na forku:
+
+- [Wydanie eksperymentalne z 19 października](https://github.com/3A-robwan/ingetrazo/releases/tag/robwan-experimental-2026-10-19),
+  tag `robwan-experimental-2026-10-19`, commit
+  `8d5d9a8fcb53786f2403fd7afc64f46a9f63a907`.
+- [Ogłoszenie upstream Discussions #752 / Show and tell](https://github.com/ingelibre/ingetrazo/discussions/752)
+  zawiera listę ulepszeń, link do wydania i prośbę o uwagi w odpowiedziach.
+- README i opis zmian wskazują nowe wydanie. To nadal nieoficjalne źródła
+  wymagające Pythona 3.12+, bez nowego instalatora/EXE i bez aktualizacji bazy.
+
+Publikację wykonano przez połączone konto GitHub; lokalny Git nie ma danych
+logowania do wysyłania. Drzewo commitu wydania jest identyczne z lokalnym
+punktem `9df67a4` (sprawdzono hashe wszystkich 34 zmienionych plików i całego
+drzewa). Wcześniejszą lokalną historię, w tym `8375a13` i `9df67a4`, zachowano
+na gałęzi `codex/local-before-github-2026-10-19`. Bieżąca gałąź ponownie
+śledzi `fork/codex/guide-transforms-and-numeric-corrections`; po wydaniu
+dochodzi jedynie zapis stanu publikacji w dokumentacji. Nie przesuwaj tagu
+wydania przy późniejszych zmianach.
 
 Świeża kontrola publikacji: **386 zaliczonych, 4 pominięte**, 31 dobranych
 plików, w tym wszystkie 57 nowych regresji; `main.py --check` i
@@ -33,8 +47,9 @@ grupy/edycję grup, warstwy, przekrój, Shift, Esc, Delete, Cofnij/Ponów,
 precyzję na własnej ścianie i zgodność obliczeń pojedynczych/zbiorczych.
 Kontrola `main.py --check` i `git diff --check` przechodzą. Nie wykonywano
 ręcznej próby w normalnym oknie ani pełnego zestawu projektu.
-Kolejny krok: próba użytkownika na jego modelu; po zmianie źródeł trzeba
-ponownie uruchomić aplikację przez launcher.
+Kolejny krok: próba użytkownika na jego modelu lub kolejne wskazane zadanie.
+Po zmianie źródeł trzeba ponownie uruchomić aplikację przez launcher.
+Ogłoszenie jest opublikowane; nie dodano automatycznego monitorowania odpowiedzi.
 
 Odczytaj `AGENTS.md`, a następnie `git status --short`, `git log -3 --oneline`
 i odpowiedni fragment `docs/experimental-changes.md`. Nie trzeba odtwarzać
@@ -52,6 +67,8 @@ całej poprzedniej rozmowy ani ponownie pobierać repozytorium.
   Program nadal podaje wersję 0.5.8. Nie są to najnowsze źródła upstream.
 - Poprzednio opublikowany punkt: `514ff849778b672f2ccd70ad5fc4830003226f6c`.
   [Eksperymentalne wydanie źródeł z 18 października](https://github.com/3A-robwan/ingetrazo/releases/tag/robwan-experimental-2026-10-18).
+- Bieżące wydanie: `8d5d9a8`, tag `robwan-experimental-2026-10-19`;
+  późniejszy commit dokumentacji nie zmienia kodu wydania.
 - `origin`: `https://github.com/ingelibre/ingetrazo.git`;
   `fork`: `https://github.com/3A-robwan/ingetrazo.git`.
 - Punkt zapisu z 19 października `8375a13` dodał ten dokument i poprawki
@@ -71,7 +88,7 @@ całej poprzedniej rozmowy ani ponownie pobierać repozytorium.
 - Ctrl+A obejmuje pomocnicze linie i punkty. Przesuń (M) i Obrót (Q) obsługują
   prowadnice, podgląd, kopiowanie, szyki, Esc i Cofnij/Ponów.
 
-### Nowsze poprawki w lokalnym punkcie zapisu
+### Nowsze poprawki opublikowane w wydaniu z 19 października
 
 | Obszar | Oczekiwane zachowanie i główne pliki |
 | --- | --- |
@@ -90,7 +107,7 @@ wszystkich testów. Lokalne logi i obrazy znajdują się w folderze projektu `qa
 | Zakres | Obserwowany wynik | Lokalny log |
 | --- | --- | --- |
 | Kontrola publikacji z 19 października | 386 zaliczonych, 4 pominięte; 31 plików, w tym wszystkie 57 nowych regresji. | `qa/github-release-2026-10-19-tests.log` |
-| Wybieranie zasłoniętych krawędzi (lokalny katalog roboczy) | 462 zaliczone, 2 pominięte, w tym 57 nowych regresji; 31 plików. | `qa/occluded-edge-fixed-adjacent.log` |
+| Wybieranie zasłoniętych krawędzi (przed publikacją) | 462 zaliczone, 2 pominięte, w tym 57 nowych regresji; 31 plików. | `qa/occluded-edge-fixed-adjacent.log` |
 | Wspólny zestaw przed przekazaniem | 333 zaliczone: wszystkie 14 nowych plików regresji oraz istniejące testy łuków, historii, pamiętania krawędzi i orientacji po usuwaniu. | `qa/handoff-checkpoint-tests.log` |
 | Narożnik na istniejącej ścianie + sąsiednie mechanizmy | 228 zaliczonych; 15 nowych przypadków. Dziewięć początkowych regresji nie przechodziło przed naprawą. | `qa/arc-inset-adjacent.log` |
 | Prostopadłość i długość z punktu | 381 zaliczonych; 57 nowych przypadków. | `qa/perpendicular-midpoint-adjacent.log` |

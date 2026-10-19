@@ -15,6 +15,9 @@ below, plus `AGENTS.md` and `HANDOFF.md` for continued work. It follows the
 18 October preview (`514ff84`), which contains only the earlier guide transforms,
 numeric corrections and Shift navigation changes.
 
+Share feedback about this preview in the
+[community discussion](https://github.com/ingelibre/ingetrazo/discussions/752).
+
 ## Changes
 
 - **Occluded edge picking:** the Eraser hover and stroke ignore edges hidden

@@ -156,4 +156,10 @@ Kontrola `.venv/Scripts/python.exe main.py --check` zakończona OK
 znanym ograniczeniem. `git diff --check` nie zgłasza błędów białych znaków.
 
 Nie wykonywano ręcznej próby w normalnym oknie ani pełnego zestawu testów.
-Nie przygotowano nowego commitu ani publikacji.
+W późniejszym etapie opublikowano poprawkę w commicie `8d5d9a8`,
+tag `robwan-experimental-2026-10-19`:
+[wydanie źródeł](https://github.com/3A-robwan/ingetrazo/releases/tag/robwan-experimental-2026-10-19).
+Świeża kontrola przed publikacją: **386 zaliczonych, 4 pominięte** w innym
+dobranym zakresie 31 plików, obejmującym wszystkie 57 nowych regresji.
+Log `../qa/github-release-2026-10-19-tests.log` zachowuje pełne polecenie.
+`main.py --check` oraz `git diff --check` przechodzą.

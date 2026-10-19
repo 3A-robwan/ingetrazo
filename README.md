@@ -4,6 +4,7 @@
 > Guide Move/Rotate, numeric correction, dynamic Shift Orbit/Pan, improved
 > inference, visible-edge erasing, rounded inset corners and adjustable highlights.
 > [Download this source preview and read the release notes](https://github.com/3A-robwan/ingetrazo/releases/tag/robwan-experimental-2026-10-19).
+> [Feedback and discussion](https://github.com/ingelibre/ingetrazo/discussions/752).
 > See [changes, usage, setup and test limitations](docs/experimental-changes.md).
 > This preview is based on upstream `d8ee8c0`; official releases remain with
 > [ingelibre/ingetrazo](https://github.com/ingelibre/ingetrazo).
