@@ -46,6 +46,60 @@ COLOR_FILLET = (0.85, 0.30, 0.80)
 _Seg = namedtuple("_Seg", "a b")
 
 
+def _loop_uses_edge(loop, edge):
+    return any((a is edge.v0 and b is edge.v1)
+               or (a is edge.v1 and b is edge.v0)
+               for a, b in zip(loop, loop[1:] + loop[:1]))
+
+
+class _TrimCornerCommand(DeleteEdgesCommand):
+    """Remove fillet stubs, returning an inset's corner to its surrounding face."""
+
+    def __init__(self, edges):
+        super().__init__(edges)
+        self.snapshot = None
+
+    def do(self, scene):
+        mesh = scene.mesh
+        self.snapshot = mesh.capture_state()
+        stubs = []
+        for a, b in self._endpoints:
+            v0, v1 = mesh.vertex_at(a), mesh.vertex_at(b)
+            edge = mesh.find_edge(v0, v1) if v0 is not None and v1 is not None else None
+            if edge is not None:
+                stubs.append(edge)
+        for edge in stubs:
+            if edge not in mesh.edges:
+                continue  # A previous union already removed both corner stubs.
+            faces = list(dict.fromkeys(edge.faces))
+            host = next((f for f in faces if any(
+                _loop_uses_edge(hole, edge) for hole in f.hole_loops)), None)
+            if host is None:
+                continue  # An isolated face still loses its corner sliver.
+            neighbors = [f for f in faces if f is not host]
+            if len(neighbors) != 1:
+                raise ValueError("Corner trim has an ambiguous surrounding face")
+            # Raw deletion only cascades through OUTER loops. On an inset it
+            # left the host's hole pointing to the deleted stubs and corner.
+            # Union the corner into the host, retaining that host's own paint
+            # (including no paint), winding and interior flag.
+            attrs, interior = dict(host.attrs), host.interior
+            merged = mesh.dissolve_coplanar_region(
+                [host, neighbors[0]], edges_to_remove=stubs)
+            if merged is None:
+                raise ValueError("Corner trim could not rebuild the surrounding face")
+            merged.attrs = attrs
+            merged.interior = interior
+            scene.selection.difference_update(faces)
+        super().do(scene)
+        mesh.prune_orphan_vertices()
+
+    def undo(self, scene):
+        if self.snapshot is not None:
+            scene.mesh.restore_state(self.snapshot)
+            scene.version += 1
+
+
 class SegmentCount:
     """The segment count of the next arc, set BEFORE drawing it — the way
     the circle takes its sides: before the first click the VCB reads
@@ -249,8 +303,8 @@ def commit_arc(viewport, pts: list[QVector3D], close_to=None, trim=None):
     radius edges close the wedge — the classic Pie. ``trim`` is a list of
     ``(a, b)`` position pairs: edges to erase once the arc is in — the two
     corner stubs a fillet leaves behind, which the classic tool «cleans out»
-    after the face has been split, so the rounded face survives and the corner
-    sliver goes with its edges. Returns the executed command."""
+    after the face has been split. An isolated face loses the corner sliver;
+    an inset returns it to the surrounding face. Returns the executed command."""
     cmd = build_arc_command(viewport, pts, close_to=close_to, trim=trim)
     viewport.history.execute(cmd)
     return cmd
@@ -264,7 +318,7 @@ def build_arc_command(viewport, pts: list[QVector3D], close_to=None, trim=None):
                     + [(pts[-1], close_to)])
     after = []
     if trim:
-        after.append(DeleteEdgesCommand([_Seg(QVector3D(a), QVector3D(b))
+        after.append(_TrimCornerCommand([_Seg(QVector3D(a), QVector3D(b))
                                          for a, b in trim]))
     from tools.circle import busy_plane, flat_drawing
     if flat_drawing(viewport.scene, pts):

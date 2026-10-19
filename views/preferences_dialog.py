@@ -17,17 +17,19 @@ pattern); Cancel touches nothing.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QLineEdit,
     QMessageBox,
+    QScrollArea,
     QSpinBox,
     QTabWidget,
     QLabel,
@@ -65,6 +67,7 @@ class PreferencesDialog(QDialog):
         # ---- General --------------------------------------------------------
         general = QWidget()
         form = QFormLayout(general)
+        form.setRowWrapPolicy(QFormLayout.WrapLongRows)
         self._lang = QComboBox()
         for code in available_languages():
             self._lang.addItem(_LANGUAGE_NAMES.get(code, code), code)
@@ -173,6 +176,29 @@ class PreferencesDialog(QDialog):
             "the drag starts."))
         form.addRow("", self._dynamic_shift_nav)
 
+        self._parallel_edge_dwell = QDoubleSpinBox()
+        self._parallel_edge_dwell.setRange(0.1, 10.0)
+        self._parallel_edge_dwell.setDecimals(1)
+        self._parallel_edge_dwell.setSingleStep(0.1)
+        self._parallel_edge_dwell.setSuffix(" s")
+        self._parallel_edge_dwell.setValue(_gs.parallel_edge_dwell_ms(st) / 1000.0)
+        self._parallel_edge_dwell.setToolTip(tr(
+            "Pause over an edge or construction line for this long to use its direction for parallel "
+            "inference. Vertices do not change the reference edge."))
+        form.addRow(tr("Edge hover time for parallel inference:"), self._parallel_edge_dwell)
+
+        self._hover_edge_width = QSpinBox()
+        self._hover_edge_width.setRange(1, 3)
+        self._hover_edge_width.setSuffix(" px")
+        self._hover_edge_width.setValue(_gs.edge_highlight_width("hover_edge_width", st))
+        form.addRow(tr("Hovered edge width (blue):"), self._hover_edge_width)
+
+        self._selected_edge_width = QSpinBox()
+        self._selected_edge_width.setRange(1, 3)
+        self._selected_edge_width.setSuffix(" px")
+        self._selected_edge_width.setValue(_gs.edge_highlight_width("selected_edge_width", st))
+        form.addRow(tr("Selected edge width (orange):"), self._selected_edge_width)
+
         from tools.walkthrough import look_sensitivity
         self._look_sens = QSpinBox()
         self._look_sens.setRange(1, 100)
@@ -216,7 +242,12 @@ class PreferencesDialog(QDialog):
             "(XWayland) draws smoothly and stays crisp. Takes effect at the "
             "next start."))
         form.addRow(tr("Graphics server:"), self._platform)
-        tabs.addTab(general, tr("General"))
+        general_scroll = QScrollArea()
+        general_scroll.setWidgetResizable(True)
+        general_scroll.setFrameShape(QScrollArea.NoFrame)
+        general_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        general_scroll.setWidget(general)
+        tabs.addTab(general_scroll, tr("General"))
 
         # ---- 3D mouse (issue #108) -------------------------------------------
         from views.ndof_input import load_settings, shared_input
@@ -484,6 +515,23 @@ class PreferencesDialog(QDialog):
         _gs.set_value("dynamic_shift_navigation",
                       "1" if self._dynamic_shift_nav.isChecked() else "0", st)
         self._window.viewport._dynamic_shift_nav = self._dynamic_shift_nav.isChecked()
+
+        delay_ms = round(self._parallel_edge_dwell.value() * 1000)
+        _gs.set_value("parallel_edge_dwell_ms", delay_ms, st)
+        vp = self._window.viewport
+        vp.parallel_edge_dwell_ms = delay_ms
+        setter = getattr(getattr(vp, "inference", None),
+                         "set_parallel_edge_dwell_ms", None)
+        if callable(setter):
+            setter(delay_ms)
+
+        for name in ("hover_edge_width", "selected_edge_width"):
+            width = getattr(self, "_" + name).value()
+            _gs.set_value(name, width, st)
+            setattr(vp, name, width)
+        update = getattr(vp, "update", None)
+        if callable(update):
+            update()
 
         # First Person reads it on every look move: nothing to push.
         st.setValue("walk/look_sensitivity", int(self._look_sens.value()))

@@ -27,12 +27,14 @@ viewport draws is what the engine decided, with no second pass.
 """
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QVector3D
 
-from core.snap import SnapResult, compute_snap
+from core.guide import Guide
+from core.snap import COLOR_REFERENCE, SnapResult, compute_snap
 
 
 def _no_snap_fast() -> bool:
@@ -49,8 +51,8 @@ class InferenceEngine:
     'from point' reference and the soft references held while a segment is
     drawn, the two encouraged points behind it, the axis / reference locks
     and the last snap result -- plus the search that reads them. The dwell
-    timer is the one live Qt object here: it turns a pause over a point into
-    an encouraged point, so it is parented to the viewport and dies with it.
+    timers turn pauses over points and edge interiors into references. Both
+    are parented to the viewport and die with it.
     """
 
     def __init__(self, viewport) -> None:
@@ -94,6 +96,20 @@ class InferenceEngine:
         self._dwell_timer.setSingleShot(True)
         self._dwell_timer.setInterval(viewport.ENCOURAGE_MS)
         self._dwell_timer.timeout.connect(self._encourage_dwelt)
+        # A direction reference needs a deliberate pause on an edge body.
+        # Keep it separate from point encouragement and from the hover edge
+        # used by highlighting and the explicit Down-arrow reference lock.
+        self._edge_dwell_edge = None
+        self._edge_dwell_key = None
+        self._edge_dwell_anchor = None
+        self._edge_cursor_px = None
+        self._edge_context = None
+        self._edge_reference_key = None
+        self._edge_dwell_timer = QTimer(viewport)
+        self._edge_dwell_timer.setSingleShot(True)
+        self._edge_dwell_timer.setTimerType(Qt.PreciseTimer)
+        self.set_parallel_edge_dwell_ms(getattr(viewport, "parallel_edge_dwell_ms", 500))
+        self._edge_dwell_timer.timeout.connect(self._acquire_dwelt_edge)
 
     # ---- Picking the cursor's neighbourhood ---------------------------------
     def acquire(self, px: float, py: float) -> None:
@@ -108,6 +124,7 @@ class InferenceEngine:
         across separate draws."""
         vp = self.viewport
         tool = vp.active_tool
+        self._edge_cursor_px = (px, py)
         if tool is not None and (tool.uses_snap
                                  or getattr(tool, "hover_group_edges", False)):
             self._hover_edge = vp.pick_edge_any(px, py)
@@ -122,23 +139,143 @@ class InferenceEngine:
             self._hover_center = vp._update_center_ref(px, py)
         drawing = (tool is not None
                    and getattr(tool, "start_point", None) is not None)
+        corner = None
         if drawing and tool.uses_snap:
             # Mid-segment: the corner under the cursor is a soft, instant
             # reference (through point / from point), as always.
             corner = vp.pick_vertex(px, py)
             if corner is not None:
                 self._acquired_point = corner
-        if not drawing:
+        context = self._drawing_context()
+        if context != self._edge_context:
+            self._cancel_edge_dwell()
+            self._acquired_edge = None
+            self._edge_reference_key = None
+            self._edge_context = context
+        if context is None:
             self._acquired_edge = None
             self._acquired_face_normal = None
         else:
-            if self._hover_edge is not None:
-                self._acquired_edge = self._hover_edge
+            edge = self._pick_reference(px, py, self._hover_edge)
+            edge = self._interior_edge(edge, px, py, corner)
+            self._dwell_on_edge(edge, px, py)
             face, _g = vp.pick_face_placement(px, py)
             if face is not None:
                 from core.snap import face_plane_world
                 self._acquired_face_normal = face_plane_world(
                     face, getattr(_g, "xform", None))[1]
+
+    def set_parallel_edge_dwell_ms(self, delay_ms: int) -> None:
+        """Apply a new edge dwell interval and cancel any unfinished pause."""
+        try:
+            delay = float(delay_ms)
+            delay = round(delay) if math.isfinite(delay) else 500
+        except (TypeError, ValueError, OverflowError):
+            delay = 500
+        delay = max(100, min(10000, delay))
+        self.viewport.parallel_edge_dwell_ms = delay
+        self._cancel_edge_dwell()
+        self._edge_dwell_timer.setInterval(delay)
+
+    def _drawing_context(self):
+        """A soft reference belongs to this tool's current drawing step."""
+        vp = self.viewport
+        tool = getattr(vp, "active_tool", None)
+        start = getattr(tool, "start_point", None)
+        if start is None or not getattr(tool, "uses_snap", False):
+            return None
+        scene = vp.scene
+        return (id(scene), id(scene.mesh), id(getattr(scene, "edit_group", None)),
+                id(tool), (start.x(), start.y(), start.z()),
+                getattr(getattr(vp, "history", None), "revision", None))
+
+    @staticmethod
+    def _edge_key(edge):
+        if isinstance(edge, Guide):
+            # Infinite construction lines have no real endpoints. Their
+            # anchor and direction remain stable while the camera changes.
+            return ("guide", id(edge),
+                    (edge.point.x(), edge.point.y(), edge.point.z()),
+                    (edge.direction.x(), edge.direction.y(), edge.direction.z()))
+        # Group picks create fresh world-space proxies on every mouse event.
+        # Their geometry and owner, rather than proxy identity, define a pause.
+        a = (edge.a.x(), edge.a.y(), edge.a.z())
+        b = (edge.b.x(), edge.b.y(), edge.b.z())
+        return (tuple(sorted((a, b))), id(getattr(edge, "group", None)),
+                getattr(edge, "context", None))
+
+    def _pick_reference(self, px, py, edge):
+        picker = getattr(self.viewport, "pick_parallel_reference", None)
+        return picker(px, py, edge) if callable(picker) else edge
+
+    def _interior_edge(self, edge, px, py, corner):
+        if edge is None or corner is not None:
+            return None
+        if isinstance(edge, Guide):
+            return edge if edge.is_line else None
+        if (edge.b - edge.a).lengthSquared() < 1e-12:
+            return None
+        vp = self.viewport
+        radius = getattr(vp, "snap_threshold_px", 9)
+        for point in (edge.a, edge.b):
+            pixel = vp._world_to_pixel(point)
+            if pixel is not None and math.hypot(pixel[0] - px, pixel[1] - py) <= radius:
+                return None
+        return edge
+
+    def _cancel_edge_dwell(self):
+        self._edge_dwell_timer.stop()
+        self._edge_dwell_edge = None
+        self._edge_dwell_key = None
+        self._edge_dwell_anchor = None
+
+    def _dwell_on_edge(self, edge, px, py):
+        if edge is None:
+            self._cancel_edge_dwell()
+            return
+        key = self._edge_key(edge)
+        if key == self._edge_reference_key:
+            self._cancel_edge_dwell()
+            return
+        anchor = self._edge_dwell_anchor
+        if (key != self._edge_dwell_key or anchor is None
+                or math.hypot(px - anchor[0], py - anchor[1]) > 3):
+            self._edge_dwell_key = key
+            self._edge_dwell_anchor = (px, py)
+            self._edge_dwell_timer.start()
+        self._edge_dwell_edge = edge
+
+    def _acquire_dwelt_edge(self):
+        """Complete a stationary pause even when no new mouse event arrives."""
+        if self._edge_dwell_edge is None:
+            return
+        context = self._drawing_context()
+        if context is None or context != self._edge_context:
+            self._cancel_edge_dwell()
+            self._acquired_edge = None
+            self._edge_reference_key = None
+            self._edge_context = context
+            return
+        vp = self.viewport
+        px, py = self._edge_cursor_px
+        edge = self._pick_reference(px, py, vp.pick_edge_any(px, py))
+        edge = self._interior_edge(edge, px, py, vp.pick_vertex(px, py))
+        # A stale pick must not resurrect an edge deleted during the pause.
+        # Real mesh edges retain their identity; world-space group proxies
+        # are revalidated by picking again and comparing geometry and owner.
+        from core.mesh import Edge
+        if isinstance(edge, Edge) and edge not in vp.scene.mesh.edges:
+            edge = None
+        if edge is None or self._edge_key(edge) != self._edge_dwell_key:
+            self._cancel_edge_dwell()
+            return
+        self._acquired_edge = edge
+        self._edge_reference_key = self._edge_dwell_key
+        self._cancel_edge_dwell()
+        refresh = getattr(vp, "_refresh_snap", None)
+        if callable(refresh):
+            refresh()
+        vp.update()
 
     # ---- The snap search -----------------------------------------------------
     def snap(self, px_x: float, px_y: float,
@@ -197,6 +334,15 @@ class InferenceEngine:
         )
         snap = self._axis_source_cue(snap, px_x, px_y)
         snap = self._extension_snap(snap, px_x, px_y)
+        # A parallel landing is a point target, not an invitation to replace
+        # its direction with the edge being landed on. Acquire runs BEFORE
+        # this search, so cancel its pending pause using this frame's result.
+        # Keep point encouragement: it must not steal the confirmed edge.
+        if (self._acquired_edge is not None and start_pt is not None
+                and snap.kind == "intersection" and snap.guide is not None
+                and snap.guide_color == COLOR_REFERENCE
+                and (snap.guide[0] - start_pt).length() < 1e-6):
+            self._cancel_edge_dwell()
         return snap
 
     # ---- Post-processors (axis-source cue, extensions) ----------------------
@@ -295,6 +441,10 @@ class InferenceEngine:
     def clear_references(self) -> None:
         """Drop cursor-acquired and encouraged model references."""
         self._dwell_timer.stop()
+        self._cancel_edge_dwell()
+        self._edge_context = None
+        self._edge_reference_key = None
+        self._edge_cursor_px = None
         self._dwell_point = None
         self._hover_edge = None
         self._hover_center = None

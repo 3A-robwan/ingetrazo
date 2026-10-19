@@ -210,6 +210,27 @@ def _shifted_mvp(mvp, dx_ndc: float, dy_ndc: float):
     m = QMatrix4x4()
     m.translate(dx_ndc, dy_ndc, 0.0)
     return m * mvp
+
+
+def _highlight_jitter(width: int, dpr: float, w: int, h: int) -> list:
+    """Screen-space offsets for a 1–3 logical-pixel edge highlight.
+
+    Core-profile drivers can clamp GL line widths to one framebuffer pixel.
+    A disc of shifted draws thickens them while keeping depth and section cuts.
+    """
+    physical_width = max(1.0, max(1, min(3, int(width))) * max(1.0, dpr))
+    if physical_width <= 1:
+        return [(0.0, 0.0)]
+    radius = (physical_width - 1.0) / 2.0
+    samples = math.ceil(physical_width)
+    positions = [-radius + i * 2.0 * radius / (samples - 1) for i in range(samples)]
+    return [(0.0, 0.0)] + [
+        (dx * 2.0 / max(w, 1), dy * 2.0 / max(h, 1))
+        for dx in positions for dy in positions
+        if (dx or dy) and dx * dx + dy * dy <= radius * radius + 0.51
+    ]
+
+
 GL_TRIANGLES = 0x0004
 GL_COLOR_BUFFER_BIT = 0x00004000
 GL_DEPTH_BUFFER_BIT = 0x00000100
@@ -980,6 +1001,10 @@ class Viewport(QOpenGLWidget):
         # snap) gathered in its own collaborator. The delegating
         # properties further down keep the old attribute names reading
         # and writing through to it.
+        from core.general_settings import edge_highlight_width, parallel_edge_dwell_ms
+        self.parallel_edge_dwell_ms = parallel_edge_dwell_ms()
+        self.hover_edge_width = edge_highlight_width("hover_edge_width")
+        self.selected_edge_width = edge_highlight_width("selected_edge_width")
         self.inference = InferenceEngine(self)
         self.active_tool: Optional[Tool] = None
         # Extensions' overlays and snap providers (views.extension_api).
@@ -2184,20 +2209,18 @@ class Viewport(QOpenGLWidget):
 
         # Selected edges (drawn on top, highlighted) — never in an export
         if self._selected_count > 0 and self._export_size is None:
-            self._set_color(0.95, 0.45, 0.16, 1.0)
-            self._selected_vao.bind()
-            self._gl.glDrawArrays(GL_LINES, 0, self._selected_count)
-            self._selected_vao.release()
+            self._draw_edge_highlight(
+                self._selected_vao, self._selected_count, (0.95, 0.45, 0.16, 1.0),
+                self.selected_edge_width, mvp, w, h)
 
         # Hovered edge — light blue, on top of everything else so it reads as
         # the pick candidate even when it overlaps a selected (orange) edge.
         # A curve segment highlights its whole contour (what a click selects).
-        if isinstance(self._hover_entity, Edge):
+        if isinstance(self._hover_entity, Edge) and self._export_size is None:
             hover_count = self._upload_hover_edge(self._hover_entity)
-            self._set_color(0.30, 0.55, 0.95, 1.0)
-            self._hover_edges_vao.bind()
-            self._gl.glDrawArrays(GL_LINES, 0, hover_count)
-            self._hover_edges_vao.release()
+            self._draw_edge_highlight(
+                self._hover_edges_vao, hover_count, (0.30, 0.55, 0.95, 1.0),
+                self.hover_edge_width, mvp, w, h)
         self._set_section_clip(False)
         self._draw_section_cut_edges()   # ON the plane — drawn unclipped
 
@@ -3499,6 +3522,26 @@ class Viewport(QOpenGLWidget):
         return (round(min(1.0, base[0] * shade) * 64.0) / 64.0,
                 round(min(1.0, base[1] * shade) * 64.0) / 64.0,
                 round(min(1.0, base[2] * shade) * 64.0) / 64.0)
+
+    def _draw_edge_highlight(self, vao, count, color, width, mvp, w, h) -> None:
+        """Thicken a screen highlight without changing its occlusion or depth."""
+        if count <= 0 or self._export_size is not None:
+            return
+        offsets = _highlight_jitter(width, self.devicePixelRatioF(), w, h)
+        self._set_color(*color)
+        vao.bind()
+        # The model's depth still hides covered edges. Highlight copies must
+        # not occlude one another, or the later blue hover on an orange edge.
+        self._gl.glDepthMask(GL_FALSE)
+        try:
+            for dx, dy in offsets:
+                shifted = _shifted_mvp(mvp, dx, dy) if dx or dy else mvp
+                self._program.setUniformValue(self._loc_mvp, shifted)
+                self._gl.glDrawArrays(GL_LINES, 0, count)
+        finally:
+            self._program.setUniformValue(self._loc_mvp, mvp)
+            self._gl.glDepthMask(GL_TRUE)
+            vao.release()
 
     # ---- Line weight for exports --------------------------------------------
     def _line_jitter(self, px: int, w: int, h: int) -> list:
@@ -6203,6 +6246,25 @@ class Viewport(QOpenGLWidget):
                 self._program.setUniformValue1f(self._loc_opacity, 1.0)
         self._gl.glDisable(GL_POLYGON_OFFSET_FILL)
 
+    @staticmethod
+    def _snap_constraint_direction(snap):
+        """The explicit active direction retained by a point snap, if valid."""
+        direction = getattr(snap, "constraint_dir", None)
+        if direction is not None:
+            length_sq = direction.lengthSquared()
+            if math.isfinite(length_sq) and length_sq > 1e-12:
+                return direction
+        return None
+
+    @staticmethod
+    def _is_parallel_landing(snap, start) -> bool:
+        """A point marker can still carry a parallel drawing direction."""
+        from core.snap import COLOR_REFERENCE
+        return (snap is not None and start is not None
+                and snap.kind == "intersection" and snap.guide is not None
+                and snap.guide_color == COLOR_REFERENCE
+                and (snap.guide[0] - start).length() < 1e-6)
+
     def _draw_rubber_band(self) -> None:
         self._overlay_rubber = None
         tool = self.active_tool
@@ -6217,16 +6279,23 @@ class Viewport(QOpenGLWidget):
         # orange rubber band).
         forced = getattr(tool, "wireframe_color", None)
         snap = self.last_snap
+        constraint = Viewport._snap_constraint_direction(snap)
+        parallel_hit = Viewport._is_parallel_landing(snap, getattr(tool, "start_point", None))
         # Axis / reference / extension cues read as "projection lines": draw them
         # a touch thicker so the alignment is easy to spot while drawing.
         inference = (
             forced is None
             and snap is not None
-            and snap.kind in ("axis", "axis_inference", "reference", "extension",
-                              "through_point", "perp_face")
+            and (constraint is not None or parallel_hit or snap.kind in (
+                "axis", "axis_inference", "reference", "extension",
+                "through_point", "perp_face"))
         )
         if forced is not None:
             color = forced
+        elif constraint is not None:
+            color = (*(snap.constraint_color or snap.color), 1.0)
+        elif parallel_hit:
+            color = (*snap.guide_color, 1.0)
         elif snap is not None and snap.kind == "axis":
             r, g, b = snap.color
             color = (r, g, b, 1.0)
@@ -9855,18 +9924,27 @@ class Viewport(QOpenGLWidget):
 
     def edge_point_under_cursor(self, edge, screen_x: float, screen_y: float):
         """The world point of ``edge`` nearest the cursor (closest point of
-        its screen-space segment, mapped back along the edge), or None when
-        the edge does not project."""
-        pa = self._world_to_pixel(edge.a)
-        pb = self._world_to_pixel(edge.b)
-        if pa is None or pb is None:
+        its screen-space segment, mapped back with perspective-correct
+        weights), or None when the edge does not project."""
+        mvp = self.camera.projection_matrix() * self.camera.view_matrix()
+        clips = [mvp.map(QVector4D(p.x(), p.y(), p.z(), 1.0))
+                 for p in (edge.a, edge.b)]
+        if any(p.w() <= 0 for p in clips):
             return None
+        pa, pb = [((p.x() / p.w() * 0.5 + 0.5) * self.width(),
+                   (0.5 - p.y() / p.w() * 0.5) * self.height())
+                  for p in clips]
         dx, dy = pb[0] - pa[0], pb[1] - pa[1]
         l2 = dx * dx + dy * dy
         if l2 < 1e-12:
             return QVector3D(edge.a)
         t = ((screen_x - pa[0]) * dx + (screen_y - pa[1]) * dy) / l2
         t = max(0.0, min(1.0, t))
+        # A screen-space fraction is not the 3D edge fraction when its ends
+        # have different depths. Testing the latter at the former fraction
+        # could inspect an exposed stretch many pixels away from the cursor.
+        wa, wb = clips[0].w(), clips[1].w()
+        t = t * wa / ((1.0 - t) * wb + t * wa)
         return edge.a + (edge.b - edge.a) * t
 
     def pick_edge(self, screen_x: float, screen_y: float):
@@ -10255,6 +10333,43 @@ class Viewport(QOpenGLWidget):
                 if dl <= d[i]:
                     return loose
         return _group_pseudo_edge(self._pick_index(near=("px", screen_x, screen_y)), i)
+
+    def pick_parallel_reference(self, screen_x: float, screen_y: float, edge=None):
+        """Choose between the supplied model edge and nearby guide lines.
+
+        Direction acquisition is separate from model-edge picking: a guide
+        must not become a topology target for tools which read the hover edge.
+        Geometry wins a distance tie. Guide points never supply a direction.
+        """
+        guides = self.scene.guides
+        if not guides:
+            return edge
+        excluded = getattr(self.active_tool, "snap_excluded_guides", None)
+        excluded = excluded() if callable(excluded) else set()
+        best, best_d = edge, self.pick_threshold_px
+        if edge is not None:
+            pa, pb = self._world_to_pixel(edge.a), self._world_to_pixel(edge.b)
+            if pa is not None and pb is not None:
+                best_d = _point_to_segment_distance_2d((screen_x, screen_y), pa, pb)
+        for guide in guides:
+            if (not guide.is_line or id(guide) in excluded
+                    or not self.scene.entity_visible(guide)):
+                continue
+            segment = self._guide_snap_segment(guide)
+            if segment is None:
+                continue
+            pa, pb = (self._world_to_pixel(p) for p in segment)
+            if pa is None or pb is None:
+                continue
+            distance = _point_to_segment_distance_2d((screen_x, screen_y), pa, pb)
+            if distance >= best_d:
+                continue
+            point = self._project_to_lock_line(guide.point, guide.direction,
+                                               screen_x, screen_y)
+            if point is None or self._is_occluded(point):
+                continue
+            best, best_d = guide, distance
+        return best
 
     #: How close (px) the cursor must come to a component's origin or an
     #: arc's midpoint for it to enter the snap scene at all.
@@ -11076,6 +11191,26 @@ class Viewport(QOpenGLWidget):
         tol = max(0.02, 0.003 * abs(along_pt))
         return along_surf < along_pt - tol
 
+    def _occlusion_ray(self, world: QVector3D):
+        """Ray and positive hit limit for visibility of a world point.
+
+        Perspective rays share the eye. Parallel rays follow the view's
+        direction, including geometry visible behind the eye: the near
+        plane is ``-far_plane()``. Cast them backwards from just before the
+        point to that plane. Starting 10 km away in a float32 QVector3D can
+        otherwise make a point ON its own face appear millimetres behind it.
+        """
+        cam = self.camera
+        eye = cam.eye()
+        if not getattr(cam, "perspective", True):
+            forward = cam.forward()
+            depth = QVector3D.dotProduct(world - eye, forward)
+            return (world - forward * 1e-3, -forward,
+                    depth + cam.far_plane() - 1e-3)
+        delta = world - eye
+        dist = delta.length()
+        return eye, delta / dist if dist >= 1e-9 else None, dist - 1e-3
+
     def _is_occluded(self, world: QVector3D) -> bool:
         """Whether geometry sits between the camera and ``world`` — i.e. the
         point is hidden from the current view. Used to keep snaps from firing
@@ -11092,9 +11227,8 @@ class Viewport(QOpenGLWidget):
 
         Only VISIBLE geometry occludes (``ent_vis``, not ``ent_sel``): an
         object on a locked layer is still solid to the eye, while one on a
-        hidden layer must not hide anything. A small epsilon on the far end
-        keeps a point lying ON a face — an edge on that face's boundary —
-        from being reported as occluded by its own face.
+        hidden layer must not hide anything. A small epsilon at the point
+        keeps an edge lying ON a face from being occluded by its own face.
 
         X-ray and wireframe show everything, so nothing hides a snap there
         (the usual trick: switch to X-ray to dimension the floor of a pool through
@@ -11115,12 +11249,9 @@ class Viewport(QOpenGLWidget):
         if getattr(idx, "tri_v0", None) is None \
                 and not getattr(idx, "own_spans", None):
             return False
-        origin = self.camera.eye()
-        delta = world - origin
-        dist = delta.length()
-        if dist < 1e-9:
+        origin, d, limit = self._occlusion_ray(world)
+        if d is None or limit <= 0:
             return False
-        d = delta / dist
         sp = _active_cut(self.scene)
         if sp is None:
             # Nothing to sort out per face: the single nearest hit decides,
@@ -11128,12 +11259,12 @@ class Viewport(QOpenGLWidget):
             # query (this fires dozens of times a frame).
             nearest = self._ray_hits(idx, origin, d, idx.ent_vis,
                                      reduce_global=True)
-            return nearest is not None and nearest < dist - 1e-3
+            return nearest is not None and nearest < limit
         face_t = self._ray_hits(idx, origin, d, idx.ent_vis)
         if face_t is None:
             return False
         import numpy as np
-        hit = np.isfinite(face_t) & (face_t < dist - 1e-3)
+        hit = np.isfinite(face_t) & (face_t < limit)
         if not hit.any():
             return False
         # An active cut removes what it hides, so a hit on the clipped-away
@@ -11152,7 +11283,8 @@ class Viewport(QOpenGLWidget):
 
     def _occluded_many(self, worlds) -> list:
         """``_is_occluded`` for several points at once — the snap engine's
-        candidates, which all cast from the same eye. One ray at a time,
+        candidates. Perspective rays share the eye; parallel rays start at
+        their candidate points and cast towards the near plane. One at a time,
         each paid for its own span cull and a Möller–Trumbore pass per span
         it met, in small NumPy calls whose overhead was the cost (0.8 ms a
         ray, ~41 rays a hover on a 330 k-face city, 60 % of the inference
@@ -11175,20 +11307,20 @@ class Viewport(QOpenGLWidget):
             return out
         if _active_cut(self.scene) is not None:
             return [self._is_occluded(w) for w in worlds]
-        origin = self.camera.eye()
-        rows, dirs, dists = [], [], []
+        parallel = not getattr(self.camera, "perspective", True)
+        rows, origins, dirs, limits = [], [], [], []
         for i, w in enumerate(worlds):
-            delta = w - origin
-            dist = delta.length()
-            if dist < 1e-9:
+            origin, d, limit = self._occlusion_ray(w)
+            if d is None or limit <= 0:
                 continue
-            d = delta / dist
             rows.append(i)
+            origins.append((origin.x(), origin.y(), origin.z()))
             dirs.append((d.x(), d.y(), d.z()))
-            dists.append(dist)
+            limits.append(limit)
         if not rows:
             return out
-        o = np.array([origin.x(), origin.y(), origin.z()])
+        O = np.array(origins, dtype=np.float64)
+        o = O[:, None, :] if parallel else O[0]
         D = np.array(dirs, dtype=np.float64)
         best = np.full(len(rows), np.inf)
         spans = ([] if idx.tri_v0 is None else
@@ -11225,17 +11357,18 @@ class Viewport(QOpenGLWidget):
                 hi_t = np.where(par[:, None, :], inf, np.maximum(t1, t2))
                 tmin = np.maximum(lo_t.max(axis=2), 0.0)
                 tmax = hi_t.min(axis=2)
-                inside = (o >= blo - 1e-9) & (o <= bhi + 1e-9)        # (S, 3)
-                meet = ((~par[:, None, :] | inside[None, :, :]).all(axis=2)
+                inside = (o >= blo - 1e-9) & (o <= bhi + 1e-9)
+                if not parallel:
+                    inside = inside[None, :, :]
+                meet = ((~par[:, None, :] | inside).all(axis=2)
                         & (tmin <= tmax))
                 unboxed = np.array([sp[0] is None for sp in spans], dtype=bool)
                 meet |= unboxed[None, :]
                 tmin = np.where(unboxed[None, :], -inf, tmin)
-        limit = np.array(dists) - 1e-3                                # (R,)
-        # Only what lies BEFORE the point can hide it: a span whose box the
-        # ray enters past the point is skipped (an occluding hit at t < limit
-        # enters its box before that), and spans go nearest first so a ray
-        # settled as hidden stops asking.
+        limit = np.array(limits)                                      # (R,)
+        # Only hits within the visibility ray can hide the point: a span
+        # entered past the limit is skipped. Spans go nearest first so a
+        # ray settled as hidden stops asking.
         meet = meet & (tmin < limit[:, None])                         # (R, S)
         ent_mask = idx.ent_vis
         live_spans = np.flatnonzero(meet.any(axis=0))
@@ -11261,9 +11394,10 @@ class Viewport(QOpenGLWidget):
                 continue
             if not live.all():
                 v0, e1, e2 = v0[live], e1[live], e2[live]
-            s = o - v0                                                # (n, 3)
-            q = np.cross(s, e1)                                       # (n, 3)
-            uq = np.einsum("ij,ij->i", e2, q)                         # (n,)
+            if not parallel:
+                s = o - v0                                            # (n, 3)
+                q = np.cross(s, e1)                                   # (n, 3)
+                uq = np.einsum("ij,ij->i", e2, q)                     # (n,)
             r_all = np.flatnonzero(meet[:, si] & (best >= limit))
             if not len(r_all):
                 continue
@@ -11275,9 +11409,16 @@ class Viewport(QOpenGLWidget):
                 det = np.einsum("nj,rnj->rn", e1, p)
                 ok = np.abs(det) > 1e-6
                 inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
-                u = np.einsum("nj,rnj->rn", s, p) * inv
-                v = (d @ q.T) * inv
-                t = uq[None, :] * inv
+                if parallel:
+                    s = O[r, None, :] - v0[None, :, :]                # (r, n, 3)
+                    q = np.cross(s, e1[None, :, :])
+                    u = np.einsum("rnj,rnj->rn", s, p) * inv
+                    v = np.einsum("rj,rnj->rn", d, q) * inv
+                    t = np.einsum("nj,rnj->rn", e2, q) * inv
+                else:
+                    u = np.einsum("nj,rnj->rn", s, p) * inv
+                    v = (d @ q.T) * inv
+                    t = uq[None, :] * inv
                 hit = (ok & (u >= 0.0) & (u <= 1.0) & (v >= 0.0)
                        & (u + v <= 1.0) & (t > 1e-6))
                 tm = np.where(hit, t, np.inf).min(axis=1)
@@ -12001,6 +12142,8 @@ class Viewport(QOpenGLWidget):
 
     def _begin_camera_drag(self, ev, mode: str) -> None:
         """Grab one world point for the whole Orbit/Pan gesture."""
+        self.inference._cancel_edge_dwell()
+        self._pending_hover = None
         self._camera_drag_mode = mode
         self._last_pos = ev.position().toPoint()
         self._pan_mode = (mode == "pan" or
@@ -12072,6 +12215,8 @@ class Viewport(QOpenGLWidget):
         self.update()
 
     def leaveEvent(self, ev) -> None:
+        self.inference._cancel_edge_dwell()
+        self._pending_hover = None
         if self._hover_entity is not None:
             self._hover_entity = None
             self.update()
@@ -12784,6 +12929,8 @@ class Viewport(QOpenGLWidget):
         return None
 
     def wheelEvent(self, ev) -> None:
+        self.inference._cancel_edge_dwell()
+        self._pending_hover = None
         self._input_t = _time_mod.monotonic()   # P0: input→paint latency
         # Zoom toward the cursor: keep the point under the
         # pointer fixed on screen, not the origin. During a wheel burst the
@@ -13315,6 +13462,8 @@ class Viewport(QOpenGLWidget):
     def focusOutEvent(self, ev) -> None:
         """Focus gone means the Alt release will land somewhere else, so the
         claim on it lapses (issue #26)."""
+        self.inference._cancel_edge_dwell()
+        self._pending_hover = None
         self._alt_tap = False
         self._alt_down = False        # its release will not reach us either
         self._ctrl_alone = False      # nor will Ctrl's
@@ -13337,18 +13486,31 @@ class Viewport(QOpenGLWidget):
         snap = self.last_snap
         tool = self.active_tool
         start = getattr(tool, "start_point", None) if tool is not None else None
-        if snap is None or start is None or snap.kind not in self._SHIFT_LOCKABLE:
+        if snap is None or start is None:
+            return
+        from core.snap import COLOR_REFERENCE
+        parallel_hit = Viewport._is_parallel_landing(snap, start)
+        constraint = Viewport._snap_constraint_direction(snap)
+        if snap.kind not in self._SHIFT_LOCKABLE and not parallel_hit and constraint is None:
             return
 
         # Lock to the exact inferred axis, preserving its direction.
-        if snap.axis in _AXIS_VECTORS:
+        if constraint is not None:
+            d = QVector3D(constraint)
+            if QVector3D.dotProduct(snap.point - start, d) < 0.0:
+                d = -d
+        elif snap.axis in _AXIS_VECTORS:
             d = QVector3D(_AXIS_VECTORS[snap.axis])
             if QVector3D.dotProduct(snap.point - start, d) < 0.0:
                 d = -d
         else:
             d = snap.point - start
         if d.length() > 1e-6:
-            self._shift_lock = (d.normalized(), snap.color)
+            if constraint is not None:
+                color = snap.constraint_color or snap.color
+            else:
+                color = COLOR_REFERENCE if parallel_hit else snap.color
+            self._shift_lock = (d.normalized(), color)
 
     # ---- Numeric value buffer (VCB-style) ----------------------------------
     def _handle_value_key(self, ev) -> bool:

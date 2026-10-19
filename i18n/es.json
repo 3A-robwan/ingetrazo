@@ -2884,5 +2884,9 @@
  "Export STL": "Exportar STL",
  "Unit of the STL file (3D printing programs expect millimetres)": "Unidad del archivo STL (los programas de impresión 3D esperan milímetros)",
  "Switch Orbit/Pan with Shift during a drag": "Cambiar Órbita/Desplazar con Mayús",
- "While holding the middle mouse button or dragging with Orbit, press or release Shift to switch between Orbit and Pan. Disable to keep the mode chosen when the drag starts.": "Mientras mantiene pulsado el botón central del ratón o arrastra con Órbita, pulse o suelte Mayús para alternar entre Órbita y Desplazar. Desactive esta opción para conservar el modo elegido al iniciar el arrastre."
+ "While holding the middle mouse button or dragging with Orbit, press or release Shift to switch between Orbit and Pan. Disable to keep the mode chosen when the drag starts.": "Mientras mantiene pulsado el botón central del ratón o arrastra con Órbita, pulse o suelte Mayús para alternar entre Órbita y Desplazar. Desactive esta opción para conservar el modo elegido al iniciar el arrastre.",
+ "Edge hover time for parallel inference:": "Tiempo sobre una arista para inferencia paralela:",
+ "Pause over an edge or construction line for this long to use its direction for parallel inference. Vertices do not change the reference edge.": "Mantenga el cursor sobre una arista o línea de construcción durante este tiempo para usar su dirección en la inferencia paralela. Los vértices no cambian la arista de referencia.",
+ "Hovered edge width (blue):": "Grosor de arista bajo el cursor (azul):",
+ "Selected edge width (orange):": "Grosor de aristas seleccionadas (naranja):"
 }

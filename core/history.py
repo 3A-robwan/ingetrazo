@@ -437,7 +437,9 @@ class EraseSelectionCommand(Command):
     An edge that divides two *coplanar* faces is dissolved and the faces merge
     back into one (rubbing out a face's split line reunites it). Any other erased
     edge takes the faces it bounds with it (a non-planar pair can't become one
-    face). Undo restores an identity-preserving snapshot — the merge restructures
+    face). If the pair shares several edges, only the requested edge is erased;
+    the others remain as free lines on the merged face. Undo restores an
+    identity-preserving snapshot — the merge restructures
     connectivity too much for a clean per-edge inverse."""
 
     def __init__(self, edges: Iterable, faces: Iterable = ()) -> None:
@@ -500,7 +502,7 @@ class EraseSelectionCommand(Command):
             if len(faces) == 2 and QVector3D.dotProduct(
                 faces[0].normal(), faces[1].normal()
             ) > 0.999:
-                merged = m.dissolve_coplanar_region(faces)  # reunite the split
+                merged = m.dissolve_coplanar_region(faces, edges_to_remove=(edge,))
                 if merged is not None:
                     dead_faces.update(id(f) for f in faces)
                     _index_face(merged)

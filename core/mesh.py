@@ -1428,15 +1428,24 @@ class Mesh:
         return {"kind": "merge_pair", "face_a": face_a, "face_b": face_b,
                 "edges": [e for e in shared_edges if e is not None], "merged": merged}
 
-    def dissolve_coplanar_region(self, faces: Iterable["Face"]) -> Optional["Face"]:
+    def dissolve_coplanar_region(
+        self, faces: Iterable["Face"], *,
+        edges_to_remove: Optional[Iterable[Edge]] = None,
+    ) -> Optional["Face"]:
         """Merge a set of mutually-coplanar, edge-connected faces into one face
         spanning the boundary of their union, removing every interior edge.
 
         Pairwise merging is order-dependent — fusing two of three faces can leave
         a valence-3 junction the third can't bridge — so the stitch merges the
         whole coplanar component at once, which is deterministic. ``None`` if the
-        faces aren't all coplanar, aren't connected, or the union isn't simple."""
+        faces aren't all coplanar, aren't connected, or the union isn't simple.
+
+        By default all interior edges go, as required by stitching. An explicit
+        ``edges_to_remove`` limits removal to those edges; the other interior
+        edges remain as free lines on the merged face for selection-based erase.
+        """
         faces = list(faces)
+        removable = None if edges_to_remove is None else set(edges_to_remove)
         if len(faces) < 2:
             return None
         n0 = faces[0].normal()
@@ -1483,7 +1492,8 @@ class Mesh:
         for f in faces:
             self.remove_face(f)
         for e in interior:
-            if e is not None and not e.faces:
+            if (e is not None and not e.faces
+                    and (removable is None or e in removable)):
                 self.remove_edge(e)
         merged = self.add_face([v.position for v in outer],
                                [[v.position for v in h] for h in holes] or None)

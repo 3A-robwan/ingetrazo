@@ -2,8 +2,8 @@
 # Copyright (C) 2026 Marco Sumari Tellez and IngeTrazo contributors.
 """Eraser tool (E): erase by clicking or by dragging over geometry.
 
-The classic behaviour: press marks the edge under the cursor, dragging keeps
-marking everything the cursor sweeps over (shown highlighted red), and release
+The classic behaviour: press marks the visible edge under the cursor, dragging
+keeps marking what the cursor sweeps over (shown highlighted red), and release
 erases the whole stroke as ONE undo step. Erasing an edge takes its faces with
 it (and rubbing out a divider between coplanar faces merges them back — the
 EraseSelectionCommand semantics). A segment of a drawn curve (circle/arc)
@@ -86,9 +86,10 @@ class EraserTool(Tool):
             label = (pick_label(ctx.screen.x(), ctx.screen.y(),
                                 rect_only=True)
                      if pick_label is not None else None)
+            pick_visible = getattr(viewport, "pick_visible_edge", None)
             viewport.set_hover(label if label is not None else
-                               viewport.pick_edge(ctx.screen.x(),
-                                                  ctx.screen.y()))
+                               (pick_visible or viewport.pick_edge)(
+                                   ctx.screen.x(), ctx.screen.y()))
         viewport.update()
 
     def on_release(self, viewport) -> None:
@@ -188,7 +189,10 @@ class EraserTool(Tool):
             if label is not None:
                 self.marked.add(label)
                 return
-        edge = viewport.pick_edge(sx, sy)
+        # Match Select: a projected edge behind a face is not the target.
+        # Keep pick_edge as a fallback for lightweight viewport adapters.
+        pick_visible = getattr(viewport, "pick_visible_edge", None)
+        edge = (pick_visible or viewport.pick_edge)(sx, sy)
         if edge is not None:
             # A curve is one entity: marking a segment marks its contour.
             for e in viewport.scene.mesh.curve_edges(edge):

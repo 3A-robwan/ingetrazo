@@ -3,12 +3,13 @@
 """The hovered edge stays acquired after the cursor leaves it.
 
 The classic parallel inference (Rafael's review, 2026-09-10): while drawing a
-line you brush an off-axis wall with the cursor, move away, and the draw locks
+line you pause over an off-axis wall with the cursor, move away, and the draw locks
 parallel to that wall (magenta «Paralelo a arista»). Drawing parallel means
 drawing AWAY from the edge, so the reference must survive the cursor leaving
 it. PR #21 briefly re-assigned the reference on every move (``_acquired_edge =
 _hover_edge``), which dropped it the moment the cursor left the edge and
-silently killed the inference; no test noticed. This one does.
+silently killed the inference; no test noticed. This one does. The pause is
+now deliberate: crossing another edge briefly must not replace this reference.
 """
 from __future__ import annotations
 
@@ -42,6 +43,14 @@ def _viewport():
     return vp
 
 
+def _finish_edge_dwell(vp):
+    """Deliver the real Qt timeout signal without waiting in an integration test."""
+    timer = vp.inference._edge_dwell_timer
+    assert timer.isActive()
+    timer.stop()
+    timer.timeout.emit()
+
+
 def test_the_hovered_edge_survives_the_cursor_leaving_it():
     from tools.base import ToolContext
     from tools.line import LineTool
@@ -59,6 +68,8 @@ def test_the_hovered_edge_survives_the_cursor_leaving_it():
     on_edge_px = vp._world_to_pixel(V(2, 1, 0))         # the wall's body
     vp._process_hover(QPointF(*on_edge_px), Qt.NoModifier)
     assert vp._hover_edge is not None
+    assert vp._acquired_edge is None                   # crossing it is not enough
+    _finish_edge_dwell(vp)
     assert vp._acquired_edge is vp._hover_edge
 
     away_px = vp._world_to_pixel(V(4, 5.5, 0))          # empty space, off the wall
@@ -80,6 +91,8 @@ def test_the_reference_is_dropped_once_nothing_is_being_drawn():
     tool.on_click(ToolContext(viewport=vp, world=V(1, 4, 0), screen=QPointF(0, 0),
                               modifiers=Qt.NoModifier, snap=None))
     vp._process_hover(QPointF(*vp._world_to_pixel(V(2, 1, 0))), Qt.NoModifier)
+    assert vp._acquired_edge is None
+    _finish_edge_dwell(vp)
     assert vp._acquired_edge is not None
     tool.start_point = None                             # Esc / segment finished
     vp._process_hover(QPointF(*vp._world_to_pixel(V(4, 5.5, 0))), Qt.NoModifier)

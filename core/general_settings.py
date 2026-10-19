@@ -19,6 +19,8 @@ there and nobody loses a setting on the way.
 """
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import QSettings
 
 _GROUP = "General/"
@@ -37,3 +39,28 @@ def value(name: str, default=None, settings: QSettings | None = None):
 def set_value(name: str, val, settings: QSettings | None = None) -> None:
     st = settings if settings is not None else QSettings()
     st.setValue(_GROUP + name, val)
+
+
+def parallel_edge_dwell_ms(settings: QSettings | None = None) -> int:
+    """How long an edge or construction line must be hovered to acquire its direction."""
+    try:
+        delay = float(value("parallel_edge_dwell_ms", 500, settings))
+    except (TypeError, ValueError, OverflowError):
+        return 500
+    if not math.isfinite(delay):
+        return 500
+    return max(100, min(10000, round(delay)))
+
+
+def edge_highlight_width(name: str, settings: QSettings | None = None) -> int:
+    """Saved hover/selection edge width, in pixels, bounded to 1–3."""
+    raw = value(name, 2, settings)
+    if isinstance(raw, bool):
+        return 2
+    try:
+        width = float(raw)
+    except (TypeError, ValueError, OverflowError):
+        return 2
+    if not math.isfinite(width) or not width.is_integer():
+        return 2
+    return max(1, min(3, int(width)))

@@ -1,4 +1,4 @@
-# Experimental community changes (18 October 2026)
+# Experimental community changes (19 October 2026)
 
 This is an **unofficial source-code preview**, published by `3A-robwan` for
 others to try and review. It is based on upstream commit
@@ -9,9 +9,64 @@ official IngeTrazo release. The application still reports 0.5.8.
 IngeTrazo is created by Marco Sumari Tellez and its contributors. Original
 attribution and the GPL-3.0-or-later license are preserved.
 
+The [19 October source preview](https://github.com/3A-robwan/ingetrazo/releases/tag/robwan-experimental-2026-10-19)
+includes the erase, inference, highlight, rounded-inset and occluded-edge fixes
+below, plus `AGENTS.md` and `HANDOFF.md` for continued work. It follows the
+18 October preview (`514ff84`), which contains only the earlier guide transforms,
+numeric corrections and Shift navigation changes.
+
 ## Changes
 
+- **Occluded edge picking:** the Eraser hover and stroke ignore edges hidden
+  behind faces, including Shift-hide and Delete from hover. Select and Eraser
+  now test the actual point under the cursor on perspective edges, including
+  two-point perspective. Orthographic visibility follows parallel view rays
+  in both single and batched checks, with stable on-face precision at large
+  camera distances. Box selection, whole-curve expansion and X-ray/wireframe
+  retain their existing rules.
+- **Rounded inset corners on existing faces:** trimming a fillet also updates
+  the surrounding face's hole boundary to follow the arc. The corner patch
+  becomes part of that surrounding face, and the obsolete vertex is removed,
+  preventing later moves from dragging or rebuilding invisible connections.
+  Undo/Redo and post-operation radius/segment corrections preserve the shared
+  boundary. Alt still keeps the corner stubs.
+- **Perpendicular lines aligned with a remembered point:** hover the midpoint
+  of an adjacent rectangle edge, then draw perpendicular from the starting
+  edge's midpoint. The dotted reference remains and the endpoint snaps exactly
+  to the rectangle centre. Acquired points can set length along active axes,
+  perpendicular or parallel directions without pulling the line off them.
+  Preview colours and Shift direction capture are retained at the point.
+- **Edge highlight widths:** Preferences > General now has separate 1–3 px
+  controls for the blue hovered edge and orange selected edges, both defaulting
+  to 2. OK persists and applies them immediately; Cancel keeps the old values.
+  Widths scale with the display and are drawn with depth-tested offset passes,
+  so they also work on drivers which limit GL line widths. The blue hover keeps
+  priority over orange selection; curves and group selection boxes follow the
+  same drawing path. General preferences scroll on smaller screens.
+- **Parallel edge inference:** pause on an edge interior for 0.5 seconds to
+  remember its direction while drawing. Crossing another edge or vertex does
+  not replace it immediately. A parallel line lands at the exact crossing with
+  the target edge and keeps its magenta preview; Shift can lock that direction
+  at the crossing too. Vertices do not acquire edge directions. Preferences >
+  General > **Edge hover time for parallel inference** sets a persistent delay
+  from 0.1 to 10 seconds, applied on OK. Small cursor jitter is tolerated;
+  moving along the edge restarts the pause. Leaving the view or navigating it
+  cancels an unfinished pause while preserving a confirmed reference.
+  Pausing at a parallel crossing keeps the original direction reference,
+  including after point encouragement; moving away and returning still snaps
+  exactly to that crossing. A deliberate pause elsewhere on another edge can
+  still replace the reference.
+- **Parallel references from construction lines:** hovering a guide line uses
+  the same delay setting as hovering an edge. Its stored direction supplies
+  the parallel cue, exact edge crossings and Shift locking. Guide points and
+  their drawn origin connectors do not supply directions; hidden, occluded or
+  transform-excluded construction lines are ignored. Direction acquisition
+  preserves the guide's coordinates and the existing model-edge hover picks.
 - **Construction guide selection:** Ctrl+A includes guide lines and points.
+- **Selected-segment deletion:** erasing one segment of a closed outline drawn
+  on an existing face keeps every unselected hard segment as an open line on
+  the healed face. Multiple selected segments, Undo/Redo and closing the outline
+  again are supported. The default seam cleanup used by stitching is unchanged.
 - **Guide transforms:** Move (M) and Rotate (Q) accept selected construction
   lines/points and can pick a guide directly. Live preview, axis constraints,
   Ctrl-copy, linear/polar copy arrays, cancellation and Undo/Redo work with them.
@@ -97,17 +152,80 @@ upstream installation documentation.
 
 ## Validation and limitations
 
+An investigation on 19 October reproduced picking of edges occluded by solid
+faces, followed by a local fix to the Eraser, orthographic visibility rays and
+perspective edge interpolation. See
+[`occluded-edge-investigation.md`](occluded-edge-investigation.md) for exact
+reproductions, preserved box/curve selection rules and regression checks.
+The earlier local diagnostic scripts deliberately assert the old bugs; use
+the new versioned regression files to verify the corrected behaviour.
+
 Focused Windows/Python 3.12/Qt 6.11.2 checks passed:
 
+- Publication check on 19 October: 386 tests passed, 4 skipped in a newly
+  selected set of 31 files, including all 57 occluded-edge regressions.
+  Startup `main.py --check` and `git diff --check` passed. The local log is
+  `../qa/github-release-2026-10-19-tests.log`. This is a separate scope from
+  the preceding 462/2 run, whose log did not preserve the selected file list.
+- Occluded edge picking: 462 tests passed, 2 skipped in one run of 31 files,
+  including 57 new regressions for Eraser/Select in both camera projections,
+  two-point perspective, partial occlusion, groups/edit contexts, layers,
+  sections, near clipping, large-distance on-face precision, batched visibility,
+  Shift/Esc/Delete and Undo/Redo. Initial regression runs reproduced 14 Eraser
+  failures and 13 picking failures before the fixes. Startup `--check` passes;
+  native interactive/OpenGL verification has not been performed for this fix.
+- Handoff checkpoint: 333 tests passed in one run covering all 14 new regression
+  files and existing arc, history, acquired-edge and erase-orientation cases.
+  A versioned copy of the external Windows-only pytest exit helper is available
+  in `scripts/windows_pytest_exit.py`; it preserves pytest's recorded status.
+- Rounded inset corners: 228 tests passed, including 15 new regressions for
+  XY/YZ and a populated plane in a 3D scene, real Arc/Rectangle tool input,
+  out-of-plane moves, Undo/Redo, radius/segment replacement, Alt, host paint,
+  opposite-facing neighboring faces and another intentional hole on that plane.
+  Nine initial regression cases failed before the fix. Native Windows OpenGL
+  images separately confirmed that the missing corner patch now renders as
+  the surrounding face, and the obsolete vertex no longer exists.
+- Remembered-point length along a direction: 381 tests passed, including 57
+  new core and real-viewport cases. These check exact midpoint-to-centre
+  geometry, XY/rotated/YZ and tilted planes, perspective/orthographic views,
+  preview colour, Shift capture, both direction signs, named-point priority,
+  the snap radius, occlusion, Alt modes and radial tools. The user scenario
+  failed in all six initial viewport regression cases before the correction.
+- Edge highlight widths: 148 tests passed, 3 GL-dependent tests skipped in the
+  offscreen suite. The new drawing regressions failed before implementation.
+  Native Windows OpenGL captures separately verified progressively thicker
+  blue/orange strokes at settings 1, 2 and 3 at 100% and 200% display scaling.
+  Preferences persistence, Cancel, live updates and scrolling at 520 × 600 px
+  were checked, including saved values loaded by a new viewport.
 - 202 numeric-correction/navigation/history/selection tests after the numeric changes.
 - 27 guide-Move tests, 131 adjacent Move tests and 58 snapping tests (2 skipped).
 - 44 guide-Rotate tests and 118 adjacent rotation/protractor/grip/input tests.
+- Follow-up erase correction: 17 regression tests and 127 adjacent erase,
+  coplanar merge, curve, hole, material and orientation tests passed. Before
+  the fix, 14 of those regression cases failed because unselected edges vanished.
+- Follow-up parallel inference: 139 tests passed for edge acquisition, exact
+  boundary landing, real perspective/orthographic picking, magenta preview,
+  Shift capture, navigation, document boundaries and preferences. The new
+  acquisition tests and boundary regressions failed before the change.
+- Parallel crossing revisit: 9 regression tests and 174 adjacent inference,
+  navigation, history-boundary and preference tests passed. A pause at a landing
+  no longer replaces the reference with its target edge. The regressions cover
+  real Qt point/edge timers (250/500 ms and a configured 100 ms), perspective and
+  orthographic views, rotated walls, midpoint crossings, repeated returns and
+  intentional acquisition elsewhere. Four revisit cases failed before this fix.
+- Construction-line parallel references: 286 tests passed for guide acquisition,
+  inference, navigation, preferences and existing guide operations; 19 further
+  picking and precision tests passed. These include visibility and transform
+  exclusions, mesh/guide distance priority, guide anchors, point markers,
+  camera clipping and large-coordinate direction precision. Four guide
+  acquisition cases failed before this addition.
 
 These are separate, partly overlapping runs, not one summed total. New regression
 checks failed before the corresponding features were added. Syntax checks,
 `git diff --check`, patch applicability and the source `--check` startup check pass.
-Automated interaction checks use Qt offscreen; interactive OpenGL rendering has
-not been manually verified for this preview.
+Most automated interaction checks use Qt offscreen. Edge highlight and rounded
+inset captures were also checked in native Windows OpenGL; full interactive use
+of the preview has not been manually verified.
 
 A full fast-suite attempt before the later guide-transform additions completed
 with **4567 passed, 30 skipped and 5 failed**; another batch crashed in Qt's

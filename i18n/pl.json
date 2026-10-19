@@ -2892,5 +2892,9 @@
  "Export STL": "Eksportuj STL",
  "Unit of the STL file (3D printing programs expect millimetres)": "Jednostka pliku STL (programy do druku 3D oczekują milimetrów)",
  "Switch Orbit/Pan with Shift during a drag": "Przełączaj Orbit/Pan klawiszem Shift",
- "While holding the middle mouse button or dragging with Orbit, press or release Shift to switch between Orbit and Pan. Disable to keep the mode chosen when the drag starts.": "Przytrzymując środkowy przycisk myszy lub przeciągając narzędziem Orbita, naciskaj lub puszczaj Shift, aby przełączać orbitę i przesuwanie widoku. Wyłącz tę opcję, aby zachować tryb wybrany na początku przeciągania."
+ "While holding the middle mouse button or dragging with Orbit, press or release Shift to switch between Orbit and Pan. Disable to keep the mode chosen when the drag starts.": "Przytrzymując środkowy przycisk myszy lub przeciągając narzędziem Orbita, naciskaj lub puszczaj Shift, aby przełączać orbitę i przesuwanie widoku. Wyłącz tę opcję, aby zachować tryb wybrany na początku przeciągania.",
+ "Edge hover time for parallel inference:": "Czas wskazania krawędzi dla równoległości:",
+ "Pause over an edge or construction line for this long to use its direction for parallel inference. Vertices do not change the reference edge.": "Zatrzymaj kursor na krawędzi lub linii pomocniczej na ten czas, aby użyć jej kierunku do przyciągania równoległego. Wierzchołki nie zmieniają krawędzi odniesienia.",
+ "Hovered edge width (blue):": "Grubość niebieskiej krawędzi pod kursorem:",
+ "Selected edge width (orange):": "Grubość zaznaczonych krawędzi (pomarańczowych):"
 }
